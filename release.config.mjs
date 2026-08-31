@@ -70,6 +70,7 @@ const plugins = [
                 {
                     name: 'RimObs',
                     path: '.',
+                    previewfile: new URL('./About/Preview.png', import.meta.url).pathname,
                     workshopIds: { stable: '3733585062' },
                 },
             ],

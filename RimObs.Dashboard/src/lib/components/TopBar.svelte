@@ -49,10 +49,9 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 1.4rem;
+        padding: 0 var(--s-5);
         border-bottom: 1px solid var(--border-soft);
-        background: color-mix(in srgb, var(--bg-base) 55%, transparent);
-        backdrop-filter: blur(6px);
+        background: var(--bg-base);
         position: sticky;
         top: 0;
         z-index: 5;
@@ -63,29 +62,29 @@
     .right {
         display: flex;
         align-items: center;
-        gap: 0.8rem;
+        gap: var(--s-3);
     }
     .update {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
+        gap: var(--s-1);
         font-size: 0.78rem;
-        color: var(--ember-soft);
-        border: 1px solid color-mix(in srgb, var(--ember) 40%, transparent);
-        background: color-mix(in srgb, var(--ember) 12%, transparent);
+        color: var(--cyan-soft);
+        border: 1px solid var(--border);
+        background: var(--bg-surface);
         border-radius: 99px;
-        padding: 0.25rem 0.7rem;
+        padding: var(--s-1) var(--s-3);
     }
     .session,
     .health {
         display: inline-flex;
         align-items: center;
-        gap: 0.45rem;
+        gap: var(--s-2);
         font-size: 0.78rem;
         color: var(--text-dim);
         border: 1px solid var(--border-soft);
         border-radius: 99px;
-        padding: 0.3rem 0.75rem;
+        padding: var(--s-1) var(--s-3);
         background: var(--bg-surface);
     }
     .sid {
@@ -106,10 +105,30 @@
     }
     .session.connected .dot {
         background: var(--cyan);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 25%, transparent);
     }
     .health.up .dot {
         background: var(--good);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent);
+    }
+
+    @media (max-width: 820px) {
+        .topbar {
+            padding: 0 var(--s-3);
+        }
+        h1 {
+            font-size: 1rem;
+        }
+        .right {
+            gap: var(--s-2);
+            min-width: 0;
+        }
+        .sid {
+            max-width: 6rem;
+        }
+    }
+    @media (max-width: 560px) {
+        .session,
+        .update {
+            display: none;
+        }
     }
 </style>

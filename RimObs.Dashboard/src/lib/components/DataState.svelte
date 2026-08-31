@@ -50,8 +50,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.6rem;
-        padding: 3rem 1rem;
+        gap: var(--s-2);
+        padding: var(--s-7) var(--s-4);
         color: var(--text-dim);
         text-align: center;
     }
@@ -69,12 +69,12 @@
         color: var(--bad);
     }
     button {
-        margin-top: 0.4rem;
+        margin-top: var(--s-2);
         background: var(--bg-elev);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
-        padding: 0.4rem 1rem;
+        padding: var(--s-2) var(--s-4);
         cursor: pointer;
         font-family: var(--font-ui);
         transition: border-color var(--t-fast) var(--ease-out);

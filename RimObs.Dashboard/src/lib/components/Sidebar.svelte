@@ -1,12 +1,13 @@
 <script lang="ts">
     import { routes, router } from '../router.svelte';
     import Icon from './Icon.svelte';
+    import Logo from './Logo.svelte';
     import { t } from '../i18n';
 </script>
 
 <aside>
     <div class="brand">
-        <div class="glyph"><Icon name="gauge" size={22} /></div>
+        <div class="glyph"><Logo size={28} /></div>
         <div class="title">
             <strong>RimObs</strong>
             <span>{t('app.subtitle')}</span>
@@ -34,34 +35,26 @@
     aside {
         grid-area: sidebar;
         width: var(--sb-w);
-        background: linear-gradient(
-            180deg,
-            color-mix(in srgb, var(--bg-surface) 60%, transparent),
-            color-mix(in srgb, var(--bg-base) 60%, transparent)
-        );
+        background: var(--bg-surface);
         border-right: 1px solid var(--border-soft);
         display: flex;
         flex-direction: column;
         overflow-y: auto;
-        backdrop-filter: blur(6px);
     }
     .brand {
         display: flex;
         align-items: center;
-        gap: 0.7rem;
-        padding: 1.1rem 1.2rem;
+        gap: var(--s-3);
+        padding: var(--s-4) var(--s-4);
         height: var(--topbar-h);
         border-bottom: 1px solid var(--border-soft);
     }
     .glyph {
         display: grid;
         place-items: center;
-        width: 34px;
-        height: 34px;
-        border-radius: var(--r-md);
-        color: var(--bg-void);
-        background: linear-gradient(135deg, var(--ember), var(--ember-deep));
-        box-shadow: 0 4px 14px color-mix(in srgb, var(--ember) 40%, transparent);
+        width: 28px;
+        height: 28px;
+        flex: none;
     }
     .title {
         display: flex;
@@ -80,7 +73,7 @@
         color: var(--text-faint);
     }
     nav {
-        padding: 0.7rem 0.6rem;
+        padding: var(--s-3) var(--s-2);
         display: flex;
         flex-direction: column;
         gap: 2px;
@@ -88,8 +81,8 @@
     .item {
         display: flex;
         align-items: center;
-        gap: 0.7rem;
-        padding: 0.55rem 0.7rem;
+        gap: var(--s-3);
+        padding: var(--s-2) var(--s-3);
         border-radius: var(--r-md);
         color: var(--text-dim);
         font-size: 0.88rem;
@@ -104,18 +97,8 @@
         color: var(--text);
     }
     .item.active {
-        background: color-mix(in srgb, var(--ember) 12%, var(--bg-surface));
+        background: var(--bg-elev);
         color: var(--text);
-    }
-    .item.active::before {
-        content: '';
-        position: absolute;
-        left: -0.6rem;
-        top: 18%;
-        bottom: 18%;
-        width: 3px;
-        border-radius: 0 3px 3px 0;
-        background: var(--ember);
     }
     @media (max-width: 900px) {
         .brand {
@@ -127,20 +110,17 @@
             display: none;
         }
         nav {
-            padding: 0.7rem 0;
+            padding: var(--s-3) 0;
             align-items: center;
         }
         .item {
             justify-content: center;
             gap: 0;
-            padding: 0.6rem;
+            padding: var(--s-2);
             width: 40px;
         }
         .item span {
             display: none;
-        }
-        .item.active::before {
-            left: -0.4rem;
         }
     }
 </style>

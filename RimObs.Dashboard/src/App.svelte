@@ -105,10 +105,16 @@
     .main {
         grid-area: main;
         overflow-y: auto;
-        padding: 1.5rem 1.8rem 3rem;
+        padding: var(--s-5) var(--s-6) var(--s-7);
     }
     .view {
         max-width: 1320px;
         margin: 0 auto;
+    }
+
+    @media (max-width: 820px) {
+        .main {
+            padding: var(--s-4) var(--s-3) var(--s-6);
+        }
     }
 </style>

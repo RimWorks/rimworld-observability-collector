@@ -1,13 +1,9 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
-    let {
-        title,
-        accent,
-        children,
-    }: { title?: string; accent?: 'ember' | 'cyan'; children: Snippet } = $props();
+    let { title, children }: { title?: string; children: Snippet } = $props();
 </script>
 
-<section class="card" class:ember={accent === 'ember'} class:cyan={accent === 'cyan'}>
+<section class="card">
     {#if title}
         <header>
             <h3>{title}</h3>
@@ -18,24 +14,18 @@
 
 <style>
     .card {
-        background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-2));
+        background: var(--bg-surface);
         border: 1px solid var(--border-soft);
         border-radius: var(--r-lg);
         box-shadow: var(--shadow-card);
         overflow: hidden;
     }
-    .card.ember {
-        border-color: color-mix(in srgb, var(--ember) 35%, var(--border));
-    }
-    .card.cyan {
-        border-color: color-mix(in srgb, var(--cyan) 35%, var(--border));
-    }
     header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 1rem;
-        padding: 0.85rem 1.1rem;
+        gap: var(--s-4);
+        padding: var(--s-3) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
     }
     h3 {
@@ -45,6 +35,6 @@
         color: var(--text-dim);
     }
     .body {
-        padding: 1.1rem;
+        padding: var(--s-4);
     }
 </style>

@@ -30,12 +30,12 @@
     let manifestRows = $derived.by(() => {
         const m = importedManifest;
         if (!m) return [] as { key: string; value: string }[];
-        const created = typeof m.created_utc === 'string' ? relativeTime(m.created_utc) : '—';
+        const created = typeof m.created_utc === 'string' ? relativeTime(m.created_utc) : '-';
         return [
-            { key: t('bundle.import.kv.session'), value: String(m.session_id ?? '—') },
-            { key: t('bundle.import.kv.collector'), value: String(m.collector_version ?? '—') },
+            { key: t('bundle.import.kv.session'), value: String(m.session_id ?? '-') },
+            { key: t('bundle.import.kv.collector'), value: String(m.collector_version ?? '-') },
             { key: t('bundle.import.kv.created'), value: created },
-            { key: t('bundle.import.kv.schema'), value: String(m.schema_version ?? '—') },
+            { key: t('bundle.import.kv.schema'), value: String(m.schema_version ?? '-') },
         ];
     });
     let hasReport = $derived(importedContents.includes('report.html'));
@@ -144,7 +144,7 @@
     </header>
 
     <div class="cols">
-        <Card title={t('bundle.export.title')} accent="ember">
+        <Card title={t('bundle.export.title')}>
             {#if currentSessionId === null}
                 <p class="empty">{t('bundle.export.noSession')}</p>
             {:else}
@@ -155,7 +155,7 @@
             {/if}
         </Card>
 
-        <Card title={t('bundle.import.title')} accent="cyan">
+        <Card title={t('bundle.import.title')}>
             {#if importedToken === null}
                 <label
                     class="drop"
@@ -273,13 +273,13 @@
 <style>
     .page {
         display: grid;
-        gap: 1.4rem;
+        gap: var(--s-5);
     }
     .intro h1 {
         font-size: 1.4rem;
     }
     .intro p {
-        margin: 0.35rem 0 0;
+        margin: var(--s-1) 0 0;
         color: var(--text-dim);
         font-size: 0.9rem;
         max-width: 60ch;
@@ -287,7 +287,7 @@
     .cols {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 1.4rem;
+        gap: var(--s-5);
         align-items: start;
     }
     .empty {
@@ -296,12 +296,12 @@
         font-size: 0.88rem;
     }
     .error {
-        margin: 1rem 0 0;
-        padding: 0.65rem 0.8rem;
+        margin: var(--s-4) 0 0;
+        padding: var(--s-3) var(--s-3);
         font-size: 0.82rem;
         color: var(--bad);
         background: color-mix(in srgb, var(--bad) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+        border: 1px solid var(--border);
         border-radius: var(--r-md);
     }
 
@@ -310,8 +310,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.5rem;
-        padding: 2rem 1rem;
+        gap: var(--s-2);
+        padding: var(--s-6) var(--s-4);
         text-align: center;
         border: 1.5px dashed var(--border-strong);
         border-radius: var(--r-md);
@@ -346,20 +346,20 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--cyan-soft);
-        border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+        border: 1px solid var(--border);
         border-radius: 99px;
-        padding: 0.2rem 0.7rem;
+        padding: var(--s-1) var(--s-3);
     }
 
     .loaded {
         display: flex;
         flex-direction: column;
-        gap: 1.2rem;
+        gap: var(--s-4);
     }
     .section {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: var(--s-2);
     }
     .section-label {
         font-size: 0.72rem;
@@ -370,13 +370,13 @@
     .kv-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 0.2rem 1.4rem;
+        gap: var(--s-1) var(--s-5);
     }
     .kv {
         display: flex;
         justify-content: space-between;
-        gap: 1rem;
-        padding: 0.4rem 0;
+        gap: var(--s-4);
+        padding: var(--s-2) 0;
         border-bottom: 1px solid var(--border-soft);
         align-items: baseline;
     }
@@ -398,13 +398,13 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.2rem;
+        gap: var(--s-1);
     }
     .files a {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
-        padding: 0.4rem 0.55rem;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--s-2);
         border-radius: var(--r-sm);
         font-size: 0.82rem;
         color: var(--text-dim);
@@ -418,14 +418,14 @@
     }
     .actions {
         display: flex;
-        gap: 0.6rem;
+        gap: var(--s-2);
         flex-wrap: wrap;
     }
     button {
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 0.45rem 0.95rem;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--s-4);
         font-family: var(--font-ui);
         font-size: 0.82rem;
         font-weight: 500;
@@ -439,7 +439,7 @@
     .primary {
         color: var(--cyan-soft);
         background: color-mix(in srgb, var(--cyan) 14%, var(--bg-elev));
-        border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+        border: 1px solid var(--border);
     }
     .primary:hover:not(:disabled) {
         border-color: var(--cyan);
@@ -478,9 +478,8 @@
         inset: 0;
         z-index: 1000;
         background: color-mix(in srgb, var(--bg-void) 78%, transparent);
-        backdrop-filter: blur(3px);
         display: flex;
-        padding: 3rem;
+        padding: var(--s-7);
         animation: row-in var(--t-base) var(--ease-out);
     }
     .modal {
@@ -497,7 +496,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.7rem 1rem;
+        padding: var(--s-3) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
         font-family: var(--font-display);
         font-size: 0.85rem;
@@ -505,14 +504,14 @@
         color: var(--text-dim);
     }
     .close {
-        padding: 0.35rem 0.85rem;
+        padding: var(--s-1) var(--s-3);
         color: var(--text-dim);
         background: var(--bg-elev);
         border: 1px solid var(--border);
     }
     .close:hover {
-        border-color: var(--ember);
-        color: var(--ember-soft);
+        border-color: var(--border-strong);
+        color: var(--text);
     }
     .modal iframe {
         flex: 1;
@@ -522,7 +521,13 @@
 
     @media (max-width: 640px) {
         .scrim {
-            padding: 1rem;
+            padding: var(--s-4);
+        }
+    }
+
+    @media (max-width: 900px) {
+        .cols {
+            grid-template-columns: 1fr;
         }
     }
 </style>

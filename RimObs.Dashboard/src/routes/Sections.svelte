@@ -69,7 +69,10 @@
             <button
                 class="chip"
                 class:active={isActive('all')}
-                onclick={() => { activeFilter = 'all'; writeFilterToUrl('all'); }}
+                onclick={() => {
+                    activeFilter = 'all';
+                    writeFilterToUrl('all');
+                }}
             >
                 {t('sections.filter.all')}
             </button>
@@ -77,7 +80,10 @@
                 <button
                     class="chip"
                     class:active={isActive(sub)}
-                    onclick={() => { activeFilter = sub; writeFilterToUrl(sub); }}
+                    onclick={() => {
+                        activeFilter = sub;
+                        writeFilterToUrl(sub);
+                    }}
                 >
                     {chipLabel(sub)}
                 </button>
@@ -109,15 +115,15 @@
     .page {
         display: flex;
         flex-direction: column;
-        gap: 1.2rem;
+        gap: var(--s-4);
     }
     .chips {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
+        gap: var(--s-2);
     }
     .chip {
-        padding: 0.28rem 0.75rem;
+        padding: var(--s-1) var(--s-3);
         border-radius: 99px;
         border: 1px solid var(--border);
         background: var(--bg-surface);
@@ -135,8 +141,8 @@
         color: var(--text);
     }
     .chip.active {
-        background: color-mix(in srgb, var(--ember) 14%, var(--bg-surface));
-        border-color: color-mix(in srgb, var(--ember) 40%, transparent);
+        background: color-mix(in srgb, var(--cyan) 14%, var(--bg-surface));
+        border-color: var(--border-strong);
         color: var(--text);
     }
     .list {
@@ -149,13 +155,13 @@
         border: 1px solid var(--border-soft);
         border-radius: var(--r-lg);
         overflow: hidden;
-        background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-2));
+        background: var(--bg-surface);
     }
     .row {
         display: flex;
         align-items: center;
-        gap: 1rem;
-        padding: 0.55rem 0.9rem;
+        gap: var(--s-4);
+        padding: var(--s-2) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
         transition: background var(--t-fast) var(--ease-out);
     }

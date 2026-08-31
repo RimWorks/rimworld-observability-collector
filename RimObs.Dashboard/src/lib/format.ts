@@ -1,4 +1,5 @@
 export function ns(value: number): string {
+    if (!Number.isFinite(value)) return '-';
     if (value <= 0) return '0';
     if (value < 1_000) return `${value} ns`;
     if (value < 1_000_000) return `${(value / 1_000).toFixed(1)} us`;
@@ -7,6 +8,7 @@ export function ns(value: number): string {
 }
 
 export function bytes(value: number): string {
+    if (!Number.isFinite(value)) return '-';
     const abs = Math.abs(value);
     if (abs < 1024) return `${value} B`;
     if (abs < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
@@ -15,6 +17,7 @@ export function bytes(value: number): string {
 }
 
 export function count(value: number): string {
+    if (!Number.isFinite(value)) return '-';
     return value.toLocaleString('en-US');
 }
 

@@ -64,14 +64,14 @@
 <style>
     .filters {
         display: flex;
-        gap: 0.4rem;
-        margin-bottom: 0.8rem;
+        gap: var(--s-2);
+        margin-bottom: var(--s-3);
     }
     .chip {
         background: var(--bg-surface);
         border: 1px solid var(--border-soft);
         color: var(--text-dim);
-        padding: 0.3rem 0.8rem;
+        padding: var(--s-1) var(--s-3);
         border-radius: 99px;
         font-size: 0.76rem;
         cursor: pointer;
@@ -95,8 +95,8 @@
     .line {
         display: grid;
         grid-template-columns: 72px 90px 1fr;
-        gap: 0.7rem;
-        padding: 0.4rem 0.6rem;
+        gap: var(--s-3);
+        padding: var(--s-2) var(--s-2);
         border-bottom: 1px solid var(--border-soft);
         align-items: baseline;
     }
@@ -121,7 +121,7 @@
     }
     .exc {
         display: block;
-        margin-top: 0.25rem;
+        margin-top: var(--s-1);
         color: var(--bad);
         white-space: pre-wrap;
         font-size: 0.74rem;

@@ -10,7 +10,12 @@ function mockApi(opts: { available?: boolean } = {}) {
         'fetch',
         vi.fn(async (url: string) => {
             if (!available && typeof url === 'string' && url.includes('/instrumentation/')) {
-                return { ok: false, status: 503, statusText: 'unavailable', json: async () => ({}) };
+                return {
+                    ok: false,
+                    status: 503,
+                    statusText: 'unavailable',
+                    json: async () => ({}),
+                };
             }
             if (typeof url === 'string' && url.includes('/instrumentation/search')) {
                 return {

@@ -72,8 +72,8 @@
         z-index: 50;
         width: max-content;
         max-width: 260px;
-        padding: 0.5rem 0.7rem;
-        background: linear-gradient(180deg, var(--bg-elev), var(--bg-surface-2));
+        padding: var(--s-2) var(--s-3);
+        background: var(--bg-elev);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
         box-shadow:

@@ -45,8 +45,8 @@
         {
             label: t('hotspots.trend.mean'),
             values: (trend?.points ?? []).map((p) => p.mean_ns),
-            stroke: '--ember',
-            fill: 'rgba(255, 122, 69, 0.14)',
+            stroke: '--cyan',
+            fill: 'rgba(57, 196, 212, 0.12)',
         },
     ]);
 </script>
@@ -66,7 +66,9 @@
             <Tooltip text={t('tip.hotspots.p50')} align="end">{t('hotspots.col.p50')}</Tooltip>
             <Tooltip text={t('tip.hotspots.p95')} align="end">{t('hotspots.col.p95')}</Tooltip>
             <Tooltip text={t('tip.hotspots.p99')} align="end">{t('hotspots.col.p99')}</Tooltip>
-            <Tooltip text={t('tip.hotspots.samples')} align="end">{t('hotspots.col.samples')}</Tooltip>
+            <Tooltip text={t('tip.hotspots.samples')} align="end"
+                >{t('hotspots.col.samples')}</Tooltip
+            >
         </div>
         {#each rows as h (h.id)}
             {@const share = h.total_ns / max}
@@ -119,7 +121,7 @@
 
 <style>
     .hint {
-        margin: 0 0 0.6rem;
+        margin: 0 0 var(--s-2);
         font-size: 0.78rem;
         color: var(--text-faint);
     }
@@ -131,9 +133,9 @@
     .rowline {
         display: grid;
         grid-template-columns: minmax(0, 2.4fr) repeat(6, minmax(64px, 0.7fr));
-        gap: 0.75rem;
+        gap: var(--s-3);
         align-items: center;
-        padding: 0.55rem 0.9rem;
+        padding: var(--s-2) var(--s-4);
     }
     .head {
         font-size: 0.72rem;
@@ -177,7 +179,7 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.3rem;
+        gap: var(--s-1);
     }
     .name {
         font-size: 0.84rem;
@@ -198,7 +200,7 @@
         border-radius: 99px;
     }
     .trend {
-        padding: 0.8rem 0.9rem 1rem;
+        padding: var(--s-3) var(--s-4) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
         background: var(--bg-surface);
     }
@@ -206,7 +208,7 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        margin-bottom: 0.5rem;
+        margin-bottom: var(--s-2);
     }
     .trend-title {
         font-size: 0.78rem;
@@ -235,5 +237,34 @@
     }
     .g4 {
         background: var(--grade-4);
+    }
+
+    @media (max-width: 900px) {
+        .head,
+        .rowline {
+            grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(60px, 0.8fr));
+            gap: var(--s-2);
+            padding: var(--s-2) var(--s-2);
+        }
+        .head > :global(*:nth-child(4)),
+        .head > :global(*:nth-child(5)),
+        .head > :global(*:nth-child(7)),
+        .rowline > :global(*:nth-child(4)),
+        .rowline > :global(*:nth-child(5)),
+        .rowline > :global(*:nth-child(7)) {
+            display: none;
+        }
+    }
+    @media (max-width: 560px) {
+        .head,
+        .rowline {
+            grid-template-columns: minmax(0, 1fr) minmax(64px, auto);
+        }
+        .head > :global(*:nth-child(3)),
+        .head > :global(*:nth-child(6)),
+        .rowline > :global(*:nth-child(3)),
+        .rowline > :global(*:nth-child(6)) {
+            display: none;
+        }
     }
 </style>

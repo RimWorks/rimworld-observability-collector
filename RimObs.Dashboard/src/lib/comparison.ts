@@ -13,7 +13,7 @@ export function signedNs(value: number): string {
 }
 
 export function signedPercent(value: number | null): string {
-    if (value === null || Number.isNaN(value)) return '—';
+    if (value === null || Number.isNaN(value)) return '-';
     const sign = value > 0 ? '+' : '';
     return `${sign}${value.toFixed(1)}%`;
 }

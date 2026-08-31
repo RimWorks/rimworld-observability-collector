@@ -23,9 +23,6 @@
     --text-dim: #93a1ba;
     --text-faint: #8a98b3;
 
-    --ember: #ff7a45;
-    --ember-soft: #ff9d6e;
-    --ember-deep: #d65a28;
     --cyan: #39c4d4;
     --cyan-soft: #6fe0ec;
 
@@ -48,10 +45,20 @@
     --r-md: 8px;
     --r-lg: 14px;
 
+    --s-0: 0.125rem;
+    --s-1: 0.25rem;
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+
     --sb-w: 232px;
     --topbar-h: 58px;
+    --sb-w-rail: 58px;
 
-    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
     --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);
 
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -71,18 +78,7 @@ body {
 }
 
 body {
-    background:
-        radial-gradient(
-            1100px 700px at 82% -8%,
-            color-mix(in srgb, var(--ember) 8%, transparent),
-            transparent 60%
-        ),
-        radial-gradient(
-            900px 600px at -6% 4%,
-            color-mix(in srgb, var(--cyan) 7%, transparent),
-            transparent 55%
-        ),
-        linear-gradient(180deg, var(--bg-base), var(--bg-void));
+    background: var(--bg-base);
     background-attachment: fixed;
     color: var(--text);
     font-family: var(--font-ui);
@@ -130,15 +126,38 @@ code,
     background: transparent;
 }
 
+button {
+    background: var(--bg-elev);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--s-1) var(--s-3);
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color var(--t-fast) var(--ease-out);
+}
+
+button:hover:not(:disabled) {
+    border-color: var(--border-strong);
+}
+
+button:disabled {
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+
 :focus-visible {
     outline: none;
     box-shadow: var(--ring-focus);
     border-radius: var(--r-sm);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
     :root {
-        --sb-w: 58px;
+        --sb-w: var(--sb-w-rail);
     }
 }
 
@@ -157,16 +176,27 @@ code,
     *,
     *::before,
     *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+        animation: none !important;
         scroll-behavior: auto !important;
+        transition-property: color, background-color, border-color, box-shadow, opacity !important;
+        transition-duration: var(--t-fast) !important;
     }
 }
 
 @media (pointer: coarse) {
     button,
+    a[href],
+    select,
     [role='button'] {
         min-height: 44px;
     }
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 3px;
+    accent-color: var(--cyan);
 }

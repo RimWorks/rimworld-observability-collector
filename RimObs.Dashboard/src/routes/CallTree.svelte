@@ -44,13 +44,13 @@
         text-transform: uppercase;
         letter-spacing: 0.07em;
         color: var(--text-faint);
-        padding: 0 0.5rem 0.6rem;
+        padding: 0 var(--s-2) var(--s-2);
         border-bottom: 1px solid var(--border);
-        margin-bottom: 0.4rem;
+        margin-bottom: var(--s-2);
     }
     .cols {
         display: flex;
-        gap: 1.6rem;
+        gap: var(--s-5);
     }
     .tree {
         display: flex;

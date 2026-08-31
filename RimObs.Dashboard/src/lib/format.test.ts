@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ns, bytes, count, rate, metricKind, patchType, relativeTime, gradeFromShare } from './format';
+import {
+    ns,
+    bytes,
+    count,
+    rate,
+    metricKind,
+    patchType,
+    relativeTime,
+    gradeFromShare,
+} from './format';
 
 describe('ns', () => {
     it('renders zero and negatives as 0', () => {
@@ -121,5 +130,15 @@ describe('gradeFromShare', () => {
         expect(gradeFromShare(0.15)).toBe(2);
         expect(gradeFromShare(0.05)).toBe(1);
         expect(gradeFromShare(0.01)).toBe(0);
+    });
+});
+
+describe('non-finite input', () => {
+    it('renders a dash instead of leaking NaN or Infinity to the UI', () => {
+        for (const bad of [NaN, Infinity, -Infinity]) {
+            expect(ns(bad)).toBe('-');
+            expect(bytes(bad)).toBe('-');
+            expect(count(bad)).toBe('-');
+        }
     });
 });

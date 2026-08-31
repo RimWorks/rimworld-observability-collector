@@ -100,7 +100,9 @@
                 <li>
                     <span class="mono sig">{m.signature}</span>
                     <span class="dim asm">{m.assemblyName}</span>
-                    <button onclick={() => instrument(m)}>{t('instrumentation.results.button')}</button>
+                    <button onclick={() => instrument(m)}
+                        >{t('instrumentation.results.button')}</button
+                    >
                 </li>
             {/each}
         </ul>
@@ -113,14 +115,18 @@
         <ul class="active">
             {#each active as p (p.id)}
                 <li>
-                    <span class="mono sig">{p.typeFullName}.{p.methodName}({p.paramTypesJoined})</span>
+                    <span class="mono sig"
+                        >{p.typeFullName}.{p.methodName}({p.paramTypesJoined})</span
+                    >
                     <Tooltip text={t(`tip.instrumentation.${p.lastStatus}`)}>
-                        <span class="pill pill-{p.lastStatus}">{t(`instrumentation.status.${p.lastStatus}`)}</span>
+                        <span class="pill pill-{p.lastStatus}"
+                            >{t(`instrumentation.status.${p.lastStatus}`)}</span
+                        >
                     </Tooltip>
-                    {#if p.lastError}
-                        <span class="dim mono">{p.lastError}</span>
-                    {/if}
                     <button onclick={() => remove(p.id)}>{t('instrumentation.remove')}</button>
+                    {#if p.lastError}
+                        <span class="dim mono err">{p.lastError}</span>
+                    {/if}
                 </li>
             {/each}
         </ul>
@@ -130,9 +136,9 @@
 <style>
     .search {
         display: flex;
-        gap: 0.5rem;
+        gap: var(--s-2);
         align-items: center;
-        margin-bottom: 0.8rem;
+        margin-bottom: var(--s-3);
     }
     .search input {
         flex: 1;
@@ -142,7 +148,7 @@
         color: var(--text);
         font-family: var(--font-ui);
         font-size: 0.85rem;
-        padding: 0.45rem 0.7rem;
+        padding: var(--s-2) var(--s-3);
         transition: border-color var(--t-fast) var(--ease-out);
     }
     .search input::placeholder {
@@ -156,7 +162,7 @@
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
-        padding: 0.35rem 0.9rem;
+        padding: var(--s-1) var(--s-4);
         font-family: var(--font-ui);
         font-size: 0.8rem;
         cursor: pointer;
@@ -169,12 +175,12 @@
         border-color: var(--cyan);
     }
     .results button {
-        background: color-mix(in srgb, var(--ember) 14%, var(--bg-elev));
-        border-color: color-mix(in srgb, var(--ember) 40%, transparent);
-        color: var(--ember-soft);
+        background: color-mix(in srgb, var(--cyan) 14%, var(--bg-elev));
+        border-color: var(--border-strong);
+        color: var(--cyan-soft);
     }
     .results button:hover {
-        border-color: var(--ember);
+        border-color: var(--cyan);
     }
     .active button:hover {
         border-color: var(--bad);
@@ -192,14 +198,14 @@
     .active li {
         display: grid;
         grid-template-columns: 1fr auto auto;
-        gap: 0.6rem;
+        gap: var(--s-2);
         align-items: center;
-        padding: 0.45rem 0.2rem;
+        padding: var(--s-2) var(--s-1);
         border-bottom: 1px solid var(--border-soft);
         animation: row-in var(--t-base) var(--ease-out);
     }
     h2 {
-        margin: 1.2rem 0 0.4rem;
+        margin: var(--s-4) 0 var(--s-2);
         font-size: 0.95rem;
     }
     .dim {
@@ -207,7 +213,7 @@
     }
     .pill {
         font-size: 0.7rem;
-        padding: 0.1rem 0.5rem;
+        padding: var(--s-0) var(--s-2);
         border-radius: 99px;
         background: var(--bg-surface);
         border: 1px solid var(--border-soft);
@@ -223,10 +229,25 @@
         color: var(--text-faint);
     }
     .empty {
-        padding: 0.6rem 0;
+        padding: var(--s-2) 0;
     }
     .unavailable {
-        padding: 1rem;
+        padding: var(--s-4);
         color: var(--text-faint);
+    }
+    .active .err {
+        grid-column: 1 / -1;
+        color: var(--bad);
+        font-size: 0.78rem;
+        overflow-wrap: anywhere;
+    }
+    @media (max-width: 820px) {
+        .results li,
+        .active li {
+            grid-template-columns: 1fr auto;
+        }
+        .active li :global(.tip) {
+            grid-column: 1;
+        }
     }
 </style>

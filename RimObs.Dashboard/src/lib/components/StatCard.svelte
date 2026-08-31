@@ -5,19 +5,17 @@
         label,
         value,
         icon,
-        tone = 'cyan',
         tooltip,
     }: {
         label: string;
         value: string;
         icon: IconName;
-        tone?: 'cyan' | 'ember' | 'good' | 'warn';
         tooltip?: string;
     } = $props();
 </script>
 
-<div class="stat tone-{tone}">
-    <div class="ic"><Icon name={icon} size={20} /></div>
+<div class="stat">
+    <div class="ic"><Icon name={icon} size={16} /></div>
     <div class="meta">
         {#if tooltip}
             <Tooltip text={tooltip}><span class="label">{label}</span></Tooltip>
@@ -31,34 +29,18 @@
 <style>
     .stat {
         display: flex;
-        gap: 0.85rem;
+        gap: var(--s-3);
         align-items: flex-start;
-        background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-2));
-        border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border-soft));
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
         border-radius: var(--r-lg);
-        padding: 1rem 1.15rem;
+        padding: var(--s-4) var(--s-4);
         box-shadow: var(--shadow-card);
     }
-    .tone-cyan {
-        --accent: var(--cyan);
-    }
-    .tone-ember {
-        --accent: var(--ember);
-    }
-    .tone-good {
-        --accent: var(--good);
-    }
-    .tone-warn {
-        --accent: var(--warn);
-    }
     .ic {
-        color: var(--accent);
+        color: var(--text-faint);
         display: grid;
         place-items: center;
-        width: 38px;
-        height: 38px;
-        border-radius: var(--r-md);
-        background: color-mix(in srgb, var(--accent) 14%, transparent);
         flex-shrink: 0;
     }
     .meta {

@@ -111,9 +111,13 @@ describe('Hotspots route', () => {
 
         const tokenPattern = /(?:stroke|fill):\s*'(--[a-z0-9-]+)'/g;
         const usedTokens = [...hotspotsSrc.matchAll(tokenPattern)].map((m) => m[1]);
-        expect(usedTokens.length, 'Hotspots references at least one chart css-var').toBeGreaterThan(0);
+        expect(usedTokens.length, 'Hotspots references at least one chart css-var').toBeGreaterThan(
+            0,
+        );
         for (const token of usedTokens) {
-            expect(definedTokens, `${token} must be defined on :root in theme.css`).toContain(token);
+            expect(definedTokens, `${token} must be defined on :root in theme.css`).toContain(
+                token,
+            );
         }
     });
 });

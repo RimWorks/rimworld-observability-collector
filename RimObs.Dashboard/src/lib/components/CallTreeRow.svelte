@@ -39,7 +39,7 @@
     .bar-row {
         display: grid;
         grid-template-columns: 16px minmax(120px, 1.7fr) minmax(80px, 1fr) 70px 90px;
-        gap: 0.6rem;
+        gap: var(--s-2);
         align-items: center;
         width: 100%;
         min-width: 360px;
@@ -48,7 +48,7 @@
         border: none;
         color: inherit;
         font: inherit;
-        padding: 0.4rem 0.5rem;
+        padding: var(--s-2) var(--s-2);
         padding-left: calc(0.5rem + var(--depth) * 1.1rem);
         border-radius: var(--r-sm);
         cursor: pointer;
@@ -91,7 +91,7 @@
     .share-fill {
         display: block;
         height: 100%;
-        background: linear-gradient(90deg, var(--cyan), var(--ember));
+        background: var(--cyan);
         border-radius: 99px;
     }
     .calls {
@@ -103,5 +103,16 @@
         text-align: right;
         font-size: 0.82rem;
         font-weight: 600;
+    }
+
+    @media (max-width: 900px) {
+        .bar-row {
+            min-width: 0;
+            grid-template-columns: 16px minmax(0, 1.6fr) 64px 78px;
+            gap: var(--s-2);
+        }
+        .share-track {
+            display: none;
+        }
     }
 </style>

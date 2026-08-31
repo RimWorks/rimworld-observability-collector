@@ -54,19 +54,19 @@
     .list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
+        gap: var(--s-4);
     }
     .metric {
         border: 1px solid var(--border-soft);
         border-radius: var(--r-lg);
-        background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-2));
+        background: var(--bg-surface);
         overflow: hidden;
     }
     header {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 0.7rem 0.9rem;
+        gap: var(--s-2);
+        padding: var(--s-3) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
     }
     .name {
@@ -80,20 +80,20 @@
         font-size: 0.66rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        padding: 0.1rem 0.5rem;
+        padding: var(--s-0) var(--s-2);
         border-radius: 99px;
     }
     .k0 {
-        background: color-mix(in srgb, var(--cyan) 16%, transparent);
-        color: var(--cyan-soft);
+        background: var(--bg-elev);
+        color: var(--text-dim);
     }
     .k1 {
-        background: color-mix(in srgb, var(--ember) 16%, transparent);
-        color: var(--ember-soft);
+        background: var(--bg-elev);
+        color: var(--text-dim);
     }
     .k2 {
-        background: color-mix(in srgb, var(--warn) 16%, transparent);
-        color: var(--warn);
+        background: var(--bg-elev);
+        color: var(--text-dim);
     }
     .unit {
         font-size: 0.72rem;
@@ -105,10 +105,10 @@
     }
     .label {
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas: 'canon val' 'samples val';
-        gap: 0 0.5rem;
-        padding: 0.55rem 0.9rem;
+        gap: 0 var(--s-2);
+        padding: var(--s-2) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
         align-items: center;
     }
@@ -117,6 +117,7 @@
     }
     .canon {
         grid-area: canon;
+        overflow-wrap: anywhere;
         font-size: 0.8rem;
         color: var(--text-dim);
     }
@@ -130,5 +131,11 @@
         grid-area: samples;
         font-size: 0.7rem;
         color: var(--text-faint);
+    }
+
+    @media (max-width: 820px) {
+        .grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>

@@ -127,7 +127,7 @@
             cursor: { y: false, points: { size: 6 } },
             axes: [
                 { ...axis, values: (_u, vals) => vals.map((v) => xFormat(v)) },
-                { ...axis, size: 64, values: (_u, vals) => vals.map((v) => format(v)) },
+                { ...axis, size: 88, values: (_u, vals) => vals.map((v) => format(v)) },
             ],
             series: [
                 { label: 'x', value: (_u, v) => (v == null ? '' : xFormat(v)) },
@@ -195,13 +195,13 @@
         pointer-events: none;
         opacity: 0;
         transition: opacity 90ms var(--ease-out);
-        background: linear-gradient(180deg, var(--bg-elev), var(--bg-surface-2));
+        background: var(--bg-elev);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
         box-shadow:
             0 1px 0 rgba(255, 255, 255, 0.03) inset,
             0 10px 28px rgba(0, 0, 0, 0.45);
-        padding: 0.45rem 0.6rem;
+        padding: var(--s-2) var(--s-2);
         font-family: var(--font-ui);
         font-size: 0.74rem;
         line-height: 1.4;
@@ -215,13 +215,13 @@
         text-transform: uppercase;
         letter-spacing: 0.07em;
         color: var(--text-faint);
-        margin-bottom: 0.25rem;
+        margin-bottom: var(--s-1);
         font-family: var(--font-mono);
     }
     .tt :global(.tt-row) {
         display: flex;
         align-items: center;
-        gap: 0.45rem;
+        gap: var(--s-2);
     }
     .tt :global(.tt-dot) {
         width: 8px;

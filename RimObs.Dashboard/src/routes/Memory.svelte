@@ -38,28 +38,24 @@
     <div class="stats">
         <StatCard
             icon="memory"
-            tone="cyan"
             label={t('memory.stat.currentHeap')}
             value={bytes(summary.currentHeap)}
             tooltip={t('tip.memory.currentHeap')}
         />
         <StatCard
             icon="memory"
-            tone="warn"
             label={t('memory.stat.peakHeap')}
             value={bytes(summary.peakHeap)}
             tooltip={t('tip.memory.peakHeap')}
         />
         <StatCard
             icon="metric"
-            tone="ember"
             label={t('memory.stat.peakRate')}
             value="{bytes(summary.peakAllocRate)}/m"
             tooltip={t('tip.memory.peakRate')}
         />
         <StatCard
             icon="stack"
-            tone="good"
             label={t('memory.stat.collections')}
             value="{count(summary.perGen[0])} / {count(summary.perGen[1])} / {count(
                 summary.perGen[2],
@@ -87,11 +83,19 @@
             <div class="head">
                 <Tooltip text={t('tip.memory.col.gen')} align="end">{t('memory.col.gen')}</Tooltip>
                 <Tooltip text={t('tip.memory.col.pause')}>{t('memory.col.pause')}</Tooltip>
-                <Tooltip text={t('tip.memory.col.before')} align="end">{t('memory.col.before')}</Tooltip>
-                <Tooltip text={t('tip.memory.col.after')} align="end">{t('memory.col.after')}</Tooltip>
-                <Tooltip text={t('tip.memory.col.interval')} align="end">{t('memory.col.interval')}</Tooltip>
-                <Tooltip text={t('tip.memory.col.rate')} align="end">{t('memory.col.rate')}</Tooltip>
-                <Tooltip text={t('tip.memory.col.tick')} align="end">{t('memory.col.tick')}</Tooltip>
+                <Tooltip text={t('tip.memory.col.before')} align="end"
+                    >{t('memory.col.before')}</Tooltip
+                >
+                <Tooltip text={t('tip.memory.col.after')} align="end"
+                    >{t('memory.col.after')}</Tooltip
+                >
+                <Tooltip text={t('tip.memory.col.interval')} align="end"
+                    >{t('memory.col.interval')}</Tooltip
+                >
+                <Tooltip text={t('tip.memory.col.rate')} align="end">{t('memory.col.rate')}</Tooltip
+                >
+                <Tooltip text={t('tip.memory.col.tick')} align="end">{t('memory.col.tick')}</Tooltip
+                >
             </div>
             <!-- gc events have no stable id and rows are display-only, so index keying is safe -->
             {#each events as e, i (i)}
@@ -138,11 +142,11 @@
     .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.2rem;
+        gap: var(--s-4);
+        margin-bottom: var(--s-4);
     }
     :global(.card) {
-        margin-bottom: 1.2rem;
+        margin-bottom: var(--s-4);
     }
     .hint,
     .note {
@@ -151,9 +155,9 @@
         margin: 0;
     }
     .note {
-        margin-top: 0.9rem;
+        margin-top: var(--s-4);
         border-top: 1px solid var(--border-soft);
-        padding-top: 0.9rem;
+        padding-top: var(--s-4);
     }
     .head,
     .rowline {
@@ -161,9 +165,9 @@
         grid-template-columns:
             72px minmax(90px, 1fr) repeat(2, minmax(90px, 1fr)) minmax(72px, 0.8fr)
             minmax(150px, 1.4fr) minmax(80px, 0.8fr);
-        gap: 0.75rem;
+        gap: var(--s-3);
         align-items: center;
-        padding: 0.5rem 0.3rem;
+        padding: var(--s-2) var(--s-1);
     }
     .head {
         font-size: 0.72rem;
@@ -192,7 +196,7 @@
     .gen {
         font-style: normal;
         font-family: var(--font-mono);
-        padding: 0.05rem 0.5rem;
+        padding: var(--s-0) var(--s-2);
         border-radius: 99px;
         font-size: 0.74rem;
         white-space: nowrap;
@@ -212,7 +216,7 @@
     .rate {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: var(--s-2);
         justify-content: flex-end;
     }
     .rate .mono {
@@ -230,19 +234,38 @@
     .fill {
         display: block;
         height: 100%;
-        background: var(--ember);
+        background: var(--cyan);
         border-radius: 99px;
     }
     .guide {
         margin: 0;
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 0.55rem 1rem;
+        gap: var(--s-2) var(--s-4);
         align-items: baseline;
     }
     .guide dd {
         margin: 0;
         font-size: 0.86rem;
         color: var(--text-dim);
+    }
+
+    @media (max-width: 820px) {
+        .stats {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+        .head,
+        .rowline {
+            grid-template-columns: 58px minmax(80px, 1fr) minmax(80px, 1fr) minmax(64px, 0.8fr);
+            gap: var(--s-2);
+        }
+        .head > :global(*:nth-child(3)),
+        .head > :global(*:nth-child(6)),
+        .head > :global(*:nth-child(7)),
+        .rowline > :global(*:nth-child(3)),
+        .rowline > :global(*:nth-child(6)),
+        .rowline > :global(*:nth-child(7)) {
+            display: none;
+        }
     }
 </style>

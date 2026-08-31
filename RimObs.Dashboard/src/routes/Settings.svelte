@@ -14,25 +14,26 @@
     let status = $derived(res.data);
 </script>
 
-<Card title={t('settings.title')} accent="ember">
+<Card title={t('settings.title')}>
     <div class="rows">
         <div class="kv">
             <Tooltip text={t('tip.settings.version')}
                 ><span class="k">{t('settings.version')}</span></Tooltip
             >
-            <span class="v mono">{status?.version ?? '—'}</span>
+            <span class="v mono">{status?.version ?? '-'}</span>
         </div>
         <div class="kv">
             <Tooltip text={t('tip.settings.schema')}
                 ><span class="k">{t('settings.schema')}</span></Tooltip
             >
-            <span class="v mono">{status?.schema_version ?? '—'}</span>
+            <span class="v mono">{status?.schema_version ?? '-'}</span>
         </div>
         <div class="kv">
             <Tooltip text={t('tip.settings.language')}
                 ><span class="k">{t('settings.language')}</span></Tooltip
             >
             <select
+                aria-label={t('settings.language')}
                 class="v lang"
                 value={getLang()}
                 onchange={(e) => userPrefs.setLang((e.currentTarget as HTMLSelectElement).value)}
@@ -53,7 +54,7 @@
     </div>
 </Card>
 
-<Card title={t('settings.exporters')} accent="ember">
+<Card title={t('settings.exporters')}>
     {#if status?.exporters}
         <div class="rows">
             <div class="kv">
@@ -74,7 +75,7 @@
                 <div class="kv">
                     <span class="k">{t('settings.exporter.last_scrape')}</span>
                     <span class="v mono"
-                        >{status.exporters.prometheus_health.last_scrape_utc ?? '—'}</span
+                        >{status.exporters.prometheus_health.last_scrape_utc ?? '-'}</span
                     >
                 </div>
                 <div class="kv">
@@ -99,7 +100,7 @@
     {/if}
 </Card>
 
-<Card title={t('settings.behavior')} accent="cyan">
+<Card title={t('settings.behavior')}>
     <label class="toggle">
         <input
             type="checkbox"
@@ -122,8 +123,8 @@
     .kv {
         display: flex;
         justify-content: space-between;
-        gap: 1rem;
-        padding: 0.65rem 0;
+        gap: var(--s-4);
+        padding: var(--s-3) 0;
         border-bottom: 1px solid var(--border-soft);
         align-items: baseline;
     }
@@ -140,13 +141,13 @@
         font-size: 0.88rem;
     }
     .update .v {
-        color: var(--ember-soft);
+        color: var(--cyan-soft);
     }
     .v.on {
         color: var(--cyan);
     }
     .v.err {
-        color: var(--ember-soft);
+        color: var(--bad);
     }
     .muted {
         font-size: 0.85rem;
@@ -158,7 +159,7 @@
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
-        padding: 0.3rem 0.6rem;
+        padding: var(--s-1) var(--s-2);
         font-family: var(--font-ui);
         font-size: 0.85rem;
         cursor: pointer;
@@ -169,19 +170,17 @@
     }
     .toggle {
         display: flex;
-        gap: 0.85rem;
+        gap: var(--s-3);
         align-items: flex-start;
         cursor: pointer;
     }
     .toggle input {
-        margin-top: 0.2rem;
-        accent-color: var(--cyan);
         cursor: pointer;
     }
     .toggle-text {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: var(--s-1);
     }
     .toggle-label {
         font-size: 0.92rem;

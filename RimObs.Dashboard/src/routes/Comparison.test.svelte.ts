@@ -49,7 +49,11 @@ function mockFetch() {
             return {
                 ok: true,
                 status: 200,
-                json: async () => ({ token: 'tok-1', manifest: MANIFEST, contents: ['manifest.json'] }),
+                json: async () => ({
+                    token: 'tok-1',
+                    manifest: MANIFEST,
+                    contents: ['manifest.json'],
+                }),
             } as Response;
         }
         if (url.startsWith('/api/v1/sessions/compare')) {
@@ -77,7 +81,9 @@ describe('Comparison route bundle source', () => {
 
         await importBundle(container);
 
-        const options = await screen.findAllByRole('option', { name: /imported-2026-05-20 \(imported\)/i });
+        const options = await screen.findAllByRole('option', {
+            name: /imported-2026-05-20 \(imported\)/i,
+        });
         expect(options).toHaveLength(2);
     });
 

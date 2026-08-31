@@ -19,7 +19,7 @@ describe('signedNs', () => {
 
 describe('signedPercent', () => {
     it('renders null as em dash placeholder', () => {
-        expect(signedPercent(null)).toBe('—');
+        expect(signedPercent(null)).toBe('-');
     });
 
     it('signs positive values', () => {

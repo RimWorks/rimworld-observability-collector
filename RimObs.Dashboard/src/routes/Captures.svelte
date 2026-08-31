@@ -187,15 +187,15 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: 1rem;
-        margin-bottom: 1rem;
+        gap: var(--s-4);
+        margin-bottom: var(--s-4);
     }
     .bar-text h2 {
         margin: 0;
         font-size: 1.1rem;
     }
     .bar-text p {
-        margin: 0.2rem 0 0;
+        margin: var(--s-1) 0 0;
         color: var(--text-faint);
         font-size: 0.82rem;
     }
@@ -205,10 +205,10 @@
     .btn {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: var(--s-2);
         border: 1px solid var(--border);
         border-radius: 6px;
-        padding: 0.5rem 0.9rem;
+        padding: var(--s-2) var(--s-4);
         font-size: 0.85rem;
         cursor: pointer;
         background: var(--surface);
@@ -223,18 +223,18 @@
         color: var(--accent);
     }
     .btn.stop {
-        border-color: var(--danger, #d9534f);
-        color: var(--danger, #d9534f);
+        border-color: var(--bad);
+        color: var(--bad);
     }
     .action-error {
-        color: var(--danger, #d9534f);
+        color: var(--bad);
         font-size: 0.82rem;
-        margin: 0 0 0.8rem;
+        margin: 0 0 var(--s-3);
     }
     .layout {
         display: grid;
         grid-template-columns: minmax(220px, 320px) 1fr;
-        gap: 1.2rem;
+        gap: var(--s-4);
     }
     .list {
         list-style: none;
@@ -242,14 +242,14 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.4rem;
+        gap: var(--s-2);
     }
     .row {
         width: 100%;
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        padding: 0.55rem 0.7rem;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--s-3);
         border: 1px solid var(--border);
         border-radius: 6px;
         background: var(--surface);
@@ -269,7 +269,6 @@
     }
     .dot.running {
         background: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
     }
     .meta {
         display: flex;
@@ -292,9 +291,9 @@
         color: var(--text-faint);
     }
     .warning {
-        margin: 0.3rem 0 0;
+        margin: var(--s-1) 0 0;
         font-size: 0.72rem;
-        color: var(--warn, #c98a00);
+        color: var(--warn);
     }
     .detail {
         min-width: 0;
@@ -302,14 +301,14 @@
     .detail-head {
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        margin-bottom: 0.7rem;
+        gap: var(--s-2);
+        margin-bottom: var(--s-3);
     }
     .badge {
         font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        padding: 0.15rem 0.5rem;
+        padding: var(--s-0) var(--s-2);
         border-radius: 999px;
         border: 1px solid var(--border);
         color: var(--text-faint);
@@ -331,13 +330,13 @@
         text-transform: uppercase;
         letter-spacing: 0.07em;
         color: var(--text-faint);
-        padding: 0 0.5rem 0.6rem;
+        padding: 0 var(--s-2) var(--s-2);
         border-bottom: 1px solid var(--border);
-        margin-bottom: 0.4rem;
+        margin-bottom: var(--s-2);
     }
     .cols {
         display: flex;
-        gap: 1.6rem;
+        gap: var(--s-5);
     }
     .tree {
         display: flex;
@@ -347,5 +346,10 @@
     .empty-tree {
         color: var(--text-faint);
         font-size: 0.82rem;
+    }
+    @media (max-width: 900px) {
+        .layout {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
