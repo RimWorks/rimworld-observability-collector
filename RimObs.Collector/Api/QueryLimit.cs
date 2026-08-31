@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class QueryLimit {
     public static int Clamp(int? requested, int defaultLimit, int maxLimit) {

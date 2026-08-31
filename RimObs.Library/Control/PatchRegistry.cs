@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Reflection;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Wire.Control;
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal sealed class ApplyResult {
     internal ApplyResult(int patchId, int sectionId, string sectionName, PatchStatus status, string? errorReason = null) {

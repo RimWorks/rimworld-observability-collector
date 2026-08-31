@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class PrivacyOptions {
     public bool IncludeSaveName { get; set; } = false;

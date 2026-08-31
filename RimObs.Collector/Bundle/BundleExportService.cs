@@ -8,11 +8,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public enum BundleExportStatus {
     Ok,

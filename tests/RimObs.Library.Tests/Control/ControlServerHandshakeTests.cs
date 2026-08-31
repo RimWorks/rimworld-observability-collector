@@ -1,14 +1,14 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Session;
-using Cryptiklemur.RimObs.Transport;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Session;
+using RimWorks.RimObs.Transport;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Library.Tests.Control;
+namespace RimWorks.RimObs.Library.Tests.Control;
 
 public sealed class ControlServerHandshakeTests : IDisposable {
     public void Dispose() {

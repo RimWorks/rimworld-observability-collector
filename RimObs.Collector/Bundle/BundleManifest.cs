@@ -2,7 +2,7 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public sealed class BundleManifest {
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) {

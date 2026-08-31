@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class PatchConflictsBatch {
     public string[] SectionNames { get; set; } = [];

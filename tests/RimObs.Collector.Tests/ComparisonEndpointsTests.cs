@@ -6,17 +6,17 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Bundle;
-using Cryptiklemur.RimObs.Collector.Hosting;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Hosting;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class ComparisonEndpointsTests : IDisposable {
     private readonly string _sessionsDir;

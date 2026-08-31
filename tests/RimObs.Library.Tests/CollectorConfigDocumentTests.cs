@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Config;
+using RimWorks.RimObs.Config;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorConfigDocumentTests {
     private const string FullConfig = """

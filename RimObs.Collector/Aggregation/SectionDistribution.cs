@@ -1,6 +1,6 @@
 using HdrHistogram;
 
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 public sealed class SectionDistribution {
     public const int BucketCount = 300;

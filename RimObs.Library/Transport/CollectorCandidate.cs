@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 public sealed class CollectorCandidate {
     public CollectorCandidate(string executablePath, Version version, string? rid = null, string? prerelease = null) {

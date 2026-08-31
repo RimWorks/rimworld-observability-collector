@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 // Hand-rolled MessagePack-format decoder, the read counterpart to WireBufferWriter. Accepts the
 // canonical compact MessagePack layout so it round-trips this codec's own output and any standard

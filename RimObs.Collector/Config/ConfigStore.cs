@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.Json;
 using Serilog;
 
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class ConfigStore {
     private readonly string? _path;

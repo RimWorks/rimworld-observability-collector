@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Config;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Config;
+using RimWorks.RimObs.Wire;
 using Microsoft.AspNetCore.Http;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class RequestBody {
     // Response envelopes always carry the wire SchemaVersion.Current. The domain version

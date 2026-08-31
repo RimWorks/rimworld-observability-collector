@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Collector.Tests.Stubs;
+namespace RimWorks.RimObs.Collector.Tests.Stubs;
 
 public sealed class StubControlServer : System.IDisposable {
     private readonly HttpListener _listener;

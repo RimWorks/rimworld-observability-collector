@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public static class LifecycleDecision {
     public static bool ShouldShutdown(bool parentTracked, bool parentAlive, TimeSpan sinceLastActivity, TimeSpan idleTimeout) {

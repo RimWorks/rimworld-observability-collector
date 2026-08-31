@@ -1,11 +1,11 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Config;
-using Cryptiklemur.RimObs.Collector.Exporters;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Config;
+using RimWorks.RimObs.Collector.Exporters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class MetricsExporterEndpoints {
     private const string ContentType = "text/plain; version=0.0.4; charset=utf-8";

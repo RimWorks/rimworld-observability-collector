@@ -61,7 +61,7 @@ render-step     // hyphens not allowed
 
 `RegisterSection` reads the calling assembly's registered `packageId` and prepends it with a dot separator. You register bare names; the library produces the qualified wire name.
 
-Example: a mod with `packageId="cryptiklemur.example"` calling `RegisterSection("tick")` produces the wire name `cryptiklemur.example.tick`. The bare name `tick` is what you pass; the qualified name is what appears in the collector and dashboard.
+Example: a mod with `packageId="yourmod.example"` calling `RegisterSection("tick")` produces the wire name `yourmod.example.tick`. The bare name `tick` is what you pass; the qualified name is what appears in the collector and dashboard.
 
 ## Measuring
 
@@ -84,7 +84,7 @@ public static MeasureScope Measure(SectionHandle handle)
 
 ### Explicit Start/Stop
 
-`Profiler` (namespace `Cryptiklemur.RimObs.Profile`) exposes a lower-level API for cases where a `using` block is structurally inconvenient:
+`Profiler` (namespace `RimWorks.RimObs.Profile`) exposes a lower-level API for cases where a `using` block is structurally inconvenient:
 
 ```csharp
 long token = Profiler.Start(handle);

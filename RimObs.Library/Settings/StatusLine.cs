@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 public sealed class StatusLine {
     public StatusLine(string label, string value, bool healthy) {

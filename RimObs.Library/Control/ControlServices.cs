@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal static class ControlServices {
     private static ControlOpQueue? s_Queue;

@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Collector.Cli;
+namespace RimWorks.RimObs.Collector.Cli;
 
 public static class OutputFormatResolver {
     public const string FlagName = "--format";

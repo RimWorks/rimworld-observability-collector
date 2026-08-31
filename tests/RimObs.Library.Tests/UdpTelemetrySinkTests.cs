@@ -2,14 +2,14 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Session;
-using Cryptiklemur.RimObs.Transport;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Session;
+using RimWorks.RimObs.Transport;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class UdpTelemetrySinkTests : IDisposable {
     public void Dispose() {

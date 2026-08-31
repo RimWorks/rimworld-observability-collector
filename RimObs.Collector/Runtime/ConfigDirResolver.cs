@@ -1,8 +1,8 @@
-namespace Cryptiklemur.RimObs.Collector.Runtime;
+namespace RimWorks.RimObs.Collector.Runtime;
 
 public static class ConfigDirResolver {
     public const string EnvVarName = "RIMOBS_CONFIG_DIR";
-    private const string DefaultSubdir = "CryptikLemur.RimObs";
+    private const string DefaultSubdir = "RimWorks.RimObs";
 
     public static string Resolve(string? explicitOverride = null) {
         if (!string.IsNullOrWhiteSpace(explicitOverride))

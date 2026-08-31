@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 // Hand-rolled MessagePack-format encoder with zero external dependencies. RimWorld's Unity Mono
 // cannot load the MessagePack package (its dynamic-codegen types reference System.Reflection.Emit

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Comparison;
+namespace RimWorks.RimObs.Collector.Comparison;
 
 public static class SessionComparer {
     private const double RegressionPercentThreshold = 25.0;

@@ -1,11 +1,11 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Cryptiklemur.RimObs.Metrics;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Metrics;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 public static class Obs {
     public static class Profile {

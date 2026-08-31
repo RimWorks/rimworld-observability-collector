@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire.Control;
+namespace RimWorks.RimObs.Wire.Control;
 
 public enum PatchStatus : byte {
     Pending = 0,

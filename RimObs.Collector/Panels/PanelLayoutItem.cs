@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Panels;
+namespace RimWorks.RimObs.Collector.Panels;
 
 public sealed class PanelLayoutItem {
     public string Metric { get; set; } = "";

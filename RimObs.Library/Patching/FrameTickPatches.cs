@@ -1,9 +1,9 @@
 using System.Reflection;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Observers;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Observers;
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 // Installs zero-arg Harmony postfixes on the game's per-tick and per-frame entry points so the
 // TpsFpsObserver can derive live TPS/FPS by differencing call counts. These compose with the

@@ -4,7 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 
-namespace Cryptiklemur.RimObs.Collector.Cli;
+namespace RimWorks.RimObs.Collector.Cli;
 
 public sealed class BundleCommandOptions {
     public string SessionId { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class TelemetryBatch {
     public int SchemaVersion { get; set; }

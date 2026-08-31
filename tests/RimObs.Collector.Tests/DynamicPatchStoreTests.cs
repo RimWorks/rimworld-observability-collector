@@ -1,12 +1,12 @@
 using System;
 using System.IO;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class DynamicPatchStoreTests {
     private static DynamicPatchStore Open() => DynamicPatchStore.OpenInMemory();

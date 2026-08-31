@@ -1,6 +1,6 @@
-using Cryptiklemur.RimObs.Collector.Security;
+using RimWorks.RimObs.Collector.Security;
 
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class SecurityOptions {
     public bool CsrfOriginCheckEnabled { get; set; } = true;

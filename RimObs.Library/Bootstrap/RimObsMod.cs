@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Config;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Observers;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Session;
-using Cryptiklemur.RimObs.Settings;
-using Cryptiklemur.RimObs.Transport;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Config;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Session;
+using RimWorks.RimObs.Settings;
+using RimWorks.RimObs.Transport;
 using Verse;
 
-namespace Cryptiklemur.RimObs.Bootstrap;
+namespace RimWorks.RimObs.Bootstrap;
 
 public sealed class RimObsMod : Mod {
-    private const string FrameworkOwnerId = "CryptikLemur.RimObs";
+    private const string FrameworkOwnerId = "RimWorks.RimObs";
     private const string CollectorHost = "127.0.0.1";
     // Cold-launching a fresh self-contained collector (extract + JIT) takes longer than
     // pinging an already-running daemon did, so allow generous readiness headroom.

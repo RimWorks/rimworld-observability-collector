@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Cryptiklemur.RimObs.Library.Control;
+using RimWorks.RimObs.Library.Control;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests.Control;
+namespace RimWorks.RimObs.Tests.Control;
 
 public class AssemblyIndexTests {
     [Fact]

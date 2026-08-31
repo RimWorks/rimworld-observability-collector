@@ -1,9 +1,9 @@
 using System;
-using Cryptiklemur.RimObs.Settings;
+using RimWorks.RimObs.Settings;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorStatusProviderTests : IDisposable {
     public CollectorStatusProviderTests() => CollectorRuntimeInfo.ResetForTests();

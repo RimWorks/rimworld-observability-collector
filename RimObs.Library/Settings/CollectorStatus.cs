@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 public sealed class CollectorStatus {
     public CollectorStatus(

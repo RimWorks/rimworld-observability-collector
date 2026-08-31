@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public enum BrowserPlatform {
     Linux,

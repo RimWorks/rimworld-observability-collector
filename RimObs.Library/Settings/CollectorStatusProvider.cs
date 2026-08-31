@@ -1,11 +1,11 @@
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Observers;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Session;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Session;
 
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 public static class CollectorStatusProvider {
     public static CollectorStatus CaptureCurrent() {

@@ -13,13 +13,13 @@ This page takes you from zero to a visible section in the dashboard in about fiv
 In your mod's project directory:
 
 ```bash
-dotnet add package CryptikLemur.RimObs.Library
+dotnet add package RimWorks.RimObs.Library
 ```
 
 Or add the reference directly in your `.csproj`:
 
 ```xml
-<PackageReference Include="CryptikLemur.RimObs.Library" Version="*" ExcludeAssets="runtime" />
+<PackageReference Include="RimWorks.RimObs.Library" Version="*" ExcludeAssets="runtime" />
 ```
 
 `ExcludeAssets="runtime"` is important: the library DLL ships with the RimObs Workshop item, not bundled in your mod.
@@ -31,7 +31,7 @@ Add a `<modDependencies>` entry to your `About/About.xml` so players are prompte
 ```xml
 <modDependencies>
   <li>
-    <packageId>cryptiklemur.rimobs</packageId>
+    <packageId>rimworks.rimobs</packageId>
     <displayName>RimWorld Observability Collector</displayName>
     <steamWorkshopUrl>steam://url/CommunityFilePage/3733585062</steamWorkshopUrl>
   </li>
@@ -45,7 +45,7 @@ Add a `<modDependencies>` entry to your `About/About.xml` so players are prompte
 Register a handle once (as a static field) and wrap your work in a `using` block:
 
 ```csharp
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 
 public static class MyModInit
 {
@@ -62,7 +62,7 @@ public static class MyModInit
 }
 ```
 
-The name `"tick"` is a bare name. At registration the library automatically prepends your mod's `packageId`, so a mod with `packageId="cryptiklemur.example"` produces the full section name `cryptiklemur.example.tick` on the wire (PRD §35.69). You will see that full name in the dashboard sidebar. See [Profile API](Profile-API) for the complete surface, including explicit `Start`/`Stop` pairs and nested sections.
+The name `"tick"` is a bare name. At registration the library automatically prepends your mod's `packageId`, so a mod with `packageId="yourmod.example"` produces the full section name `yourmod.example.tick` on the wire (PRD §35.69). You will see that full name in the dashboard sidebar. See [Profile API](Profile-API) for the complete surface, including explicit `Start`/`Stop` pairs and nested sections.
 
 ## Your first metric
 

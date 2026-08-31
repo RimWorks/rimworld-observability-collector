@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <Authors>CryptikLemur</Authors>
+        <Authors>RimWorks</Authors>
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>True</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>
         <WarningLevel>4</WarningLevel>
-        <RootNamespace>Cryptiklemur.RimObs.Wire</RootNamespace>
+        <RootNamespace>RimWorks.RimObs.Wire</RootNamespace>
         <AssemblyName>RimObs.Wire</AssemblyName>
         <DebugType>embedded</DebugType>
 
-        <PackageId>CryptikLemur.RimObs.Wire</PackageId>
+        <PackageId>RimWorks.RimObs.Wire</PackageId>
         <Description>Wire protocol (MessagePack-style) shared between the RimWorld Observability collector and its mod-side library. Useful for third-party tools that read collector data.</Description>
         <PackageTags>rimworld;observability;telemetry;wire-protocol</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>

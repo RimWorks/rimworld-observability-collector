@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Panels;
+namespace RimWorks.RimObs.Collector.Panels;
 
 public sealed class PanelRegistry {
     // Domain version of the panel registration body. Used only to validate inbound

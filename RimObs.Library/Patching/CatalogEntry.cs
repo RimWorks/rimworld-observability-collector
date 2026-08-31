@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal sealed class CatalogEntry {
     public CatalogEntry(string name, string typeName, string methodName, string[]? paramTypeNames) {

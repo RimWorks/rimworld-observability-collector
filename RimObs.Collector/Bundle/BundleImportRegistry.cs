@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public sealed class BundleImportRegistry {
     private readonly string _baseDir;

@@ -2,15 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Captures;
-using Cryptiklemur.RimObs.Collector.Config;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Captures;
+using RimWorks.RimObs.Collector.Config;
+using RimWorks.RimObs.Wire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class CapturesEndpoints {
     public static IEndpointRouteBuilder MapCapturesEndpoints(this IEndpointRouteBuilder endpoints) {

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class TpsFpsBatch {
     public double Tps { get; set; }

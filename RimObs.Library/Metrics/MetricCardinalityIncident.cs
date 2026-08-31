@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Metrics;
+namespace RimWorks.RimObs.Metrics;
 
 public readonly struct MetricCardinalityIncident {
     public MetricCardinalityIncident(string metricName, string ownerPackageId, int cardinalityLimit, long incidentCount) {

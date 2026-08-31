@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class SqliteSessionPersister : ISessionPersister {
     private readonly string _sessionsDir;

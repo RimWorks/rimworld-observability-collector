@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using Cryptiklemur.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Bundle;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class BundleSizeEstimatorTests {
     [Fact]

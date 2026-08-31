@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal static class MethodResolver {
     private static readonly string[] s_BlocklistedNamespaces = [
-        "Cryptiklemur.RimObs.Library.",
-        "Cryptiklemur.RimObs.Wire.",
+        "RimWorks.RimObs.Library.",
+        "RimWorks.RimObs.Wire.",
         "HarmonyLib.",
         "MonoMod.",
     ];

@@ -1,10 +1,10 @@
 using System;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class OwnerRegistryTests : IDisposable {
     private readonly Assembly _self = typeof(OwnerRegistryTests).Assembly;

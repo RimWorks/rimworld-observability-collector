@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 // Monotonic counters fed by the per-tick and per-frame Harmony postfixes (see FrameTickPatches).
 // Postfixes run on RimWorld's main thread; the TpsFpsObserver reads them from a background poller,

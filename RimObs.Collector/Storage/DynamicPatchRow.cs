@@ -1,6 +1,6 @@
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed record DynamicPatchRow(
     long Id,

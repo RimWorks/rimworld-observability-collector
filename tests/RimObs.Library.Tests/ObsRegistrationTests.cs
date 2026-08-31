@@ -1,16 +1,16 @@
 using System;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Metrics;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Metrics;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class ObsRegistrationTests : IDisposable {
-    private const string TestPackageId = "CryptikLemur.RimObs.tests";
+    private const string TestPackageId = "RimWorks.RimObs.tests";
     private readonly Assembly _self;
 
     public ObsRegistrationTests() {
@@ -30,7 +30,7 @@ public sealed class ObsRegistrationTests : IDisposable {
         SectionHandle handle = Obs.Profile.RegisterSection("pawn_scan");
 
         handle.IsValid.Should().BeTrue();
-        SectionRegistry.GetName(handle.Id).Should().Be("CryptikLemur.RimObs.tests.pawn_scan");
+        SectionRegistry.GetName(handle.Id).Should().Be("RimWorks.RimObs.tests.pawn_scan");
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class ObsRegistrationTests : IDisposable {
 
         handle.IsValid.Should().BeTrue();
         MetricDescriptor descriptor = MetricRegistry.Get(handle.Id)!;
-        descriptor.FullName.Should().Be("CryptikLemur.RimObs.tests.cache_hits");
+        descriptor.FullName.Should().Be("RimWorks.RimObs.tests.cache_hits");
         descriptor.OwnerPackageId.Should().Be(TestPackageId);
         descriptor.Kind.Should().Be(MetricKind.Counter);
         descriptor.Subsystem.Should().Be("jobs");

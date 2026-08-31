@@ -3,14 +3,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Observers;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Wire;
 
-using Cryptiklemur.RimObs.Session;
+using RimWorks.RimObs.Session;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationSink, ITpsFpsSink, IDisposable {
     public const int DefaultPort = 17654;

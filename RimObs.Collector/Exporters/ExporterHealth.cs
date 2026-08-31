@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Collector.Exporters;
+namespace RimWorks.RimObs.Collector.Exporters;
 
 // Tracks the runtime health of the Prometheus exporter so the dashboard can
 // surface enabled state, last scrape time, sample count, and the most recent

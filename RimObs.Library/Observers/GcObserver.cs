@@ -1,9 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 internal sealed class GcObserver {
     private static readonly long s_TimestampTicksPerSecond = Stopwatch.Frequency;

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Exporters;
+namespace RimWorks.RimObs.Collector.Exporters;
 
 // Renders the collector's session aggregates as a Prometheus text exposition.
 // Reads only from summarized aggregates (never a game hot path) per PRD §17.1,

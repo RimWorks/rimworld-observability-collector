@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class PingMessage {
     public string OwnerId { get; set; } = string.Empty;

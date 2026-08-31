@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal static class PatchInstaller {
-    public const string HarmonyId = "CryptikLemur.RimObs.library";
+    public const string HarmonyId = "RimWorks.RimObs.library";
 
     private static Harmony? s_Harmony;
 
@@ -114,7 +114,7 @@ internal static class PatchInstaller {
     }
 
     internal static void PatchSingleForTests(MethodBase target) {
-        Harmony harmony = EnsureHarmony("CryptikLemur.RimObs.tests");
+        Harmony harmony = EnsureHarmony("RimWorks.RimObs.tests");
         HarmonyMethod transpiler = new(MethodTransplanter.TranspilerMethod);
         harmony.Patch(target, transpiler: transpiler);
     }

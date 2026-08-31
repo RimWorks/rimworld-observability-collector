@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 public sealed class CallEdgeStats {
     public int ParentId { get; init; }

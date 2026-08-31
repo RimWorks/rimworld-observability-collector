@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class RimObsConfig {
     // Domain version of the config document. Used only to validate inbound POST

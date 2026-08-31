@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Exporters;
+namespace RimWorks.RimObs.Collector.Exporters;
 
 public readonly struct PrometheusRender {
     public PrometheusRender(string body, int sampleCount) {

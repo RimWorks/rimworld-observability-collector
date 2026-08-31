@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Runtime;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Runtime;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Cli;
+namespace RimWorks.RimObs.Collector.Cli;
 
 public static class SessionsCommand {
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions { WriteIndented = true };

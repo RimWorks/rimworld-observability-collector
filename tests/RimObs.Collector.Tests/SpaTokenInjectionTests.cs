@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Api;
+using RimWorks.RimObs.Collector.Api;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class SpaTokenInjectionTests {
     [Fact]

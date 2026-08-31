@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Sockets;
-using Cryptiklemur.RimObs.Collector.Hosting;
+using RimWorks.RimObs.Collector.Hosting;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class InstrumentationEndpointsTests {
     [Fact]

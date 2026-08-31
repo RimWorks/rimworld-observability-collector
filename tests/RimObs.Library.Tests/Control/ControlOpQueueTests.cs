@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using Cryptiklemur.RimObs.Library.Control;
+using RimWorks.RimObs.Library.Control;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Library.Tests.Control;
+namespace RimWorks.RimObs.Library.Tests.Control;
 
 public class ControlOpQueueTests {
     [Fact]

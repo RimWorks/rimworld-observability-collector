@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public sealed class BundleEstimateInput {
     public int SectionCount { get; set; }

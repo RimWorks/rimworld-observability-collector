@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public class ObservedSectionScannerTests : System.IDisposable {
     public ObservedSectionScannerTests() {
@@ -236,7 +236,7 @@ public class ObservedSectionScannerTests : System.IDisposable {
 
         IReadOnlyList<Assembly> asms = new[] { (Assembly)rimobs };
         ObservedSectionScanner.ScanResult result = ObservedSectionScanner.Scan(
-            new[] { ("cryptiklemur.rimobs", asms) });
+            new[] { ("rimworks.rimobs", asms) });
 
         result.AssembliesScanned.Should().Be(0);
     }

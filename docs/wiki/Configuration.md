@@ -10,10 +10,10 @@ The config directory is resolved in this order:
 
 1. The `--config-dir` CLI flag (if passed).
 2. The `RIMOBS_CONFIG_DIR` environment variable.
-3. The platform default under `LocalApplicationData/CryptikLemur.RimObs/`:
-   - **Windows:** `%LOCALAPPDATA%\CryptikLemur.RimObs\config.json`
-   - **Linux:** `~/.local/share/CryptikLemur.RimObs/config.json`
-   - **macOS:** `~/Library/Application Support/CryptikLemur.RimObs/config.json`
+3. The platform default under `LocalApplicationData/RimWorks.RimObs/`:
+   - **Windows:** `%LOCALAPPDATA%\RimWorks.RimObs\config.json`
+   - **Linux:** `~/.local/share/RimWorks.RimObs/config.json`
+   - **macOS:** `~/Library/Application Support/RimWorks.RimObs/config.json`
 
 If the file does not exist, defaults apply and the file is written on the first config change via the API.
 

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Security;
+namespace RimWorks.RimObs.Collector.Security;
 
 internal static class OriginCheck {
     public static bool ShouldEnforce(string method, bool csrfEnabled) {

@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Bundle;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Wire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class BundleEndpoints {
     public static IEndpointRouteBuilder MapBundleEndpoints(this IEndpointRouteBuilder endpoints) {

@@ -1,13 +1,13 @@
 using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class PatchInstallerTests : IDisposable {
     public PatchInstallerTests() {

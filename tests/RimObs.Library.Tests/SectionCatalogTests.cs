@@ -1,11 +1,11 @@
 using System;
 using System.Reflection;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class SectionCatalogTests {
     [Fact]

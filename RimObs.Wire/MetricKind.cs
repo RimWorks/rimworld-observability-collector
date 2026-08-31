@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public enum MetricKind : byte {
     Counter = 0,

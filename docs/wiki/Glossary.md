@@ -20,7 +20,7 @@ Terms used throughout this documentation, in alphabetical order. Each entry link
 
 **Owner** — an internal grouping of registrations by mod `packageId`. Each registered name is scoped to the registering mod's owner.
 
-**packageId prefix** — every registered section or metric name is automatically prefixed with the calling mod's RimWorld `packageId` (PRD 35.69). E.g. mod `cryptiklemur.example` registering `"tick"` produces the wire name `cryptiklemur.example.tick`. See [Profile API](Profile-API).
+**packageId prefix** — every registered section or metric name is automatically prefixed with the calling mod's RimWorld `packageId` (PRD 35.69). E.g. mod `yourmod.example` registering `"tick"` produces the wire name `yourmod.example.tick`. See [Profile API](Profile-API).
 
 **Schema version** — an integer on every wire envelope identifying the wire-protocol shape. Bumped only on semantic changes. See [Wire protocol](Wire-Protocol).
 

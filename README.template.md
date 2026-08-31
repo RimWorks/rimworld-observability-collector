@@ -19,13 +19,13 @@ The collector itself is a separate small binary that runs alongside the game and
 Add the mod-side library from NuGet:
 
 ```
-dotnet add package CryptikLemur.RimObs.Library
+dotnet add package RimWorks.RimObs.Library
 ```
 
 Third-party tools that want to read collector data without the bundled dashboard can depend on just the wire protocol:
 
 ```
-dotnet add package CryptikLemur.RimObs.Wire
+dotnet add package RimWorks.RimObs.Wire
 ```
 
 Then declare the Workshop item as a dependency in your `About.xml` so subscribers get the shared runtime DLL automatically.

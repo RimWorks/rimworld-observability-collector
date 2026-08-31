@@ -1,12 +1,12 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Instrumentation;
-using Cryptiklemur.RimObs.Collector.Receive;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Instrumentation;
+using RimWorks.RimObs.Collector.Receive;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class UdpReceiverDispatchTests {
     [Fact]

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Serilog;
 
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public static class BrowserLauncher {
     public static void Open(string url) {

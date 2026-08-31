@@ -1,6 +1,6 @@
 using System.Runtime.Serialization;
 
-namespace Cryptiklemur.RimObs.Config;
+namespace RimWorks.RimObs.Config;
 
 [DataContract]
 internal sealed class CollectorSectionsConfig {

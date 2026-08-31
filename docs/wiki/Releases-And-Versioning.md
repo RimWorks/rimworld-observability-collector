@@ -34,8 +34,8 @@ Steam Workshop IDs are configured inline in `release.config.mjs`. The `main` bra
 Each release produces the following artifacts:
 
 **NuGet packages** (pushed to nuget.org):
-- `CryptikLemur.RimObs.Wire` - shared MessagePack wire types
-- `CryptikLemur.RimObs.Library` - the RimWorld instrumentation library
+- `RimWorks.RimObs.Wire` - shared MessagePack wire types
+- `RimWorks.RimObs.Library` - the RimWorld instrumentation library
 
 **Collector binaries** (attached to the GitHub release as `.zip` archives):
 - `collector-win-x64-<version>.zip`

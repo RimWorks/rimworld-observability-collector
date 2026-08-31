@@ -1,6 +1,6 @@
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal sealed class HarmonyConflict {
     public HarmonyConflict(

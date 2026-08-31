@@ -1,7 +1,7 @@
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire.Control;
 using Microsoft.Data.Sqlite;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class DynamicPatchStore : IDisposable {
     private readonly SqliteConnection _conn;

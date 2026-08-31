@@ -1,12 +1,12 @@
-using Cryptiklemur.RimObs.Collector.Instrumentation;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Instrumentation;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class InstrumentationEndpoints {
     public static IEndpointRouteBuilder MapInstrumentationEndpoints(this IEndpointRouteBuilder endpoints) {

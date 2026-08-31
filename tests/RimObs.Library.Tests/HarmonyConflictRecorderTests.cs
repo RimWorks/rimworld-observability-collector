@@ -1,13 +1,13 @@
 using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using HarmonyLib;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class HarmonyConflictRecorderTests : IDisposable {
     private readonly Harmony _ourHarmony;
@@ -17,7 +17,7 @@ public sealed class HarmonyConflictRecorderTests : IDisposable {
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         HarmonyConflictRecorder.Clear();
-        _ourHarmony = new Harmony($"CryptikLemur.RimObs.tests.{Guid.NewGuid():N}");
+        _ourHarmony = new Harmony($"RimWorks.RimObs.tests.{Guid.NewGuid():N}");
         _foreignHarmony = new Harmony($"foreign.modder.{Guid.NewGuid():N}");
     }
 

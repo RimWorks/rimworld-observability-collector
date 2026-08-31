@@ -5,7 +5,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public enum BundleImportStatus {
     Ok,

@@ -1,9 +1,9 @@
-using Cryptiklemur.RimObs.Collector.Runtime;
-using Cryptiklemur.RimObs.Collector.Security;
+using RimWorks.RimObs.Collector.Runtime;
+using RimWorks.RimObs.Collector.Security;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class RuntimeFilesTests : IDisposable {
     private readonly string _tempDir;

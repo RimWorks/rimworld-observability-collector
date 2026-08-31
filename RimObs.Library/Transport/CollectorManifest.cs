@@ -5,7 +5,7 @@ using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Xml;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 [DataContract]
 public sealed class CollectorManifest {

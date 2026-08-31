@@ -1,9 +1,9 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 public static class CollectorHandshake {
     public static PongMessage? TryPing(string host, int port, string ownerId, TimeSpan timeout) {

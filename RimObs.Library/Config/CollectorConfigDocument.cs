@@ -5,7 +5,7 @@ using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Xml;
 
-namespace Cryptiklemur.RimObs.Config;
+namespace RimWorks.RimObs.Config;
 
 [DataContract]
 internal sealed class CollectorConfigDocument {

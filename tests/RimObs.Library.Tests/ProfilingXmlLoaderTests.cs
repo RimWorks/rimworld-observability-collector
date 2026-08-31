@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Cryptiklemur.RimObs.Config;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Config;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class ProfilingXmlLoaderTests : IDisposable {
     private static readonly string[] ExpectedMethodNames = ["Calculate", "Apply"];

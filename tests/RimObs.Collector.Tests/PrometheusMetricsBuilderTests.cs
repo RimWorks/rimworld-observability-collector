@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Exporters;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Exporters;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class PrometheusMetricsBuilderTests {
     private static SessionAggregator Populated() {

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 internal readonly struct TpsFpsSample {
     public TpsFpsSample(double tps, double fps, long tick) {

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Profile;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal static class SectionCatalog {
     private static readonly List<CatalogEntry> s_Entries = new();

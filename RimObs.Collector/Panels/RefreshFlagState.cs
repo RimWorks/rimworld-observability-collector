@@ -1,3 +1,3 @@
-namespace Cryptiklemur.RimObs.Collector.Panels;
+namespace RimWorks.RimObs.Collector.Panels;
 
 public readonly record struct RefreshFlagState(bool Requested, int RemainingSeconds);

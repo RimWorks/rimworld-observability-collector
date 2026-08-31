@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public sealed class BundleImportSweeper : BackgroundService {
     private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(5);

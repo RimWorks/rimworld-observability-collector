@@ -1,7 +1,7 @@
 using System.Threading;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Instrumentation;
+namespace RimWorks.RimObs.Collector.Instrumentation;
 
 public sealed class SessionMetaRegistry {
     private int _controlPort;

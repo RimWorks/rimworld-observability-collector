@@ -1,10 +1,10 @@
 using System;
-using Cryptiklemur.RimObs.Library.Control;
+using RimWorks.RimObs.Library.Control;
 using Xunit;
 using FluentAssertions;
 using RimObsTest.Fixtures;
 
-namespace Cryptiklemur.RimObs.Library.Tests.Control;
+namespace RimWorks.RimObs.Library.Tests.Control;
 
 public class MethodResolverTests {
     [Fact]
@@ -59,7 +59,7 @@ public class MethodResolverTests {
     [Fact]
     public void Refuses_self_patch_in_library_namespace() {
         MethodResolveResult result = MethodResolver.Resolve(
-            "Cryptiklemur.RimObs.Library.Profile.Profiler", "Start",
+            "RimWorks.RimObs.Library.Profile.Profiler", "Start",
             [typeof(int).FullName!],
             AppDomain.CurrentDomain.GetAssemblies());
         result.Refused.Should().BeTrue();

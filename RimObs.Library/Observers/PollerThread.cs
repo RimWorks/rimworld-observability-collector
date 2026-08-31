@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 internal sealed class PollerThread {
     private readonly object _lock = new();

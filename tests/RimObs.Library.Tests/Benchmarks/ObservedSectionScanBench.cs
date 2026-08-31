@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Cryptiklemur.RimObs.Library.Tests.Benchmarks;
+namespace RimWorks.RimObs.Library.Tests.Benchmarks;
 
 public sealed class ObservedSectionScanBench : IDisposable {
     private readonly ITestOutputHelper _output;

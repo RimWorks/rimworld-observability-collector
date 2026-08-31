@@ -1,10 +1,10 @@
 using System;
-using Cryptiklemur.RimObs.Observers;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class GcObserverTests {
     [Fact]

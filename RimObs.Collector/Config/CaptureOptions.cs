@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class CaptureOptions {
     public int NestedSectionDepthCap { get; set; } = 10;

@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
-using Cryptiklemur.RimObs.Observers;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Profile;
 
-namespace Cryptiklemur.RimObs.Config;
+namespace RimWorks.RimObs.Config;
 
 internal sealed class CollectorConfigClient {
     public const int DefaultIntervalMs = 30000;

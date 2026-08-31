@@ -1,6 +1,6 @@
-using Cryptiklemur.RimObs.Collector.Security;
+using RimWorks.RimObs.Collector.Security;
 
-namespace Cryptiklemur.RimObs.Collector.Runtime;
+namespace RimWorks.RimObs.Collector.Runtime;
 
 public static class RuntimeFiles {
     public const string TokenFileName = "collector.token";

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 internal static class AllocationSamplerHost {
     private static readonly object s_Lock = new();

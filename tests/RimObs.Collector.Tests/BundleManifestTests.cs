@@ -1,10 +1,10 @@
 using System;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Bundle;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class BundleManifestTests {
     private static readonly string[] ExpectedEntries = ["manifest.json", "session_summary.json"];

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 public static class CallTreeBuilder {
     public const int DefaultDepthCap = 10;

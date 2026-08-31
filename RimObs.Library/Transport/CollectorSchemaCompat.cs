@@ -1,6 +1,6 @@
 using System.Runtime.Serialization;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 [DataContract]
 public sealed class CollectorSchemaCompat {

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class SectionBatch {
     public int[] SectionIds { get; set; } = [];

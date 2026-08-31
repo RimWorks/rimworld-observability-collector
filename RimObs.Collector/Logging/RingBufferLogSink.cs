@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using Serilog.Core;
 using Serilog.Events;
 
-namespace Cryptiklemur.RimObs.Collector.Logging;
+namespace RimWorks.RimObs.Collector.Logging;
 
 public sealed class RingBufferLogSink : ILogEventSink {
     public const int DefaultCapacity = 1024;

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 public static class CollectorDiscovery {
     public static CollectorCandidate? SelectHighest(IEnumerable<CollectorCandidate> candidates) {

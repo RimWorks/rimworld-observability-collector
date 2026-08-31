@@ -2,17 +2,17 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Hosting;
-using Cryptiklemur.RimObs.Collector.Tests.Stubs;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Hosting;
+using RimWorks.RimObs.Collector.Tests.Stubs;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class EndToEndSmokeTests {
     private readonly ITestOutputHelper _out;

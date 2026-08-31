@@ -1,9 +1,9 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class SessionAggregatorTests {
     [Fact]
@@ -57,18 +57,18 @@ public sealed class SessionAggregatorTests {
         act.Should().NotThrow();
     }
 
-    private sealed class FakePersister : Cryptiklemur.RimObs.Collector.Storage.ISessionPersister {
+    private sealed class FakePersister : RimWorks.RimObs.Collector.Storage.ISessionPersister {
         public List<SessionMeta> WrittenMetas { get; } = [];
-        public List<(string id, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.SectionStats> sections)> WrittenSections { get; } = [];
-        public List<(string id, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.MetricStats> metrics)> WrittenMetrics { get; } = [];
-        public List<(string id, Cryptiklemur.RimObs.Collector.Aggregation.GcEventRecord[] events)> WrittenGc { get; } = [];
+        public List<(string id, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.SectionStats> sections)> WrittenSections { get; } = [];
+        public List<(string id, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.MetricStats> metrics)> WrittenMetrics { get; } = [];
+        public List<(string id, RimWorks.RimObs.Collector.Aggregation.GcEventRecord[] events)> WrittenGc { get; } = [];
 
         public void WriteSessionMeta(SessionMeta meta) => WrittenMetas.Add(meta);
-        public void WriteSectionsSnapshot(string sessionId, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.SectionStats> sections) => WrittenSections.Add((sessionId, sections));
-        public void WriteMetricsSnapshot(string sessionId, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.MetricStats> metrics) => WrittenMetrics.Add((sessionId, metrics));
-        public void ReplaceGcEventsSnapshot(string sessionId, Cryptiklemur.RimObs.Collector.Aggregation.GcEventRecord[] events) => WrittenGc.Add((sessionId, events));
-        public List<(string id, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.CallEdgeStats> edges)> WrittenCallTree { get; } = [];
-        public void WriteCallTreeSnapshot(string sessionId, IReadOnlyCollection<Cryptiklemur.RimObs.Collector.Aggregation.CallEdgeStats> edges) => WrittenCallTree.Add((sessionId, edges));
+        public void WriteSectionsSnapshot(string sessionId, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.SectionStats> sections) => WrittenSections.Add((sessionId, sections));
+        public void WriteMetricsSnapshot(string sessionId, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.MetricStats> metrics) => WrittenMetrics.Add((sessionId, metrics));
+        public void ReplaceGcEventsSnapshot(string sessionId, RimWorks.RimObs.Collector.Aggregation.GcEventRecord[] events) => WrittenGc.Add((sessionId, events));
+        public List<(string id, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.CallEdgeStats> edges)> WrittenCallTree { get; } = [];
+        public void WriteCallTreeSnapshot(string sessionId, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.CallEdgeStats> edges) => WrittenCallTree.Add((sessionId, edges));
         public void Dispose() { }
     }
 

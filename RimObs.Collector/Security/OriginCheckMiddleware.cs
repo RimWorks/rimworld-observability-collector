@@ -1,9 +1,9 @@
-using Cryptiklemur.RimObs.Collector.Config;
+using RimWorks.RimObs.Collector.Config;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cryptiklemur.RimObs.Collector.Security;
+namespace RimWorks.RimObs.Collector.Security;
 
 internal static class OriginCheckMiddleware {
     public static IApplicationBuilder UseOriginCheck(this IApplicationBuilder app, int port) {

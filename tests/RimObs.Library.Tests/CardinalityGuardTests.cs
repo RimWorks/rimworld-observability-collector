@@ -1,14 +1,14 @@
 using System;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
-using Cryptiklemur.RimObs.Metrics;
+using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Metrics;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CardinalityGuardTests : IDisposable {
-    private const string TestPackageId = "CryptikLemur.RimObs.tests";
+    private const string TestPackageId = "RimWorks.RimObs.tests";
 
     public CardinalityGuardTests() {
         OwnerRegistry.Clear();

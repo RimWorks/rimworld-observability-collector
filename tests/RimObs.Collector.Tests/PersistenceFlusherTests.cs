@@ -1,11 +1,11 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class PersistenceFlusherTests : IDisposable {
     private readonly string _tempDir;

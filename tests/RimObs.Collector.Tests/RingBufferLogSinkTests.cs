@@ -1,10 +1,10 @@
-using Cryptiklemur.RimObs.Collector.Logging;
+using RimWorks.RimObs.Collector.Logging;
 using FluentAssertions;
 using Serilog;
 using Serilog.Events;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class RingBufferLogSinkTests {
     private static readonly string[] NewestFirstMessages = ["c", "b"];

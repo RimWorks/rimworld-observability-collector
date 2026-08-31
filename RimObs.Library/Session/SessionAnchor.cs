@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace Cryptiklemur.RimObs.Session;
+namespace RimWorks.RimObs.Session;
 
 internal static class SessionAnchor {
     public static DateTime StartedUtc { get; private set; }

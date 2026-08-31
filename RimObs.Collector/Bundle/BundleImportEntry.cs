@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public sealed class BundleImportEntry {
     public string Token { get; init; } = string.Empty;

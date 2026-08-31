@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace Cryptiklemur.RimObs.Collector.Security;
+namespace RimWorks.RimObs.Collector.Security;
 
 public sealed class CollectorToken {
     public const string EnvVarName = "RIMOBS_TOKEN";

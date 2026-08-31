@@ -1,9 +1,9 @@
 using System;
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class NameValidatorTests {
     [Theory]

@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Cryptiklemur.RimObs.Transport;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Transport;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorLauncherTests {
     [Fact]

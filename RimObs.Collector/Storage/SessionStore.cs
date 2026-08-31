@@ -1,9 +1,9 @@
 using System.Globalization;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Wire;
 using Microsoft.Data.Sqlite;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class SessionStore : IDisposable {
     public const int SchemaVersion = 4;

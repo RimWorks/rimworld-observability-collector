@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 internal sealed class BoundedRecordRing<T>
     where T : struct {

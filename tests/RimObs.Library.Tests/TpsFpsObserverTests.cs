@@ -1,9 +1,9 @@
 using System.Threading;
-using Cryptiklemur.RimObs.Observers;
+using RimWorks.RimObs.Observers;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class TpsFpsObserverTests {
     public TpsFpsObserverTests() {

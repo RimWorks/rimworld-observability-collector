@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 internal sealed class BoundedSampleQueue<T>
     where T : struct {

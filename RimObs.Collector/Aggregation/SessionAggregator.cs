@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Concurrent;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 public sealed class SessionAggregator {
     private const int GcEventRingCapacity = 1024;

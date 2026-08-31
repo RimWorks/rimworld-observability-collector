@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 
-namespace Cryptiklemur.RimObs.Collector.Captures;
+namespace RimWorks.RimObs.Collector.Captures;
 
 public sealed class CaptureTimeCapWatcher : BackgroundService {
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);

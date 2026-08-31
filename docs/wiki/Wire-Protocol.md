@@ -26,7 +26,7 @@ The wire format is **MessagePack**, encoded as an array of fields in declaration
 
 ## Types
 
-All types live in the `Cryptiklemur.RimObs.Wire` namespace unless noted otherwise.
+All types live in the `RimWorks.RimObs.Wire` namespace unless noted otherwise.
 
 ### `TelemetryBatch` - outer envelope
 
@@ -212,7 +212,7 @@ public sealed class PongMessage {
 }
 ```
 
-### Control types (`Cryptiklemur.RimObs.Wire.Control`)
+### Control types (`RimWorks.RimObs.Wire.Control`)
 
 Used by the dynamic runtime instrumentation feature (v2, supersedes PRD §35.51). Travel over the control channel whose port and secret are advertised in `SessionMeta`.
 
@@ -239,7 +239,7 @@ None. Batches are raw MessagePack bytes. Do not wrap them in gzip or any other c
 .NET tool authors can reference the shared types directly:
 
 ```
-dotnet add package CryptikLemur.RimObs.Wire
+dotnet add package RimWorks.RimObs.Wire
 ```
 
 The package targets `netstandard2.0`, so it works in any modern .NET host (.NET 6+, .NET Framework 4.6.1+). Reference it to get the type definitions without copying them; your MessagePack library of choice will handle deserialization as long as you decode array-format MessagePack in field-declaration order.

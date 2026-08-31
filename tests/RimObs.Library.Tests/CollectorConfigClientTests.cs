@@ -1,9 +1,9 @@
-using Cryptiklemur.RimObs.Config;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Config;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorConfigClientTests {
     public CollectorConfigClientTests() {

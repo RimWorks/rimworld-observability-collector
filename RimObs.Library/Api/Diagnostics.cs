@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Threading;
-using Cryptiklemur.RimObs.Metrics;
+using RimWorks.RimObs.Metrics;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 public static class Diagnostics {
     private static long s_SamplesDroppedExternal;

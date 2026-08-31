@@ -1,6 +1,6 @@
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Metrics;
+namespace RimWorks.RimObs.Metrics;
 
 internal sealed class MetricDescriptor {
     public const int DefaultCardinalityLimit = 64;

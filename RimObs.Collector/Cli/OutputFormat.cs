@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Cli;
+namespace RimWorks.RimObs.Collector.Cli;
 
 public enum OutputFormat {
     Table,

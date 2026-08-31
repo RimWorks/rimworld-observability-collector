@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Metrics;
+namespace RimWorks.RimObs.Metrics;
 
 internal static class MetricRegistry {
     public const int MaxMetrics = 4096;

@@ -1,6 +1,6 @@
 using Verse;
 
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 public sealed class RimObsSettings : ModSettings {
     public bool AutoOpenDashboard = true;

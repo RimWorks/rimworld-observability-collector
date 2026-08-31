@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Transport;
+namespace RimWorks.RimObs.Transport;
 
 public sealed class CollectorLaunchResult {
     public CollectorLaunchResult(bool isRunning, PongMessage? pong, CollectorCandidate? selected, bool launchAttempted, Exception? launchError = null) {

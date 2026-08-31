@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 public static class OwnerRegistry {
     private static readonly Dictionary<Assembly, string> s_AssemblyToPackageId = new();

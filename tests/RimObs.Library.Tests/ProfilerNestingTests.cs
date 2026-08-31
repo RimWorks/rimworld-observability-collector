@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class ProfilerNestingTests {
     private sealed class CapturingSink : ISampleSink {

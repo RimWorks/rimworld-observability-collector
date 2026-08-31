@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Comparison;
+using RimWorks.RimObs.Collector.Comparison;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class DeltaStatusExtensionsTests {
     [Theory]

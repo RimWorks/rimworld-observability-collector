@@ -14,8 +14,8 @@ http://localhost:<port>
 
 In standalone mode the port is always `17654`. When launched from the game the library picks an ephemeral port, writes it to a discovery file, and passes it to the collector via `--port`. The discovery files are written to:
 
-- Windows: `%LOCALAPPDATA%\CryptikLemur.RimObs\`
-- Linux/macOS: `~/.local/share/CryptikLemur.RimObs/` (or `$XDG_DATA_HOME`)
+- Windows: `%LOCALAPPDATA%\RimWorks.RimObs\`
+- Linux/macOS: `~/.local/share/RimWorks.RimObs/` (or `$XDG_DATA_HOME`)
 - Override: set `RIMOBS_CONFIG_DIR` to any path
 
 Two files are written at startup and deleted when the collector exits:
@@ -40,7 +40,7 @@ See [Using the collector](Using-The-Collector) for launch modes and [Wire protoc
 For curl or scripted clients read the token file and pass it explicitly:
 
 ```bash
-TOKEN=$(cat "$LOCALAPPDATA/CryptikLemur.RimObs/collector.token")
+TOKEN=$(cat "$LOCALAPPDATA/RimWorks.RimObs/collector.token")
 curl -s -X POST http://localhost:17654/api/v1/panels/refresh_requested \
   -H "Origin: http://localhost:17654" \
   -H "Authorization: Bearer $TOKEN"

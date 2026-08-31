@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 /// <summary>
 /// Marks a method as an observed section. At library startup the scanner discovers methods

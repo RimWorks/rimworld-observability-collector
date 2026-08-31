@@ -1,11 +1,11 @@
-using Cryptiklemur.RimObs.Collector.Logging;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Logging;
+using RimWorks.RimObs.Wire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Serilog.Events;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class LogsEndpoints {
     public const int DefaultLimit = 200;

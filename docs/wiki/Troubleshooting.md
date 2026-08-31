@@ -10,8 +10,8 @@ Common problems and how to fix them, for both players and mod authors.
 
 **The collector's own log file.** The collector writes a rolling daily log to:
 
-- Windows: `%LOCALAPPDATA%\CryptikLemur.RimObs\logs\collector-<date>.log`
-- Linux/macOS: `~/.local/share/CryptikLemur.RimObs/logs/collector-<date>.log` (or `$XDG_DATA_HOME/CryptikLemur.RimObs/logs/`)
+- Windows: `%LOCALAPPDATA%\RimWorks.RimObs\logs\collector-<date>.log`
+- Linux/macOS: `~/.local/share/RimWorks.RimObs/logs/collector-<date>.log` (or `$XDG_DATA_HOME/RimWorks.RimObs/logs/`)
 
 The directory can be overridden with the `RIMOBS_CONFIG_DIR` environment variable.
 
@@ -75,7 +75,7 @@ The directory can be overridden with the `RIMOBS_CONFIG_DIR` environment variabl
 
 **Cause:** Load order. RimObs must be enabled and loaded before any mod that declares it as a dependency. If RimObs appears below a dependent in the mod list, RimWorld may report it as missing even though the mod is present.
 
-**Fix:** Move RimObs above all mods that depend on it in the mod list. If the error persists, verify that the `packageId` in your mod's `About.xml` matches `CryptikLemur.RimObs` exactly (case-insensitive, but the dot notation must be correct).
+**Fix:** Move RimObs above all mods that depend on it in the mod list. If the error persists, verify that the `packageId` in your mod's `About.xml` matches `RimWorks.RimObs` exactly (case-insensitive, but the dot notation must be correct).
 
 ---
 

@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 public sealed class WireFormatException : Exception {
     public WireFormatException(string message) : base(message) {

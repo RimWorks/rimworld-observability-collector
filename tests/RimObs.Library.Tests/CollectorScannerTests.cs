@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using Cryptiklemur.RimObs.Transport;
+using RimWorks.RimObs.Transport;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorScannerTests {
     [Fact]

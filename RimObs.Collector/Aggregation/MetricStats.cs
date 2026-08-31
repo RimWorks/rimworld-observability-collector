@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 public sealed class MetricStats {
     public MetricStats(int metricId) {

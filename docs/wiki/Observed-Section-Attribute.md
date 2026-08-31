@@ -7,7 +7,7 @@ The attribute is discovered once at bootstrap by scanning every loaded mod assem
 ## Quick example
 
 ```csharp
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 
 public class MyMod
 {
@@ -40,7 +40,7 @@ public class MyMod
 | `[ObservedSection("name")]` | `"name"` as supplied |
 | `[ObservedSection(Subsystem = "...")]` | `TypeFullName.MethodName` with subsystem tag applied |
 
-In every case the bare name is automatically prefixed with the mod's `packageId` at registration (PRD §35.69). A method `DoWork` on `MyMod` in mod `cryptiklemur.example` becomes `cryptiklemur.example.MyMod.DoWork` on the wire and in the dashboard.
+In every case the bare name is automatically prefixed with the mod's `packageId` at registration (PRD §35.69). A method `DoWork` on `MyMod` in mod `yourmod.example` becomes `yourmod.example.MyMod.DoWork` on the wire and in the dashboard.
 
 Name validation follows the same rules as `Obs.Profile.RegisterSection`: lowercase ASCII letters, digits, and underscores only; must start with a letter. Auto-derived names that fail validation are rejected with a warning.
 

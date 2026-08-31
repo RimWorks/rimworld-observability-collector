@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire.Control;
+namespace RimWorks.RimObs.Wire.Control;
 
 public sealed class ControlPatchResponse {
     public int PatchId { get; set; }

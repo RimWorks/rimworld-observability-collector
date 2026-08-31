@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Cryptiklemur.RimObs.Collector.Cli;
+namespace RimWorks.RimObs.Collector.Cli;
 
 public static class CliRouter {
     public static int Run(string[] args) {

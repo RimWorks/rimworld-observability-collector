@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class CollectorOptions {
     public string ListenAddress { get; set; } = "127.0.0.1";

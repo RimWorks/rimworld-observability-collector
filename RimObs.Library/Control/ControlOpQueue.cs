@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal sealed class ControlOpQueue {
     private readonly ConcurrentQueue<ControlOp> _ops = new ConcurrentQueue<ControlOp>();

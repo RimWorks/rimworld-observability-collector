@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Collector.Instrumentation;
+namespace RimWorks.RimObs.Collector.Instrumentation;
 
 public sealed class DynamicPatchReplayer {
     private readonly DynamicPatchStore _store;

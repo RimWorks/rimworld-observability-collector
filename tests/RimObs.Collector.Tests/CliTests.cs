@@ -1,13 +1,13 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Cli;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Cli;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class CliTests {
     [Theory]

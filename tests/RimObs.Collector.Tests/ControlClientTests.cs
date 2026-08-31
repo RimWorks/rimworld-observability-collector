@@ -1,10 +1,10 @@
-using Cryptiklemur.RimObs.Collector.Instrumentation;
-using Cryptiklemur.RimObs.Collector.Tests.Stubs;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Instrumentation;
+using RimWorks.RimObs.Collector.Tests.Stubs;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class ControlClientTests {
     [Fact]
@@ -13,7 +13,7 @@ public sealed class ControlClientTests {
         stub.OnSearch = _ => new ControlSearchResponse {
             Results = [
                 new ControlMethodDescriptor {
-                    TypeFullName = "Cryptiklemur.RimObs.Library.Tests.ResolverTargets",
+                    TypeFullName = "RimWorks.RimObs.Library.Tests.ResolverTargets",
                     MethodName = "Add",
                     Signature = "Int32 Add(Int32, Int32)",
                     ParamTypeFullNames = ["System.Int32", "System.Int32"],

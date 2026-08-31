@@ -1,12 +1,12 @@
 using System.Buffers;
 using System.Reflection;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using MessagePack;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class WireCodecTests {
     private static TelemetryBatch SampleEnvelope() => new() {
@@ -377,7 +377,7 @@ public sealed class WireCodecTests {
         ControlPatchResponse res = new() {
             PatchId = 42,
             SectionId = 8,
-            SectionName = "com.cryptiklemur.rimobs.dynamic.Verse.PathFinder.FindPath",
+            SectionName = "com.rimworks.rimobs.dynamic.Verse.PathFinder.FindPath",
             Status = PatchStatus.Active,
             ErrorReason = null,
         };

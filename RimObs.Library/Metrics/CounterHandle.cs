@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace Cryptiklemur.RimObs.Metrics;
+namespace RimWorks.RimObs.Metrics;
 
 public readonly struct CounterHandle {
     public readonly int Id;

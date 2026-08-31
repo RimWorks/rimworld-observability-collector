@@ -165,7 +165,7 @@ Collector -h
 |---|---|
 | `RIMOBS_TOKEN` | Bearer token for authenticating CLI requests to the local HTTP API. If set, the collector uses this value instead of generating a random token at startup. |
 | `BROWSER` | Browser command used for auto-opening the dashboard. Standard Unix convention (`xdg-open`, `open`, a browser binary). If unset the collector uses the platform default. |
-| `RIMOBS_CONFIG_DIR` | Override the directory used for config, logs, and session storage. Defaults to `%LOCALAPPDATA%\CryptikLemur.RimObs` (Windows) or `~/.local/share/CryptikLemur.RimObs` (Linux/macOS). |
+| `RIMOBS_CONFIG_DIR` | Override the directory used for config, logs, and session storage. Defaults to `%LOCALAPPDATA%\RimWorks.RimObs` (Windows) or `~/.local/share/RimWorks.RimObs` (Linux/macOS). |
 
 ## Exit behavior
 

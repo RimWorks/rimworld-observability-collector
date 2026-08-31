@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal sealed class MethodResolveResult {
     public bool Refused { get; private set; }

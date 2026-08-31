@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 using Microsoft.Data.Sqlite;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public static class SessionCatalog {
     public static IReadOnlyList<SessionMeta> List(string sessionsDir) {

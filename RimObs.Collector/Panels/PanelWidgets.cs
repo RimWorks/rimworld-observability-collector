@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Panels;
+namespace RimWorks.RimObs.Collector.Panels;
 
 public static class PanelWidgets {
     private static readonly HashSet<string> Allowed = new(StringComparer.Ordinal) {

@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Exporters;
+using RimWorks.RimObs.Collector.Exporters;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class PrometheusLabelCardinalityTests {
     [Fact]

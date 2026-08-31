@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 // Derives ticks-per-second and frames-per-second by differencing the cumulative FrameTickCounters
 // against wall time between polls. The tick count doubles as the sample's monotonic tick number.

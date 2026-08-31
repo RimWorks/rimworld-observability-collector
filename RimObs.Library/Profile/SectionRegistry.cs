@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Cryptiklemur.RimObs.Profile;
+namespace RimWorks.RimObs.Profile;
 
 internal static class SectionRegistry {
     public const int MaxSections = 4096;

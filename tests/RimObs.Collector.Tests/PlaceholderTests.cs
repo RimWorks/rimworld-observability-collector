@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class PlaceholderTests {
     [Fact]

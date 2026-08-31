@@ -1,7 +1,7 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 // Write/persist seam only. This exists so the flush path can be spied on in tests;
 // it deliberately exposes no read or filesystem-location members. Read sites that need

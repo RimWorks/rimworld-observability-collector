@@ -4,11 +4,11 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Update;
+using RimWorks.RimObs.Collector.Update;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class UpdateCheckerTests {
     [Theory]

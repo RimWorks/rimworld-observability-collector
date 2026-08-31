@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Security;
+using RimWorks.RimObs.Collector.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class SpaEndpoints {
     private const string ResourcePrefix = "Dashboard.";

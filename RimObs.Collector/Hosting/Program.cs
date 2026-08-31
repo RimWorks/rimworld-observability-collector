@@ -1,13 +1,13 @@
-using Cryptiklemur.RimObs.Collector.Api;
-using Cryptiklemur.RimObs.Collector.Runtime;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Collector.Security;
+using RimWorks.RimObs.Collector.Api;
+using RimWorks.RimObs.Collector.Runtime;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Collector.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public static class Program {
     public static int Main(string[] args) {
@@ -169,7 +169,7 @@ public static class Program {
         app.MapSpaEndpoints();
     }
 
-    private const string UpdateOwner = "cryptiklemur";
+    private const string UpdateOwner = "RimWorks";
     private const string UpdateRepo = "rimworld-observability-collector";
 
     internal static void StartUpdateCheck(IServiceProvider services) {

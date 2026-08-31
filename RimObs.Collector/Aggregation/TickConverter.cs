@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Collector.Aggregation;
+namespace RimWorks.RimObs.Collector.Aggregation;
 
 internal static class TickConverter {
     public static double NsPerTick(SessionMeta? meta) => NsPerTick(meta?.StopwatchFrequency ?? 0L);

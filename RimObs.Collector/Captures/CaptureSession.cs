@@ -3,9 +3,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Cryptiklemur.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Aggregation;
 
-namespace Cryptiklemur.RimObs.Collector.Captures;
+namespace RimWorks.RimObs.Collector.Captures;
 
 public sealed class CaptureSession {
     private const int EstimatedBytesPerEdge = 48;

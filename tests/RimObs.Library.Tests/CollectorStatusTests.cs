@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using Cryptiklemur.RimObs.Settings;
+using RimWorks.RimObs.Settings;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorStatusTests {
     private static CollectorStatus Running(int port = 17654) =>

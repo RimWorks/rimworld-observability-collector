@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <Authors>CryptikLemur</Authors>
+        <Authors>RimWorks</Authors>
         <TargetFramework>net48</TargetFramework>
         <LangVersion>latest</LangVersion>
         <OutDir>..\Assemblies\</OutDir>
@@ -20,10 +20,10 @@
         <DebugType>embedded</DebugType>
         <Optimize>false</Optimize>
         <DefineConstants>DEBUG;TRACE</DefineConstants>
-        <RootNamespace>Cryptiklemur.RimObs</RootNamespace>
+        <RootNamespace>RimWorks.RimObs</RootNamespace>
         <AssemblyName>RimObs</AssemblyName>
 
-        <PackageId>CryptikLemur.RimObs.Library</PackageId>
+        <PackageId>RimWorks.RimObs.Library</PackageId>
         <Description>RimWorld Observability mod-side library. Register named sections and metrics; the out-of-process collector aggregates the data and serves a dashboard. Net48 / RimWorld 1.6+.</Description>
         <PackageTags>rimworld;observability;telemetry;harmony;mod</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>

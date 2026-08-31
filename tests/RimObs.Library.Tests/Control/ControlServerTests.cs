@@ -3,16 +3,16 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using RimObsTest.Fixtures;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Library.Tests.Control;
+namespace RimWorks.RimObs.Library.Tests.Control;
 
 public class ControlServerTests : IDisposable {
     private readonly ControlServer _server;

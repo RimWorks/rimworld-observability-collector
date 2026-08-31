@@ -1,9 +1,9 @@
 using System.Linq;
-using Cryptiklemur.RimObs.Collector.Comparison;
+using RimWorks.RimObs.Collector.Comparison;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class SessionComparerTests {
     private static SectionSnapshot Section(int id, string name, long samples, long totalNs) {

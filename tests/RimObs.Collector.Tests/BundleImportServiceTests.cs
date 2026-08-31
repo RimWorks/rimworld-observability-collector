@@ -3,11 +3,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading.Tasks;
-using Cryptiklemur.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Bundle;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class BundleImportServiceTests : IDisposable {
     private static readonly string[] ExpectedContents = ["manifest.json", "session_summary.json"];

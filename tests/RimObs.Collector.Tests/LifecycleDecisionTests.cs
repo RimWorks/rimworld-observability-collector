@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Hosting;
+using RimWorks.RimObs.Collector.Hosting;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class LifecycleDecisionTests {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(5);

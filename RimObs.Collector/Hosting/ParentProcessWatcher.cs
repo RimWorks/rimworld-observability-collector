@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using Cryptiklemur.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Aggregation;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public sealed class ParentProcessWatcher : BackgroundService {
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);

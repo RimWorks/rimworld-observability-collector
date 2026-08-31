@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Sockets;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Instrumentation;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Instrumentation;
+using RimWorks.RimObs.Wire;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Cryptiklemur.RimObs.Collector.Receive;
+namespace RimWorks.RimObs.Collector.Receive;
 
 public sealed class UdpReceiver : BackgroundService {
     private readonly SessionAggregator _aggregator;

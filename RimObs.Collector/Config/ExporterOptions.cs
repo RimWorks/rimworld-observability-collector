@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public sealed class ExporterOptions {
     public bool PrometheusEnabled { get; set; } = false;

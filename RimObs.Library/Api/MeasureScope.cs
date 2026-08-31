@@ -1,8 +1,8 @@
 using System;
 using System.Runtime.CompilerServices;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Profile;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 public readonly struct MeasureScope : IDisposable {
     private readonly int _sectionId;

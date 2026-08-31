@@ -1,7 +1,7 @@
 using System;
-using Cryptiklemur.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Aggregation;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 internal static class ReceiveCounters {
     public static object Project(SessionAggregator aggregator) {

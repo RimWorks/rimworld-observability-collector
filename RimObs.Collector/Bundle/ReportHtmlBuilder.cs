@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public static class ReportHtmlBuilder {
     private const string EmbeddedResourceName = "Dashboard.report.html";

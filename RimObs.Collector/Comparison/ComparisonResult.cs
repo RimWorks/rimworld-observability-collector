@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Comparison;
+namespace RimWorks.RimObs.Collector.Comparison;
 
 public sealed record ComparisonResult(
     SessionRef Base,

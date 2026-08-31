@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Bundle;
+namespace RimWorks.RimObs.Collector.Bundle;
 
 public enum BundleContentKey {
     MetricsSqlite,

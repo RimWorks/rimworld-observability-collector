@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Reflection;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal static class ControlSearchService {
     private const int HardCap = 200;

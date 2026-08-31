@@ -1,11 +1,11 @@
-using Cryptiklemur.RimObs.Collector.Instrumentation;
-using Cryptiklemur.RimObs.Collector.Storage;
-using Cryptiklemur.RimObs.Collector.Tests.Stubs;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Collector.Instrumentation;
+using RimWorks.RimObs.Collector.Storage;
+using RimWorks.RimObs.Collector.Tests.Stubs;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class DynamicPatchReplayerTests {
     [Fact]

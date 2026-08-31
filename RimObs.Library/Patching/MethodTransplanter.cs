@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Profile;
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal static class MethodTransplanter {
     private static readonly MethodInfo s_StartByIdMethod = typeof(Profiler).GetMethod(

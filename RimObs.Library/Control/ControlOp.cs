@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace Cryptiklemur.RimObs.Library.Control;
+namespace RimWorks.RimObs.Library.Control;
 
 internal sealed class ControlOp {
     private readonly System.Action _work;

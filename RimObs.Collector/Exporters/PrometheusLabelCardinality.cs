@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Exporters;
+namespace RimWorks.RimObs.Collector.Exporters;
 
 // Caps the number of distinct values exported for a single label dimension.
 // Once the cap is reached, any further distinct value collapses to "other",

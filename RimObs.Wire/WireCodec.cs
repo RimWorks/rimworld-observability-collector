@@ -1,7 +1,7 @@
 using System;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Wire;
+namespace RimWorks.RimObs.Wire;
 
 // Dependency-free MessagePack codec. The net48 library cannot ship MessagePack.dll (its dynamic
 // codegen references System.Reflection.Emit split facades that fail to bind under RimWorld's Unity

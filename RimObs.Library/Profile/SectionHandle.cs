@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace Cryptiklemur.RimObs.Profile;
+namespace RimWorks.RimObs.Profile;
 
 public readonly struct SectionHandle {
     public readonly int Id;

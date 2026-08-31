@@ -1,14 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-using Cryptiklemur.RimObs.Collector.Aggregation;
-using Cryptiklemur.RimObs.Collector.Captures;
-using Cryptiklemur.RimObs.Collector.Config;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Captures;
+using RimWorks.RimObs.Collector.Config;
+using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class CaptureManagerTests {
     private static (SessionAggregator Aggregator, CaptureManager Manager, ConfigStore Config) NewFixture(

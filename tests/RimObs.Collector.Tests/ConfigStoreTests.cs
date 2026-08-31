@@ -1,10 +1,10 @@
 using System.IO;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Config;
+using RimWorks.RimObs.Collector.Config;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class ConfigStoreTests {
     [Fact]

@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Security;
+namespace RimWorks.RimObs.Collector.Security;
 
 internal static class BearerHeader {
     private const string Scheme = "Bearer ";

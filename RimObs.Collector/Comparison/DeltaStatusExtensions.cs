@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Collector.Comparison;
+namespace RimWorks.RimObs.Collector.Comparison;
 
 public static class DeltaStatusExtensions {
     public static string ToWireString(this DeltaStatus status) {

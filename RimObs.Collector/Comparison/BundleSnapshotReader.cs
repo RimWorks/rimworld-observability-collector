@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using Cryptiklemur.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Bundle;
 
-namespace Cryptiklemur.RimObs.Collector.Comparison;
+namespace RimWorks.RimObs.Collector.Comparison;
 
 public sealed class BundleSnapshotReader {
     private readonly BundleImportRegistry _registry;

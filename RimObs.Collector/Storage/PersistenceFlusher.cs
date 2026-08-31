@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Aggregation;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Cryptiklemur.RimObs.Collector.Storage;
+namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class PersistenceFlusher : BackgroundService {
     public static TimeSpan DefaultInterval { get; } = TimeSpan.FromSeconds(5);

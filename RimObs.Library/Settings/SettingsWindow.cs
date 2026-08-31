@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 // Verse/Unity-bound rendering. Not unit-tested (requires a live RimWorld UI host);
 // the testable logic lives in CollectorStatus.BuildLines and CollectorStatusProvider.

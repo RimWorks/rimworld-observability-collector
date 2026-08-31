@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Wire.Control;
+namespace RimWorks.RimObs.Wire.Control;
 
 public sealed class ControlMethodDescriptor {
     public string TypeFullName { get; set; } = string.Empty;

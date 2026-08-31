@@ -1,8 +1,8 @@
 using System.Net;
-using Cryptiklemur.RimObs.Wire;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Wire;
+using RimWorks.RimObs.Wire.Control;
 
-namespace Cryptiklemur.RimObs.Collector.Instrumentation;
+namespace RimWorks.RimObs.Collector.Instrumentation;
 
 public sealed class ControlClient {
     private readonly string _secret;

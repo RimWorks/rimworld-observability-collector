@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace Cryptiklemur.RimObs.Profile;
+namespace RimWorks.RimObs.Profile;
 
 public static class Profiler {
     public const long DisabledToken = -1L;

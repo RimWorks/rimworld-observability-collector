@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Cryptiklemur.RimObs.Collector.Panels;
+namespace RimWorks.RimObs.Collector.Panels;
 
 public sealed class PanelDefinition {
     public string Id { get; set; } = "";

@@ -1,9 +1,9 @@
 using System.IO;
-using Cryptiklemur.RimObs.Collector.Cli;
+using RimWorks.RimObs.Collector.Cli;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public class BundleCommandTests {
     private static readonly string[] ExportWithOptionsArgs = [

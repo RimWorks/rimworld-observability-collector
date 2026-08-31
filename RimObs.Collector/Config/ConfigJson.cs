@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Cryptiklemur.RimObs.Collector.Config;
+namespace RimWorks.RimObs.Collector.Config;
 
 public static class ConfigJson {
     public static readonly JsonSerializerOptions Options = new() {

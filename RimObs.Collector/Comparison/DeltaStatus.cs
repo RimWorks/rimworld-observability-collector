@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Comparison;
+namespace RimWorks.RimObs.Collector.Comparison;
 
 public enum DeltaStatus {
     Unchanged,

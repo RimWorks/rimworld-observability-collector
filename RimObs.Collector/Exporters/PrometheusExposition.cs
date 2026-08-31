@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace Cryptiklemur.RimObs.Collector.Exporters;
+namespace RimWorks.RimObs.Collector.Exporters;
 
 // Writes the Prometheus text exposition format, version 0.0.4.
 // Reference: https://prometheus.io/docs/instrumenting/exposition_formats/

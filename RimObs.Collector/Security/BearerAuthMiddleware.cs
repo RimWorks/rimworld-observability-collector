@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
-namespace Cryptiklemur.RimObs.Collector.Security;
+namespace RimWorks.RimObs.Collector.Security;
 
 internal static class BearerAuthMiddleware {
     public static IApplicationBuilder UseBearerAuth(this IApplicationBuilder app, CollectorToken token) {

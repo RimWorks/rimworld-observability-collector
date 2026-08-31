@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Collector.Update;
+namespace RimWorks.RimObs.Collector.Update;
 
 public sealed class UpdateState {
     private readonly object _lock = new();

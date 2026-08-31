@@ -1,6 +1,6 @@
 using System;
 
-namespace Cryptiklemur.RimObs.Api;
+namespace RimWorks.RimObs.Api;
 
 public static class NameValidator {
     public static void ValidateBareName(string name, string paramName) {

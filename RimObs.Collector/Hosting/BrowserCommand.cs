@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Hosting;
+namespace RimWorks.RimObs.Collector.Hosting;
 
 public static class BrowserCommand {
     public static (string FileName, IReadOnlyList<string> PrefixArgs) Resolve(BrowserPlatform platform, string? browserEnv) {

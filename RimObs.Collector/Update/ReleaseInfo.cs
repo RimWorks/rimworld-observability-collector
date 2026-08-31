@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Update;
+namespace RimWorks.RimObs.Collector.Update;
 
 public sealed class ReleaseInfo {
     public string TagName { get; set; } = string.Empty;

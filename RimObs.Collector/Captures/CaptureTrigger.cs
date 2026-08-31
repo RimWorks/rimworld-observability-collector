@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Captures;
+namespace RimWorks.RimObs.Collector.Captures;
 
 public enum CaptureTrigger {
     Manual,

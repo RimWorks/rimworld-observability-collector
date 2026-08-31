@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Settings;
+namespace RimWorks.RimObs.Settings;
 
 public static class CollectorRuntimeInfo {
     public static string Host { get; private set; } = "127.0.0.1";

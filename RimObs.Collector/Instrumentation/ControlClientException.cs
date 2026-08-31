@@ -1,4 +1,4 @@
-namespace Cryptiklemur.RimObs.Collector.Instrumentation;
+namespace RimWorks.RimObs.Collector.Instrumentation;
 
 public sealed class ControlClientException : Exception {
     public ControlClientException(int status) : base($"control endpoint returned {status}") {

@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cryptiklemur.RimObs.Collector.Update;
+namespace RimWorks.RimObs.Collector.Update;
 
 public static class UpdateChecker {
     private static readonly JsonSerializerOptions JsonOpts = new() {

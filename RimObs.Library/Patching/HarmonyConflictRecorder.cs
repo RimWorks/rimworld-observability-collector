@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 using HarmonyLib;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal static class HarmonyConflictRecorder {
     private static readonly List<HarmonyConflict> s_Conflicts = new();

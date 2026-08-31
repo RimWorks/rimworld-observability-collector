@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
     <PropertyGroup>
-        <Authors>CryptikLemur</Authors>
+        <Authors>RimWorks</Authors>
         <TargetFramework>net10.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
@@ -9,7 +9,7 @@
         <EnableNETAnalyzers>True</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>
         <WarningLevel>4</WarningLevel>
-        <RootNamespace>Cryptiklemur.RimObs.Collector</RootNamespace>
+        <RootNamespace>RimWorks.RimObs.Collector</RootNamespace>
         <AssemblyName>Collector</AssemblyName>
         <OutputType>Exe</OutputType>
         <DebugType>embedded</DebugType>

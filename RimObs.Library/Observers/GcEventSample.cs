@@ -1,6 +1,6 @@
-using Cryptiklemur.RimObs.Wire;
+using RimWorks.RimObs.Wire;
 
-namespace Cryptiklemur.RimObs.Observers;
+namespace RimWorks.RimObs.Observers;
 
 internal readonly struct GcEventSample {
     public GcEventSample(byte generation, GcPauseType pauseType, long heapBefore, long heapAfter, long durationMicros, long tick, long allocationRateBytesPerMinute) {

@@ -1,11 +1,11 @@
 using System;
 using System.Diagnostics;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class ProfilerOverheadTests {
     private readonly ITestOutputHelper _out;

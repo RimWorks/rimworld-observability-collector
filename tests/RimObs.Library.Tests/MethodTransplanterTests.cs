@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Cryptiklemur.RimObs.Patching;
-using Cryptiklemur.RimObs.Profile;
+using RimWorks.RimObs.Patching;
+using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using HarmonyLib;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class MethodTransplanterTests : IDisposable {
     private readonly RecordingSink _sink;
@@ -19,7 +19,7 @@ public sealed class MethodTransplanterTests : IDisposable {
         _sink = new RecordingSink();
         Profiler.SetSink(_sink);
         Profiler.Enabled = true;
-        _harmony = new Harmony($"CryptikLemur.RimObs.tests.{Guid.NewGuid():N}");
+        _harmony = new Harmony($"RimWorks.RimObs.tests.{Guid.NewGuid():N}");
     }
 
     public void Dispose() {

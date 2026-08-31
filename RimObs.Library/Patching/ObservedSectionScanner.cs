@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 
-namespace Cryptiklemur.RimObs.Patching;
+namespace RimWorks.RimObs.Patching;
 
 internal static class ObservedSectionScanner {
     public sealed class ScanResult {
@@ -23,7 +23,7 @@ internal static class ObservedSectionScanner {
             return AttributesEnabledForTests.Value;
         try {
             Type? settingsType = Type.GetType(
-                "Cryptiklemur.RimObs.Settings.RimObsSettings, RimObs");
+                "RimWorks.RimObs.Settings.RimObsSettings, RimObs");
             if (settingsType == null)
                 return true;
             System.Reflection.PropertyInfo? currentProp =

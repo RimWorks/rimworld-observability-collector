@@ -1,8 +1,8 @@
-using Cryptiklemur.RimObs.Collector.Runtime;
+using RimWorks.RimObs.Collector.Runtime;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Collector.Tests;
+namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class ConfigDirResolverTests {
     [Fact]
@@ -23,14 +23,14 @@ public sealed class ConfigDirResolverTests {
         using EnvVarScope _ = EnvVarScope.Set(ConfigDirResolver.EnvVarName, null);
         string result = ConfigDirResolver.Resolve(null);
         result.Should().NotBeNullOrWhiteSpace();
-        result.Should().EndWith("CryptikLemur.RimObs");
+        result.Should().EndWith("RimWorks.RimObs");
     }
 
     [Fact]
     public void Resolve_treats_whitespace_env_as_unset() {
         using EnvVarScope _ = EnvVarScope.Set(ConfigDirResolver.EnvVarName, "   ");
         string result = ConfigDirResolver.Resolve(null);
-        result.Should().EndWith("CryptikLemur.RimObs");
+        result.Should().EndWith("RimWorks.RimObs");
     }
 
     private sealed class EnvVarScope : IDisposable {

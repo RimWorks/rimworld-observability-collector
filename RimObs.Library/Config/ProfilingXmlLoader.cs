@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
-using Cryptiklemur.RimObs.Patching;
+using RimWorks.RimObs.Patching;
 
-namespace Cryptiklemur.RimObs.Config;
+namespace RimWorks.RimObs.Config;
 
 internal static class ProfilingXmlLoader {
     public const string FileName = "profiling.xml";

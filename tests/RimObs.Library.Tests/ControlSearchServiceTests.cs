@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Cryptiklemur.RimObs.Library.Control;
-using Cryptiklemur.RimObs.Wire.Control;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
 using Xunit;
 
-namespace Cryptiklemur.RimObs.Tests;
+namespace RimWorks.RimObs.Tests;
 
 public sealed class ControlSearchServiceTests {
     private sealed class SearchTarget {

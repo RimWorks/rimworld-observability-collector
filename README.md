@@ -1,7 +1,7 @@
 # RimWorld Observability Collector
 
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=cryptiklemur_rimworld-observability-collector&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=cryptiklemur_rimworld-observability-collector)
-[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=cryptiklemur_rimworld-observability-collector&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=cryptiklemur_rimworld-observability-collector)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
 
 A telemetry framework for RimWorld mods. Mod authors register named sections
 and metrics; an out-of-process collector aggregates the data, serves a
@@ -14,13 +14,13 @@ dashboard, and can export diagnostic bundles.
 Add the library:
 
 ```bash
-dotnet add package CryptikLemur.RimObs.Library
+dotnet add package RimWorks.RimObs.Library
 ```
 
 Instrument a tick:
 
 ```csharp
-using Cryptiklemur.RimObs.Api;
+using RimWorks.RimObs.Api;
 
 private static readonly SectionHandle Tick =
     Obs.Profile.RegisterSection("tick");

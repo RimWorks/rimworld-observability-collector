@@ -1,9 +1,9 @@
-using Cryptiklemur.RimObs.Collector.Config;
+using RimWorks.RimObs.Collector.Config;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Cryptiklemur.RimObs.Collector.Api;
+namespace RimWorks.RimObs.Collector.Api;
 
 public static class ConfigEndpoints {
     public static IEndpointRouteBuilder MapConfigEndpoints(this IEndpointRouteBuilder endpoints) {
