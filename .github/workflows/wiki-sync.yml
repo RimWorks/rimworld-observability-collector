@@ -1,6 +1,6 @@
 # One-time bootstrap (run once, by a maintainer, before the first sync):
-#   1. gh api -X PATCH repos/cryptiklemur/rimworld-observability-collector -f has_wiki=true
-#   2. Visit https://github.com/cryptiklemur/rimworld-observability-collector/wiki
+#   1. gh api -X PATCH repos/RimWorks/rimworld-observability-collector -f has_wiki=true
+#   2. Visit https://github.com/RimWorks/rimworld-observability-collector/wiki
 #      and click "Create the first page". Save any stub content (it will be
 #      overwritten by the first sync).
 # The wiki repo (<repo>.wiki.git) does not exist until a first wiki page is
