@@ -32,7 +32,7 @@ Then declare the Workshop item as a dependency in your `About.xml` so subscriber
 
 ## Links
 
-- Source, docs, and issues: https://github.com/cryptiklemur/rimworld-observability-collector
-- Latest collector binaries: https://github.com/cryptiklemur/rimworld-observability-collector/releases
+- Source, docs, and issues: https://github.com/RimWorks/rimworld-observability-collector
+- Latest collector binaries: https://github.com/RimWorks/rimworld-observability-collector/releases
 
 Licensed under MIT.

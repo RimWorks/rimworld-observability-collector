@@ -10,7 +10,7 @@ After subscribing, restart RimWorld and enable RimObs in the mod list before any
 
 ## Manual Install
 
-1. Download the latest release zip from `https://github.com/cryptiklemur/rimworld-observability-collector/releases`.
+1. Download the latest release zip from `https://github.com/RimWorks/rimworld-observability-collector/releases`.
 2. Extract it into RimWorld's `Mods/` folder so you end up with `Mods/RimObsCollector/` (or whatever folder the zip contains).
 3. Launch RimWorld, open the mod list, and enable RimObs before any mod that depends on it.
 

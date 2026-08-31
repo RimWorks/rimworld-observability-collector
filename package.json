@@ -7,7 +7,7 @@
     "description": "Local performance telemetry framework for RimWorld players and mod authors.",
     "repository": {
         "type": "git",
-        "url": "https://github.com/cryptiklemur/rimworld-observability-collector"
+        "url": "https://github.com/RimWorks/rimworld-observability-collector"
     },
     "scripts": {
         "build:dashboard": "pnpm --filter ./RimObs.Dashboard build",

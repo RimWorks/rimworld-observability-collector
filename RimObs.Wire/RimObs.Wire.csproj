@@ -17,9 +17,9 @@
         <PackageTags>rimworld;observability;telemetry;wire-protocol</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <RepositoryUrl>https://github.com/cryptiklemur/rimworld-observability-collector</RepositoryUrl>
+        <RepositoryUrl>https://github.com/RimWorks/rimworld-observability-collector</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageProjectUrl>https://github.com/cryptiklemur/rimworld-observability-collector</PackageProjectUrl>
+        <PackageProjectUrl>https://github.com/RimWorks/rimworld-observability-collector</PackageProjectUrl>
         <IncludeSymbols>false</IncludeSymbols>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <NoWarn>$(NoWarn);CS1591</NoWarn>

@@ -81,4 +81,4 @@ The directory can be overridden with the `RIMOBS_CONFIG_DIR` environment variabl
 
 ## Filing a bug report
 
-Export a [diagnostic bundle](Diagnostic-Bundle) from the dashboard (or via the CLI) and attach the resulting zip to your issue at `https://github.com/cryptiklemur/rimworld-observability-collector/issues`. The bundle includes `Player.log`, the collector log, the current session database, and configuration -- everything needed to reproduce most issues without back-and-forth.
+Export a [diagnostic bundle](Diagnostic-Bundle) from the dashboard (or via the CLI) and attach the resulting zip to your issue at `https://github.com/RimWorks/rimworld-observability-collector/issues`. The bundle includes `Player.log`, the collector log, the current session database, and configuration -- everything needed to reproduce most issues without back-and-forth.

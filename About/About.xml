@@ -3,7 +3,7 @@
     <name>RimWorld Observability</name>
     <packageId>CryptikLemur.RimObs</packageId>
     <author>CryptikLemur</author>
-    <url>https://github.com/cryptiklemur/rimworld-observability-collector</url>
+    <url>https://github.com/RimWorks/rimworld-observability-collector</url>
     <supportedVersions>
         <li>1.6</li>
     </supportedVersions>
