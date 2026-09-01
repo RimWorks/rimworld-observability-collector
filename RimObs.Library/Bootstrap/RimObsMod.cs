@@ -132,7 +132,8 @@ public sealed class RimObsMod : Mod {
         try {
             PatchBackends.SelectBest();
             if (PatchBackends.Active == null) {
-                Log.Warning("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
+                Log.Error("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
+                ShowMissingBackendNotice();
                 return;
             }
 
@@ -154,6 +155,37 @@ public sealed class RimObsMod : Mod {
         catch (Exception ex) {
             Log.Error($"[RimObs] Instrumentation install failed: {ex}");
         }
+    }
+
+    // About.xml declares no modDependencies, so RimWorld raises no missing-dependency
+    // warning of its own. this replaces it, and is not DevMode-gated because players run this.
+    private static void ShowMissingBackendNotice() {
+        string? text = MissingBackendNotice.ClaimOnce();
+        if (text == null)
+            return;
+
+        // Find.UIRoot is null here. Root.Start queues InitializingInterface, which builds it,
+        // behind the load event we are finishing, so the dialog waits its turn in that queue.
+        LongEventHandler.QueueLongEvent(
+            () =>
+                Find.WindowStack.Add(
+                    new Dialog_MessageBox(
+                        text,
+                        "Close".Translate(),
+                        null,
+                        null,
+                        null,
+                        "RimObs",
+                        buttonADestructive: false,
+                        acceptAction: null,
+                        // without a cancelAction closeOnCancel stays false, so Escape does nothing.
+                        cancelAction: () => { }
+                    )
+                ),
+            null,
+            doAsynchronously: false,
+            null
+        );
     }
 
     private static void WireTelemetrySink(string ownerId, int port) {
