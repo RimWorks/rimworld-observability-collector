@@ -68,6 +68,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- TODO(backends): remove when PatchInstaller and PatchRegistry call IPatchBackend instead. -->
+        <Compile Include="..\Source\Shared\MethodTransplanter.cs" Link="Patching\MethodTransplanter.cs"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\RimObs.Wire\RimObs.Wire.csproj">
             <Private>True</Private>
         </ProjectReference>

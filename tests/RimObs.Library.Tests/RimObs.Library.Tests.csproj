@@ -25,6 +25,7 @@
         <Compile Include="..\..\RimObs.Library\**\*.cs"
                  Exclude="..\..\RimObs.Library\obj\**\*.cs;..\..\RimObs.Library\bin\**\*.cs;..\..\RimObs.Library\Bootstrap\RimObsMod.cs;..\..\RimObs.Library\Settings\SettingsWindow.cs;..\..\RimObs.Library\Settings\RimObsSettings.cs"
                  LinkBase="LinkedSource"/>
+        <Compile Include="..\..\Source\Shared\MethodTransplanter.cs" Link="LinkedSource\MethodTransplanter.cs"/>
     </ItemGroup>
 
     <ItemGroup>

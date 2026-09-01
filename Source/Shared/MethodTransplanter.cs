@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using RimWorks.RimObs.Profile;
-using HarmonyLib;
+using CodeInstruction = HarmonyLib.CodeInstruction;
+using ExceptionBlock = HarmonyLib.ExceptionBlock;
+using ExceptionBlockType = HarmonyLib.ExceptionBlockType;
 
 namespace RimWorks.RimObs.Patching;
 
