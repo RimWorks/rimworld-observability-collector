@@ -197,4 +197,19 @@ public sealed class ConcordBackendTests : IDisposable {
             throw new InvalidOperationException("nope");
         }
     }
+
+    // regression: CONC123. an async target's body compiles into a generated MoveNext, and
+    // Concord refuses At.Transpiler on the declared method rather than time its setup.
+    [Fact]
+    public void PatchesAnAsyncTargetThroughItsStateMachine() {
+        SectionCatalog.RegisterCorePack();
+
+        Action act = () => _backend.Patch(typeof(AsyncTarget).GetMethod(nameof(AsyncTarget.Work))!);
+
+        act.Should().NotThrow();
+    }
+
+    private static class AsyncTarget {
+        public static async System.Threading.Tasks.Task Work() => await System.Threading.Tasks.Task.Yield();
+    }
 }

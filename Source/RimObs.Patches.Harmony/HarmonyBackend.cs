@@ -16,6 +16,11 @@ public sealed class HarmonyBackend : IPatchBackend {
     public string Name => "Harmony";
 
     public void Patch(MethodBase target) {
+        // an async or iterator method only builds its state machine, so patching it as declared
+        // would time construction. the generated MoveNext holds the body as written.
+        if (StateMachineTarget.TryResolveMoveNext(target, out MethodInfo? moveNext) && moveNext != null)
+            target = moveNext;
+
         HarmonyMethod transpiler = new(MethodTransplanter.TranspilerMethod) { priority = Priority.Low };
         s_Harmony.Patch(target, transpiler: transpiler);
     }

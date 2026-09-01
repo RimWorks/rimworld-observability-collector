@@ -51,6 +51,14 @@ public sealed class ConcordBackend : IPatchBackend {
         s_Handles.Clear();
     }
 
-    private static void Install(MethodBase target, MethodBase injection, At at) =>
-        s_Handles[(target, at)] = Patcher.Patch(target, injection, at);
+    private static void Install(MethodBase target, MethodInfo injection, At at) {
+        PatchBuilder builder = Patcher.For(target);
+
+        // CONC123: an async or iterator body compiles into a generated MoveNext. Concord refuses
+        // At.Transpiler on the declared method rather than silently time its state-machine setup.
+        if (StateMachineTarget.TryResolveMoveNext(target, out MethodInfo? _))
+            builder = builder.Body(PatchBody.StateMachine);
+
+        s_Handles[(target, at)] = builder.Inject(at, injection).Apply();
+    }
 }

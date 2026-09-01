@@ -76,7 +76,7 @@ internal static class SectionCatalog {
             entry.SectionId = handle.Id;
             SectionRegistry.SetActive(handle.Id, true);
             s_Entries.Add(entry);
-            s_MethodToSectionId[method] = handle.Id;
+            MapMethod(method, handle.Id);
             return entry;
         }
     }
@@ -104,13 +104,21 @@ internal static class SectionCatalog {
                     entry.SectionId = handle.Id;
                     entry.Resolved = method;
                     SectionRegistry.SetActive(handle.Id, true);
-                    s_MethodToSectionId[method] = handle.Id;
+                    MapMethod(method, handle.Id);
                 }
                 catch (Exception ex) {
                     entry.ResolutionError = ex;
                 }
             }
         }
+    }
+
+    // an async or iterator target is patched through its generated MoveNext, so map that too.
+    // whichever method the backend reports as the original then resolves to the same section.
+    private static void MapMethod(MethodBase method, int sectionId) {
+        s_MethodToSectionId[method] = sectionId;
+        if (StateMachineTarget.TryResolveMoveNext(method, out MethodInfo? moveNext) && moveNext != null)
+            s_MethodToSectionId[moveNext] = sectionId;
     }
 
     public static bool TryGetSectionId(MethodBase method, out int sectionId) {
