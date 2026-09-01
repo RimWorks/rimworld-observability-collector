@@ -33,6 +33,25 @@ public sealed class ConfigDirResolverTests {
         result.Should().EndWith("RimWorks.RimObs");
     }
 
+    [Fact]
+    public void Resolve_throws_rather_than_falling_back_to_a_shared_temp_dir() {
+        using EnvVarScope _ = EnvVarScope.Set(ConfigDirResolver.EnvVarName, null);
+
+        Action act = () => ConfigDirResolver.Resolve(null, () => string.Empty);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*" + ConfigDirResolver.EnvVarName + "*");
+    }
+
+    [Fact]
+    public void Resolve_still_uses_the_env_var_when_there_is_no_per_user_dir() {
+        using EnvVarScope _ = EnvVarScope.Set(ConfigDirResolver.EnvVarName, "/tmp/rimobs-test-env");
+
+        string result = ConfigDirResolver.Resolve(null, () => string.Empty);
+
+        result.Should().Be("/tmp/rimobs-test-env");
+    }
+
     private sealed class EnvVarScope : IDisposable {
         private readonly string _name;
         private readonly string? _previous;

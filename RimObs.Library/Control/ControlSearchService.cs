@@ -16,7 +16,7 @@ internal static class ControlSearchService {
         if (needle.Length == 0)
             return new ControlSearchResponse { Results = [] };
 
-        List<ControlMethodDescriptor> hits = new List<ControlMethodDescriptor>(cap);
+        List<ControlMethodDescriptor> hits = new List<ControlMethodDescriptor>();
         foreach (Assembly assembly in assemblies) {
             System.Type[] types;
             try { types = assembly.GetTypes(); }

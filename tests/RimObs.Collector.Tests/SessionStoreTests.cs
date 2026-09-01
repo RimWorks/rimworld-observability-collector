@@ -410,4 +410,13 @@ public sealed class SessionStoreSubsystemTests : IDisposable {
         core!.Name.Should().Be("core.tick");
         core.Subsystem.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("sections", "\"sections\"")]
+    [InlineData("odd name", "\"odd name\"")]
+    [InlineData("we\"ird", "\"we\"\"ird\"")]
+    [InlineData("a\"; DROP TABLE metrics; --", "\"a\"\"; DROP TABLE metrics; --\"")]
+    public void QuoteIdentifier_doubles_embedded_quotes(string name, string expected) {
+        SessionStore.QuoteIdentifier(name).Should().Be(expected);
+    }
 }

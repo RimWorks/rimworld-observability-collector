@@ -302,20 +302,20 @@ ON CONFLICT(parent_id, section_id) DO UPDATE SET
         tx.Commit();
     }
 
-    public int CountCallTreeEdges() => CountRows("call_tree_edges");
+    public int CountCallTreeEdges() => CountRows("SELECT COUNT(*) FROM call_tree_edges;");
 
-    public int CountSections() => CountRows("sections");
+    public int CountSections() => CountRows("SELECT COUNT(*) FROM sections;");
 
-    public int CountMetrics() => CountRows("metrics");
+    public int CountMetrics() => CountRows("SELECT COUNT(*) FROM metrics;");
 
-    public int CountMetricLabels() => CountRows("metric_labels");
+    public int CountMetricLabels() => CountRows("SELECT COUNT(*) FROM metric_labels;");
 
-    public int CountGcEvents() => CountRows("gc_events");
+    public int CountGcEvents() => CountRows("SELECT COUNT(*) FROM gc_events;");
 
-    private int CountRows(string table) {
+    private int CountRows(string sql) {
         ThrowIfDisposed();
         using SqliteCommand cmd = _connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM {table};";
+        cmd.CommandText = sql;
         return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -440,9 +440,15 @@ ON CONFLICT(parent_id, section_id) DO UPDATE SET
 
         foreach (string table in tables) {
             using SqliteCommand dropCmd = connection.CreateCommand();
-            dropCmd.CommandText = $"DROP TABLE IF EXISTS \"{table}\";";
+            dropCmd.CommandText = "DROP TABLE IF EXISTS " + QuoteIdentifier(table) + ";";
             dropCmd.ExecuteNonQuery();
         }
+    }
+
+    // SQLite has no parameter slot for an identifier, so quote it the way SQLite does:
+    // wrap in double quotes and double any quote already inside the name.
+    internal static string QuoteIdentifier(string name) {
+        return "\"" + name.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 
     private static void CreateSchema(SqliteConnection connection) {

@@ -44,8 +44,8 @@ public static class RequestBody {
         T? incoming;
         try {
             incoming = options is null
-                ? await context.Request.ReadFromJsonAsync<T>()
-                : await context.Request.ReadFromJsonAsync<T>(options);
+                ? await context.Request.ReadFromJsonAsync<T>(context.RequestAborted)
+                : await context.Request.ReadFromJsonAsync<T>(options, context.RequestAborted);
         }
         catch (JsonException) {
             return (null, Results.BadRequest(new { schema_version = SchemaVersion.Current, reason = $"malformed {entity} body" }));
