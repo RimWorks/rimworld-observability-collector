@@ -93,11 +93,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         while (!_stop.IsSet) {
             try {
                 if (SessionAnchor.IsInitialized) {
-                    // SessionMeta is a one-shot control message: without it the collector never
-                    // creates a session, so a single dropped loopback datagram blanks the whole run.
-                    // Resend on every tick for the first second, then heartbeat every ~5s so the
-                    // session survives packet loss and is re-learned if the collector restarts.
-                    // OnSessionMeta is idempotent, so resends are harmless.
+                    // SessionMeta is one-shot: one dropped datagram blanks the whole run. burst for a second
+                    // then heartbeat ~5s. OnSessionMeta is idempotent, so resends are harmless.
                     if (_metaTicks < MetaInitialBurstTicks || _metaTicks % MetaHeartbeatTicks == 0) {
                         SendSessionMeta();
                         SendPatchConflicts();

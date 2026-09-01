@@ -7,11 +7,8 @@ namespace RimWorks.RimObs.Collector.Api;
 
 public static class ConfigEndpoints {
     public static IEndpointRouteBuilder MapConfigEndpoints(this IEndpointRouteBuilder endpoints) {
-        // The config resource is returned raw rather than under a { schema_version, ... } envelope:
-        // RimObsConfig already carries its own schema_version field (the same field the POST handler
-        // validates against RimObsConfig.Version). It is a single self-versioned object, so an outer
-        // envelope would just duplicate that field. The envelope pattern exists for list/aggregate
-        // payloads (arrays) that have no natural place to carry their own version.
+        // returned raw, not enveloped: RimObsConfig already carries its own schema_version. the
+        // envelope exists for list payloads that have nowhere of their own to put one.
         endpoints.MapGet("/api/v1/config", (ConfigStore store) =>
             Results.Json(store.Current, ConfigJson.Options));
 

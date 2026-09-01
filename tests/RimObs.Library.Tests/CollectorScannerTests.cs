@@ -111,9 +111,8 @@ public sealed class CollectorScannerTests {
 
     [Fact]
     public void Scan_ignores_collector_under_assemblies_tree() {
-        // RimWorld force-loads everything under Assemblies/ into Mono and the net10 collector
-        // crashes it. The collector under Assemblies/ must be invisible to discovery so we never
-        // ship there by accident.
+        // regression: RimWorld force-loads everything under Assemblies/ and the net10 collector
+        // crashes Mono. discovery must not see one there, so we never ship there by accident.
         using TempDirectory root = new TempDirectory();
         string buried = Path.Combine(root.Path, "legacy", "Assemblies", "Collector");
         Directory.CreateDirectory(buried);

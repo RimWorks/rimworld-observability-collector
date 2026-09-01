@@ -39,12 +39,8 @@ public sealed class AllocationSamplerTests {
         byte[]? big1 = new byte[500_000];
         big1[0] = 1;
 
-        // Bank the +500KB heap delta into the accumulator without emitting a window.
-        // long.MaxValue guarantees this poll returns false (banks only) even on a
-        // slow CI runner; the previous 10ms duration could elapse between
-        // construction and this poll, emitting+resetting early and discarding the
-        // 500KB into the throwaway sample so first.BytesAllocated.BeGreaterThan(0)
-        // flaked.
+        // long.MaxValue banks the +500KB delta without emitting: a real duration could elapse on a
+        // slow runner, emit early, and discard the 500KB into a throwaway sample.
         sampler.TryPollWindow(long.MaxValue, out _);
         GC.KeepAlive(big1);
 

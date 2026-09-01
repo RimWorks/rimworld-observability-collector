@@ -148,10 +148,8 @@ public sealed class RimObsMod : Mod {
             Profiler.SetEnabled(true);
             GcObserverHost.Start();
             TpsFpsObserverHost.Start();
-            // AllocationSamplerHost is opt-in and stays inert at bootstrap. Mod authors
-            // call AllocationSamplerHost.Start() themselves when they want it (PRD §35.18,
-            // §11.2). It is off by default because the GC.GetTotalMemory delta heuristic
-            // is a soft cost on every poll.
+            // AllocationSamplerHost is opt-in: the GC.GetTotalMemory delta heuristic costs
+            // something on every poll. mod authors start it themselves. PRD §35.18, §11.2.
             StartConfigPoll(CollectorHost, port);
             LogBootstrapSummary(declared, attrs);
         }
@@ -160,18 +158,15 @@ public sealed class RimObsMod : Mod {
         }
     }
 
-    // About.xml lists no patching library as a dependency, so RimWorld raises no
-    // missing-dependency warning for one. this replaces it, and is not DevMode-gated
-    // because players run this.
+    // no patching library is a hard dependency, so RimWorld warns about none of them. this
+    // replaces that warning, and is not DevMode-gated because players hit it.
     private static void ReportMissingBackend() {
         string? text = MissingBackendNotice.ClaimOnce();
         if (text == null)
             return;
 
-        // Both the error and the dialog wait for the queued event. Find.UIRoot is null until
-        // InitializingInterface builds it, and PlayDataLoader.loadedInt is still false until
-        // LoadAllPlayData returns - Log.Error force-opens the debug log while it is, which
-        // would cover the dialog.
+        // Find.UIRoot is null until InitializingInterface builds it, and Log.Error force-opens
+        // the debug log until PlayDataLoader.loadedInt flips. queueing puts both after that.
         LongEventHandler.QueueLongEvent(
             () => {
                 Log.Error(

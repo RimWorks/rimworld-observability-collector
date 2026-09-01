@@ -96,9 +96,8 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
 
         _out.WriteLine($"enabled BenchTarget.Tick best-of-{trials} = {bestNsPerCall:F1} ns/call ({iterations:N0} iterations/trial)");
 
-        // PRD §11.6 target is < 1us. Assert a generous 10x ceiling (10us) to
-        // avoid false flakes on virtualized CI runners; a real regression blows
-        // well past this boundary.
+        // PRD §11.6 target is < 1us. assert 10x (10us) to avoid flakes on virtualized runners; a
+        // real regression blows past it.
         bestNsPerCall.Should().BeLessThan(10_000.0,
             $"enabled section overhead too high: {bestNsPerCall:F1}ns/call");
     }

@@ -7,9 +7,8 @@ using Microsoft.AspNetCore.Http;
 namespace RimWorks.RimObs.Collector.Api;
 
 public static class RequestBody {
-    // Response envelopes always carry the wire SchemaVersion.Current. The domain version
-    // (config/panel registration schema) is only used to validate the inbound body.
-    // Config/panel bodies are snake_case, so this path uses ConfigJson.Options.
+    // envelopes carry the wire SchemaVersion.Current; the domain version only validates the
+    // inbound body. config and panel bodies are snake_case, so this uses ConfigJson.Options.
     public static async Task<(T? Body, IResult? Error)> ReadValidated<T>(
         HttpContext context,
         int domainVersion,
@@ -28,10 +27,8 @@ public static class RequestBody {
         return (incoming, null);
     }
 
-    // For bodies that carry no schema_version of their own. Produces the same
-    // malformed/empty-body envelope as ReadValidated so every POST handler reports
-    // body errors identically. Uses the host's default JSON options (camelCase) so
-    // it matches the wire contract these endpoints already accept.
+    // for bodies with no schema_version of their own. same error envelope as ReadValidated, and
+    // the host's default camelCase options to match what these endpoints already accept.
     public static Task<(T? Body, IResult? Error)> Read<T>(HttpContext context, string entity)
         where T : class =>
         ReadBody<T>(context, entity, null);

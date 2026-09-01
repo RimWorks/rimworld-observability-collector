@@ -34,12 +34,8 @@ public sealed class BundleEndpointsTests {
 
     [Fact]
     public async Task BuildApp_disposes_dynamic_patch_store_so_db_file_unlocks() {
-        // Regression: the DynamicPatchStore was registered as a pre-built singleton
-        // instance, which the DI container never disposes. Its SqliteConnection stayed
-        // open, and on Windows that kept dynamic_patches.db locked, so test cleanup
-        // (Directory.Delete) threw IOException. The fix registers it via a factory so the
-        // container owns and disposes it. Linux unlinks open files silently, so the teeth
-        // here are the disposal assertion, not the delete.
+        // regression: DynamicPatchStore was a pre-built singleton the container never disposed, so its
+        // SqliteConnection kept the db locked on Windows. the teeth here are the disposal assertion.
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("dispose-bearer-token");
         string tempDir = Path.Combine(Path.GetTempPath(), "rimobs-dispose-" + Guid.NewGuid().ToString("N"));

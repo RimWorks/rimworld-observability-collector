@@ -4,12 +4,10 @@ using RimWorks.RimObs.Wire.Control;
 
 namespace RimWorks.RimObs.Wire;
 
-// Dependency-free MessagePack codec. The net48 library cannot ship MessagePack.dll (its dynamic
-// codegen references System.Reflection.Emit split facades that fail to bind under RimWorld's Unity
-// Mono, poisoning the mod's assembly load), so this codec encodes/decodes the MessagePack byte
-// format by hand via WireBufferWriter/WireBufferReader. Output is the same array-of-fields layout
-// MessagePack's generated formatters produce (sequential field -> array element n; byte[] -> bin),
-// so it stays interoperable with any standard MessagePack reader on the collector side.
+// Dependency-free MessagePack codec. The net48 library cannot ship MessagePack.dll: its dynamic
+// codegen references System.Reflection.Emit split facades that fail to bind under Unity Mono.
+// Encodes the same array-of-fields layout MessagePack's generated formatters produce, so it
+// stays interoperable with any standard reader on the collector side.
 public static class WireCodec {
     public static byte[] Serialize<T>(T value) where T : class {
         switch (value) {

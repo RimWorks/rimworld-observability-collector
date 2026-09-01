@@ -9,9 +9,8 @@ namespace RimObs.Library.Tests;
 public class InstrumentationInstallTests {
     public InstrumentationInstallTests() => InstrumentationInstall.ResetForTests();
 
-    // regression: patching resolves each target's MethodBase, which runs the declaring type's
-    // static constructor. RimWorld's UI types build materials there and Unity refuses that off
-    // the main thread, so the install must never run inline from the mod constructor.
+    // regression: patching runs each target's static ctor, RimWorld's UI types build materials
+    // there, and Unity refuses that off the main thread. the install must never run inline.
     [Fact]
     public void DoesNotRunTheInstallInline() {
         bool ran = false;

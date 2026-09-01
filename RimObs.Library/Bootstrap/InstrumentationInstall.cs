@@ -11,9 +11,8 @@ public static class InstrumentationInstall {
     /// <summary>
     /// Queues <paramref name="install"/> on <paramref name="scheduler"/>, at most once.
     /// </summary>
-    // Patching resolves each target's MethodBase, which runs the declaring type's static
-    // constructor. RimWorld's UI types build materials there, and Unity refuses that off the
-    // main thread.
+    // patching resolves each target's MethodBase, which runs the declaring type's static ctor.
+    // RimWorld's UI types build materials there and Unity refuses that off the main thread.
     public static void Schedule(Action<Action> scheduler, Action install) {
         if (s_Scheduled)
             return;

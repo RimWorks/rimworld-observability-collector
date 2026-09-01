@@ -79,10 +79,8 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
 
         sawSection.Should().BeTrue("UdpTelemetrySink should flush SectionBatch frames to the loopback receiver within 3s");
 
-        // The sender thread increments SamplesSent on the line *after* UdpClient.Send returns, so a
-        // loopback receiver can observe the datagram before the counter is bumped. Poll briefly to
-        // close that race instead of reading the counter once (regression: flaky failure on Linux CI
-        // where the receive won the race against the increment).
+        // regression: SamplesSent increments after Send returns, so a loopback receiver can see the
+        // datagram first. poll instead of reading once. flaked on Linux CI.
         SpinWait.SpinUntil(() => sink.SamplesSent > 0, TimeSpan.FromSeconds(2));
         sink.SamplesSent.Should().BeGreaterThan(0);
     }
@@ -172,9 +170,8 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
 
             sawSection.Should().BeTrue("Profiler samples should reach the sink set via Profiler.SetSink and flush over loopback");
 
-            // SamplesSent is incremented on the line after UdpClient.Send returns, so the loopback
-            // receiver can observe the datagram before the counter is bumped. Poll instead of reading
-            // once (same race as Drain_flushes_to_loopback_receiver).
+            // SamplesSent increments after Send returns, so the receiver can win the race. poll instead
+            // of reading once. same race as Drain_flushes_to_loopback_receiver.
             SpinWait.SpinUntil(() => sink.SamplesSent > 0, TimeSpan.FromSeconds(2));
             sink.SamplesSent.Should().BeGreaterThan(0);
         }

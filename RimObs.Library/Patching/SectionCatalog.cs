@@ -159,11 +159,8 @@ internal static class SectionCatalog {
         return byName;
     }
 
-    // When the catalog entry only specifies a method name (no param types), we deliberately
-    // pick the widest overload. RimWorld's vanilla methods that mods want to instrument
-    // (FindPath, FindPathNow, MapPreTick, ...) are typically the canonical highest-arity
-    // form; the lower-arity overloads are usually thin convenience wrappers that delegate
-    // to the wide one, so patching the wide overload covers both call paths.
+    // name-only entries take the widest overload: vanilla's lower-arity forms are usually thin
+    // wrappers that delegate to it, so patching the wide one covers both call paths.
     private static MethodInfo? ResolveByNameOnly(List<MethodInfo> byName) {
         if (byName.Count == 1)
             return byName[0];

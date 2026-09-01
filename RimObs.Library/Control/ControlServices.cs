@@ -18,9 +18,8 @@ internal static class ControlServices {
             server.Start();
         }
         catch (System.Net.HttpListenerException) {
-            // Bind failure must not kill mod bootstrap. Server stays null → SessionMeta
-            // advertises port=0, secret="", and the collector's ControlClient (Task 14)
-            // treats that as "no in-process control server available".
+            // bind failure must not kill bootstrap. server stays null, SessionMeta advertises port=0,
+            // and the collector's ControlClient reads that as no control server.
             return;
         }
         s_Server = server;

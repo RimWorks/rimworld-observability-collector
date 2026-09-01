@@ -21,12 +21,8 @@ public sealed class EndToEndSmokeTests {
         _out = output;
     }
 
-    // Asks the OS for a free ephemeral port, then releases it so the collector can bind it.
-    // There is an inherent TOCTOU window between Stop() and the app re-binding the port;
-    // another process could grab it first. In practice the window is sub-millisecond on
-    // loopback and these tests run serially (see AssemblyInfo's DisableTestParallelization),
-    // so collisions have not been observed. If they ever do, the fix is a bind-retry loop,
-    // not a wider port range.
+    // asks the OS for a free port then releases it. the TOCTOU window is sub-millisecond on
+    // loopback and these tests run serially, so collisions have not been seen.
     private static int PickFreePort() {
         TcpListener listener = new(IPAddress.Loopback, 0);
         listener.Start();

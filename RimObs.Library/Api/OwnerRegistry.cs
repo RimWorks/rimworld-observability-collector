@@ -11,9 +11,8 @@ public static class OwnerRegistry {
     private static Func<Assembly, string?>? s_LateResolver;
 
     /// <summary>
-    /// Installs a fallback resolver used by <see cref="TryGetPackageId"/> on cache miss.
-    /// RimObsMod wires this to a Verse-aware scan of LoadedModManager so consumer mods whose
-    /// Mod ctor runs before RimObsMod still resolve. Pass null to clear (used by tests).
+    /// Fallback resolver for <see cref="TryGetPackageId"/> on cache miss. RimObsMod points it at
+    /// LoadedModManager so mods whose ctor runs first still resolve. Null clears it, for tests.
     /// </summary>
     public static void SetLateResolver(Func<Assembly, string?>? resolver) {
         lock (s_Lock) {

@@ -3,12 +3,10 @@ using System.Text;
 
 namespace RimWorks.RimObs.Wire;
 
-// Hand-rolled MessagePack-format encoder with zero external dependencies. RimWorld's Unity Mono
-// cannot load the MessagePack package (its dynamic-codegen types reference System.Reflection.Emit
-// split-facade assemblies that fail to bind, which poisons the mod's assembly load and segfaults),
-// so the net48 side cannot ship MessagePack.dll at all. This writer emits the canonical compact
-// MessagePack byte layout (positive/negative fixint, str/bin, fixarray etc.) so output stays valid
-// standard MessagePack while depending only on the BCL.
+// Hand-rolled MessagePack encoder, no external dependencies. RimWorld's Unity Mono cannot load
+// the MessagePack package: its dynamic-codegen types reference System.Reflection.Emit split
+// facades that fail to bind, poisoning the mod's assembly load and segfaulting. Output is the
+// canonical compact MessagePack layout, so it stays valid for any standard reader.
 internal sealed class WireBufferWriter {
     private byte[] _buffer;
     private int _written;

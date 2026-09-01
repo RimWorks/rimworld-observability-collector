@@ -411,9 +411,8 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void ControlSearchResponse_rejects_count_larger_than_buffer() {
-        // Outer array header (0x91), then an int32 count of 0x7FFFFFFF (uint32 BE) and no payload.
-        // The old code allocated new ControlMethodDescriptor[count] from this attacker-controlled
-        // count before reading anything (SonarCloud S6680), risking an OOM on a malformed frame.
+        // regression: S6680. the old code allocated ControlMethodDescriptor[count] from an
+        // attacker-controlled 0x7FFFFFFF before reading any payload, risking OOM.
         byte[] malformed = [0x91, 0xce, 0x7f, 0xff, 0xff, 0xff];
 
         Action act = () => WireCodec.Deserialize<ControlSearchResponse>(malformed);
@@ -466,10 +465,8 @@ public sealed class WireCodecTests {
         act.Should().Throw<WireFormatException>();
     }
 
-    // Exhaustiveness guard for WireCodec's two parallel hand-maintained dispatch tables
-    // (the Serialize<T> switch and the Deserialize<T> if/else chain). The set of supported
-    // types is derived from the concrete Serialize overloads, so adding a new wire type means
-    // adding an overload — which immediately forces a case in BOTH generic tables, or this fails.
+    // exhaustiveness guard for WireCodec's two hand-maintained dispatch tables. the type set comes
+    // from the Serialize overloads, so a new wire type forces a case in both or this fails.
     public static TheoryData<Type> AllWireTypes() {
         TheoryData<Type> data = new TheoryData<Type>();
         IEnumerable<Type> wireTypes = typeof(WireCodec)

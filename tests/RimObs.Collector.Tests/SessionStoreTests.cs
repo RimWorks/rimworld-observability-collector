@@ -77,14 +77,8 @@ public sealed class SessionStoreTests : IDisposable {
 
     [Fact]
     public void Dispose_closes_connection_so_wal_sidecars_are_removed() {
-        // Regression: SessionStore opened its SqliteConnection with default pooling, so
-        // Dispose() returned the native sqlite3 handle to the pool instead of closing it.
-        // The lingering handle kept session.db (and its -wal/-shm sidecars) open, which on
-        // Windows locked the file and made test cleanup (Directory.Delete) throw IOException.
-        // The fix sets Pooling=false so Dispose truly closes the last connection, letting
-        // SQLite checkpoint and delete the WAL sidecars. That sidecar removal is observable on
-        // every platform, so this assertion has teeth on Linux too: with pooling on, -wal/-shm
-        // persist after Dispose and this test fails.
+        // regression: default pooling returned the sqlite handle to the pool instead of closing it, so
+        // the -wal/-shm sidecars persisted. their removal is what this asserts, with teeth on Linux.
         SessionMeta meta = new() {
             SessionId = "wal-probe",
             StartedUtcTicks = 638_500_000_000_000_000L,

@@ -221,14 +221,8 @@ public class ObservedSectionScannerTests : System.IDisposable {
         entry.Installed.Should().BeTrue();
     }
 
-    // The library ships as assembly name "RimObs" (see RimObs.Library.csproj <AssemblyName>).
-    // In this test project the library is source-linked into "RimObs.Library.Tests",
-    // so typeof(Profiler).Assembly.GetName().Name is "RimObs.Library.Tests" here.
-    // We verify the guard does NOT exclude the test assembly (wrong name), proving
-    // the guard is name-exact and only fires for "RimObs".
-    // The library ships as assembly name "RimObs" (see RimObs.Library.csproj <AssemblyName>).
-    // In this test project the library is source-linked, so we fabricate a dynamic assembly
-    // named "RimObs" to verify the guard skips it.
+    // the library ships as assembly "RimObs" but is source-linked here as "RimObs.Library.Tests",
+    // so we fabricate a dynamic "RimObs" assembly to prove the guard is name-exact.
     [Fact]
     public void Scan_SkipsRimObsLibraryItself() {
         System.Reflection.Emit.AssemblyBuilder rimobs = System.Reflection.Emit.AssemblyBuilder.DefineDynamicAssembly(

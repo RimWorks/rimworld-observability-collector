@@ -18,10 +18,8 @@ public static class CollectorScanner {
             return results;
 
         foreach (string modDir in Directory.EnumerateDirectories(modsRoot)) {
-            // The collector lives in <mod>/Collector, NOT <mod>/Assemblies/Collector. RimWorld's
-            // ModAssemblyHandler loads every .dll under Assemblies/ recursively (SearchOption.AllDirectories),
-            // and the net10 collector assemblies crash Mono's custom-attribute reader. Keeping them out of
-            // the Assemblies/ tree is the only safe layout.
+            // <mod>/Collector, never <mod>/Assemblies/Collector: RimWorld loads every dll under
+            // Assemblies/ recursively and the net10 collector crashes Mono's attribute reader.
             ReadCandidates(Path.Combine(modDir, CollectorDirName), results);
         }
 

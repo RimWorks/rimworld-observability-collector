@@ -57,9 +57,8 @@ public sealed class ConcordBackendTests : IDisposable {
         _sink.Samples.Should().HaveCount(1);
     }
 
-    // regression: a section whose target throws must still emit its Stop. Harmony's finally
-    // splicing is proven by MethodTransplanterTests; Concord's is not, and the whole plan rests
-    // on the two behaving the same.
+    // regression: a target that throws must still emit its Stop. Harmony's finally splicing is
+    // proven by MethodTransplanterTests; Concord's exclusive EndExceptionBlock is not.
     [Fact]
     public void RecordsASampleEvenWhenTheTargetThrows() {
         Patch(nameof(Targets.ThrowsAlways), "test.concord_throws");
