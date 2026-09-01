@@ -132,8 +132,7 @@ public sealed class RimObsMod : Mod {
         try {
             PatchBackends.SelectBest();
             if (PatchBackends.Active == null) {
-                Log.Error("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
-                ShowMissingBackendNotice();
+                ReportMissingBackend();
                 return;
             }
 
@@ -159,15 +158,18 @@ public sealed class RimObsMod : Mod {
 
     // About.xml declares no modDependencies, so RimWorld raises no missing-dependency
     // warning of its own. this replaces it, and is not DevMode-gated because players run this.
-    private static void ShowMissingBackendNotice() {
+    private static void ReportMissingBackend() {
         string? text = MissingBackendNotice.ClaimOnce();
         if (text == null)
             return;
 
-        // Find.UIRoot is null here. Root.Start queues InitializingInterface, which builds it,
-        // behind the load event we are finishing, so the dialog waits its turn in that queue.
+        // Both the error and the dialog wait for the queued event. Find.UIRoot is null until
+        // InitializingInterface builds it, and PlayDataLoader.loadedInt is still false until
+        // LoadAllPlayData returns - Log.Error force-opens the debug log while it is, which
+        // would cover the dialog.
         LongEventHandler.QueueLongEvent(
-            () =>
+            () => {
+                Log.Error("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
                 Find.WindowStack.Add(
                     new Dialog_MessageBox(
                         text,
@@ -181,7 +183,8 @@ public sealed class RimObsMod : Mod {
                         // without a cancelAction closeOnCancel stays false, so Escape does nothing.
                         cancelAction: () => { }
                     )
-                ),
+                );
+            },
             null,
             doAsynchronously: false,
             null
