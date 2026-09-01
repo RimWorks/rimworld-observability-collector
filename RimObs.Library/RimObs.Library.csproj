@@ -2,9 +2,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <Authors>RimWorks</Authors>
-        <TargetFramework>net48</TargetFramework>
+        <TargetFrameworks>net472;net48</TargetFrameworks>
         <LangVersion>latest</LangVersion>
-        <OutDir>..\Assemblies\</OutDir>
+        <OutDir Condition="'$(TargetFramework)' == 'net48'">..\Assemblies\</OutDir>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>True</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>
@@ -24,7 +24,7 @@
         <AssemblyName>RimObs</AssemblyName>
 
         <PackageId>RimWorks.RimObs.Library</PackageId>
-        <Description>RimWorld Observability mod-side library. Register named sections and metrics; the out-of-process collector aggregates the data and serves a dashboard. Net48 / RimWorld 1.6+.</Description>
+        <Description>RimWorld Observability mod-side library. Register named sections and metrics; the out-of-process collector aggregates the data and serves a dashboard. Net472 / net48, RimWorld 1.6+.</Description>
         <PackageTags>rimworld;observability;telemetry;harmony;mod</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -74,7 +74,7 @@
 
     <ItemGroup>
         <PackageReference Include="Lib.Harmony" Version="2.4.2"/>
-        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all">
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all">
             <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
 
