@@ -56,6 +56,17 @@ public class MethodResolverTests {
         result.Reason.Should().Contain("abstract");
     }
 
+    [Theory]
+    [InlineData("HarmonyLib.Harmony")]
+    [InlineData("Concord.Patcher")]
+    public void Refuses_patching_the_patcher(string typeFullName) {
+        MethodResolveResult result = MethodResolver.Resolve(
+            typeFullName, "Patch", [],
+            AppDomain.CurrentDomain.GetAssemblies());
+        result.Refused.Should().BeTrue();
+        result.Reason.Should().Contain("blocklist");
+    }
+
     [Fact]
     public void Refuses_self_patch_in_library_namespace() {
         MethodResolveResult result = MethodResolver.Resolve(

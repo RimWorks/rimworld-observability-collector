@@ -10,6 +10,7 @@ internal static class MethodResolver {
         "RimWorks.RimObs.Library.",
         "RimWorks.RimObs.Wire.",
         "HarmonyLib.",
+        "Concord.",
         "MonoMod.",
     ];
 

@@ -8,11 +8,11 @@
 .steamignore
 
 RimObs.Library/
-RimObs.Library.Tests/
 RimObs.Wire/
 RimObs.Collector/
-RimObs.Collector.Tests/
 RimObs.Dashboard/
+Source/
+tests/
 
 bin/
 obj/
