@@ -12,4 +12,8 @@ public sealed class PatchConflictsBatch {
     public int[] Priorities { get; set; } = [];
 
     public string[] PatchMethods { get; set; } = [];
+
+    // false when the backend cannot enumerate foreign patches, so an empty batch means
+    // "not checked" rather than "none found".
+    public bool ConflictsKnown { get; set; } = true;
 }

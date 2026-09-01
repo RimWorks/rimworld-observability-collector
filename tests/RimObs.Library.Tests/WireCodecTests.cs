@@ -198,6 +198,15 @@ public sealed class WireCodecTests {
     }
 
     [Fact]
+    public void PatchConflictsBatch_round_trips_an_unknown_conflict_set() {
+        PatchConflictsBatch original = new() { ConflictsKnown = false };
+
+        PatchConflictsBatch decoded = WireCodec.Deserialize<PatchConflictsBatch>(WireCodec.Serialize(original));
+
+        decoded.ConflictsKnown.Should().BeFalse();
+    }
+
+    [Fact]
     public void TpsFpsBatch_round_trips() {
         TpsFpsBatch original = new() {
             Tps = 59.84231,

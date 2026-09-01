@@ -198,6 +198,7 @@ export interface PatchConflict {
 
 export interface PatchesResponse {
     schema_version: number;
+    conflicts_known: boolean;
     conflicts: PatchConflict[];
 }
 

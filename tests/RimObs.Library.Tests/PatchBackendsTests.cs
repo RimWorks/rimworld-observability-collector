@@ -19,6 +19,7 @@ public sealed class PatchBackendsTests : IDisposable {
         public void PatchPrefix(MethodBase target, MethodInfo prefix) { }
         public void PatchPostfix(MethodBase target, MethodInfo postfix) { }
         public void Unpatch(MethodBase target) { }
+        public bool SupportsConflictReporting => true;
         public IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target) => Array.Empty<ForeignPatch>();
         public void UnpatchAllForTests() { }
     }

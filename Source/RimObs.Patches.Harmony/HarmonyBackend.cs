@@ -29,6 +29,8 @@ public sealed class HarmonyBackend : IPatchBackend {
     public void Unpatch(MethodBase target) =>
         s_Harmony.Unpatch(target, HarmonyPatchType.Transpiler, Id);
 
+    public bool SupportsConflictReporting => true;
+
     public IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target) {
         List<ForeignPatch> found = new();
         HarmonyLib.Patches? patches = HarmonyLib.Harmony.GetPatchInfo(target);

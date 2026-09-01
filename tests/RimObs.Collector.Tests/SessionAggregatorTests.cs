@@ -255,6 +255,17 @@ public sealed class SessionAggregatorTests {
     }
 
     [Fact]
+    public void OnPatchConflicts_carries_the_unknown_flag_so_empty_is_not_read_as_none() {
+        SessionAggregator agg = new();
+
+        agg.PatchConflictsKnown.Should().BeTrue();
+        agg.OnPatchConflicts(new PatchConflictsBatch { ConflictsKnown = false });
+
+        agg.PatchConflicts.Should().BeEmpty();
+        agg.PatchConflictsKnown.Should().BeFalse();
+    }
+
+    [Fact]
     public void OnPatchConflicts_tolerates_length_mismatch_by_truncating() {
         SessionAggregator agg = new();
         PatchConflictsBatch batch = new() {

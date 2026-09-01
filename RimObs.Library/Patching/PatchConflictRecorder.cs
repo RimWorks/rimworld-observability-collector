@@ -39,6 +39,7 @@ internal static class PatchConflictRecorder {
                 PatchTypes = new byte[n],
                 Priorities = new int[n],
                 PatchMethods = new string[n],
+                ConflictsKnown = PatchBackends.Active?.SupportsConflictReporting ?? false,
             };
             for (int i = 0; i < n; i++) {
                 PatchConflict conflict = s_Conflicts[i];

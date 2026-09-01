@@ -20,4 +20,15 @@ public sealed class PatchConflictTests {
         conflict.PatchType.Should().Be(PatchKind.Transpiler);
         conflict.Priority.Should().Be(400);
     }
+
+    // PatchConflictRecorder casts these straight to the wire byte and the dashboard decodes by
+    // index, so renumbering the enum silently relabels every conflict row.
+    [Theory]
+    [InlineData(PatchKind.Prefix, 1)]
+    [InlineData(PatchKind.Postfix, 2)]
+    [InlineData(PatchKind.Transpiler, 3)]
+    [InlineData(PatchKind.Finalizer, 4)]
+    public void KindMatchesTheWireByteTheDashboardDecodes(PatchKind kind, int expected) {
+        ((int)kind).Should().Be(expected);
+    }
 }

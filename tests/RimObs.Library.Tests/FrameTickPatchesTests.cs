@@ -98,6 +98,8 @@ public sealed class FrameTickPatchesTests : IDisposable {
 
         public void Unpatch(MethodBase target) { }
 
+        public bool SupportsConflictReporting => true;
+
         public IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target) => Array.Empty<ForeignPatch>();
 
         public void UnpatchAllForTests() { }

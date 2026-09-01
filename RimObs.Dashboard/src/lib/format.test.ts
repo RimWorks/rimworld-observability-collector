@@ -97,6 +97,17 @@ describe('patchType', () => {
         expect(patchType(5)).toBe('reverse');
     });
 
+    // pins the producer contract: PatchKind in RimObs.Library/Patching/PatchConflict.cs is
+    // Prefix=1 through Finalizer=4, and the recorder casts it straight to the wire byte.
+    it('decodes the four PatchKind values the library emits', () => {
+        expect([1, 2, 3, 4].map(patchType)).toEqual([
+            'prefix',
+            'postfix',
+            'transpiler',
+            'finalizer',
+        ]);
+    });
+
     it('falls back for unknown types', () => {
         expect(patchType(9)).toBe('type:9');
     });

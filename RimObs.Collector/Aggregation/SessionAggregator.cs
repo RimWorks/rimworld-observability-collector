@@ -15,6 +15,7 @@ public sealed class SessionAggregator {
     private readonly ISessionPersister? _persister;
     private SessionMeta? _meta;
     private PatchConflictRecord[] _patchConflicts = [];
+    private int _patchConflictsKnown = 1;
 
     public SessionAggregator()
         : this(persister: null) {
@@ -62,6 +63,9 @@ public sealed class SessionAggregator {
     public GcEventRecord[] SnapshotGcEvents(int limit) => _gcEvents.SnapshotNewestFirst(limit);
 
     public IReadOnlyList<PatchConflictRecord> PatchConflicts => Volatile.Read(ref _patchConflicts);
+
+    /// <summary>False when the game's patching library cannot enumerate other mods' patches.</summary>
+    public bool PatchConflictsKnown => Volatile.Read(ref _patchConflictsKnown) != 0;
 
     public Action<SectionBatch>? SectionBatchObserver { get; set; }
     public Action<int, string>? SectionRegistrationObserver { get; set; }
@@ -113,6 +117,7 @@ public sealed class SessionAggregator {
             );
         }
         Volatile.Write(ref _patchConflicts, records);
+        Volatile.Write(ref _patchConflictsKnown, batch.ConflictsKnown ? 1 : 0);
     }
 
     public void OnTpsFps(TpsFpsBatch batch) {

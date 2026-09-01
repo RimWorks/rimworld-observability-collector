@@ -2,13 +2,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Patches from './Patches.svelte';
 
-function mockPatches(conflicts: unknown[]) {
+function mockPatches(conflicts: unknown[], conflictsKnown = true) {
     vi.stubGlobal(
         'fetch',
         vi.fn(async () => ({
             ok: true,
             status: 200,
-            json: async () => ({ schema_version: 1, conflicts }),
+            json: async () => ({ schema_version: 1, conflicts_known: conflictsKnown, conflicts }),
         })),
     );
 }
@@ -51,5 +51,15 @@ describe('Patches route', () => {
         render(Patches);
 
         expect(await screen.findByText('No conflicting patches')).toBeInTheDocument();
+    });
+
+    // regression: a backend that cannot introspect sends an empty list, which is not the same
+    // as finding nothing.
+    it('says conflicts were not checked when the backend cannot report them', async () => {
+        mockPatches([], false);
+        render(Patches);
+
+        expect(await screen.findByText('Conflicts not checked')).toBeInTheDocument();
+        expect(screen.queryByText('No conflicting patches')).not.toBeInTheDocument();
     });
 });

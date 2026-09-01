@@ -206,6 +206,7 @@ public static class SessionsEndpoints {
     private static IResult GetCurrentPatches(SessionAggregator aggregator) {
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
+            conflicts_known = aggregator.PatchConflictsKnown,
             conflicts = aggregator.PatchConflicts.Select(c => new {
                 section = c.SectionName,
                 target_method = c.TargetMethod,

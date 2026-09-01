@@ -23,6 +23,8 @@ public sealed class CollectorStatusTests {
             FailedCount = 0,
             OwnerCount = 7,
             ConflictCount = 0,
+            PatchBackend = "Concord",
+            PatchBackendPriority = 100,
             GcObserverRunning = true,
             TpsFpsObserverRunning = true,
             AllocationSamplerRunning = false,
@@ -117,6 +119,36 @@ public sealed class CollectorStatusTests {
 
         core.Value.Should().Be("12/13 installed (unresolved=1, failed=0)");
         core.Healthy.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildLinesNamesTheWinningPatchBackend() {
+        StatusLine backend = Running().BuildLines().Single(l => l.Label == "Patch backend");
+
+        backend.Value.Should().Be("Concord (priority 100)");
+        backend.Healthy.Should().BeTrue();
+    }
+
+    // regression: with no patching library the mod records nothing, so no line may read green.
+    [Fact]
+    public void BuildLinesFlagsTheNoBackendStateAsUnhealthy() {
+        IReadOnlyList<StatusLine> lines = new CollectorStatus().BuildLines();
+
+        StatusLine backend = lines.Single(l => l.Label == "Patch backend");
+        backend.Value.Should().Be("none (install Harmony or Concord)");
+        backend.Healthy.Should().BeFalse();
+
+        StatusLine core = lines.Single(l => l.Label == "Core sections");
+        core.Value.Should().Be("0/0 (not installed)");
+        core.Healthy.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildLinesLabelsConflictsWithoutNamingAPatchingLibrary() {
+        StatusLine conflicts = Running().BuildLines().Single(l => l.Label == "Patch conflicts");
+
+        conflicts.Value.Should().Be("0");
+        conflicts.Healthy.Should().BeTrue();
     }
 
     [Fact]

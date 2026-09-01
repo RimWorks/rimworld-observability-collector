@@ -32,7 +32,10 @@ public sealed class ConcordBackend : IPatchBackend {
         s_Handles.Remove(key);
     }
 
-    // TODO(concord-introspection): fill this in once Concord ships a GetPatchInfo equivalent.
+    public bool SupportsConflictReporting => false;
+
+    // TODO(concord-introspection): return the real list once Concord ships a GetPatchInfo
+    // equivalent, and flip SupportsConflictReporting to true.
     public IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target) => Array.Empty<ForeignPatch>();
 
     public void UnpatchAllForTests() {

@@ -25,6 +25,9 @@ public interface IPatchBackend {
     /// <summary>Other mods' patches on the same method, for conflict reporting.</summary>
     IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target);
 
+    /// <summary>False when an empty conflict list means "not checked" instead of "none found".</summary>
+    bool SupportsConflictReporting { get; }
+
     /// <summary>Test teardown only. Removes every patch this backend installed.</summary>
     void UnpatchAllForTests();
 }

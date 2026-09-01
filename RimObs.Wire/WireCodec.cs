@@ -160,13 +160,14 @@ public static class WireCodec {
 
     public static byte[] Serialize(PatchConflictsBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(6);
+        writer.WriteArrayHeader(7);
         WriteStringArray(writer, value.SectionNames);
         WriteStringArray(writer, value.TargetMethods);
         WriteStringArray(writer, value.OtherOwners);
         writer.WriteBinary(value.PatchTypes);
         WriteInt32Array(writer, value.Priorities);
         WriteStringArray(writer, value.PatchMethods);
+        writer.WriteInt32(value.ConflictsKnown ? 1 : 0);
         return writer.ToArray();
     }
 
@@ -389,8 +390,8 @@ public static class WireCodec {
 
     private static PatchConflictsBatch ReadPatchConflictsBatch(byte[] data) {
         WireBufferReader reader = new WireBufferReader(data);
-        reader.ReadArrayHeader();
-        return new PatchConflictsBatch {
+        int count = reader.ReadArrayHeader();
+        PatchConflictsBatch batch = new PatchConflictsBatch {
             SectionNames = ReadStringArray(reader),
             TargetMethods = ReadStringArray(reader),
             OtherOwners = ReadStringArray(reader),
@@ -398,6 +399,11 @@ public static class WireCodec {
             Priorities = ReadInt32Array(reader),
             PatchMethods = ReadStringArray(reader),
         };
+
+        if (count >= 7)
+            batch.ConflictsKnown = reader.ReadInt32() != 0;
+
+        return batch;
     }
 
     private static TpsFpsBatch ReadTpsFpsBatch(byte[] data) {

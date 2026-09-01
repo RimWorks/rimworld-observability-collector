@@ -278,6 +278,7 @@ public sealed class BundleExportService {
 
     private object BuildPatches() {
         return new {
+            conflicts_known = _aggregator.PatchConflictsKnown,
             conflicts = _aggregator.PatchConflicts.Select(c => new {
                 section = c.SectionName,
                 target_method = c.TargetMethod,

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using RimWorks.RimObs.Patching;
@@ -95,6 +96,40 @@ public sealed class PatchConflictRecorderTests : IDisposable {
 
         PatchConflictRecorder.Count.Should().Be(0);
         PatchConflictRecorder.Conflicts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildBatch_marks_conflicts_known_when_the_backend_can_report_them() {
+        PatchConflictRecorder.BuildBatch().ConflictsKnown.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildBatch_marks_conflicts_unknown_for_a_backend_that_cannot_report_them() {
+        PatchBackends.ResetForTests();
+        PatchBackends.Register(new SilentBackend("Silent"), PatchBackends.ConcordPriority);
+        PatchBackends.SelectBest(scan: false);
+
+        PatchConflictRecorder.BuildBatch().ConflictsKnown.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildBatch_marks_conflicts_unknown_without_a_backend() {
+        PatchBackends.ResetForTests();
+
+        PatchConflictRecorder.BuildBatch().ConflictsKnown.Should().BeFalse();
+    }
+
+    // the ctor argument is load-bearing: it keeps ScanForBackends from constructing this fake.
+    private sealed class SilentBackend : IPatchBackend {
+        public SilentBackend(string name) => Name = name;
+        public string Name { get; }
+        public bool SupportsConflictReporting => false;
+        public void Patch(MethodBase target) { }
+        public void PatchPrefix(MethodBase target, MethodInfo prefix) { }
+        public void PatchPostfix(MethodBase target, MethodInfo postfix) { }
+        public void Unpatch(MethodBase target) { }
+        public IReadOnlyList<ForeignPatch> ConflictsFor(MethodBase target) => Array.Empty<ForeignPatch>();
+        public void UnpatchAllForTests() { }
     }
 
     public static class ConflictTargets {

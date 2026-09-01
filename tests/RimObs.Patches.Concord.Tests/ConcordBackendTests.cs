@@ -32,6 +32,13 @@ public sealed class ConcordBackendTests : IDisposable {
         _backend.Name.Should().Be("Concord");
     }
 
+    // Concord has no GetPatchInfo equivalent, so an empty list must not be read as "no conflicts".
+    [Fact]
+    public void DoesNotClaimToReportConflicts() {
+        _backend.SupportsConflictReporting.Should().BeFalse();
+        _backend.ConflictsFor(typeof(Targets).GetMethod(nameof(Targets.VoidNoOp))!).Should().BeEmpty();
+    }
+
     [Fact]
     public void RegistersItselfAtTheConcordPriority() {
         PatchBackends.Register(_backend, PatchBackends.ConcordPriority);

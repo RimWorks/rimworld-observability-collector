@@ -66,6 +66,26 @@ describe('getLang', () => {
     });
 });
 
+describe('patch conflict keys', () => {
+    const patchKeys = ['patches.title', 'patches.empty', 'patches.unknown', 'patches.unknown.hint'];
+
+    for (const lang of LANGUAGES) {
+        it(`resolves all patch conflict keys for ${lang.code}`, () => {
+            userPrefs.setLang(lang.code);
+            for (const key of patchKeys) {
+                expect(t(key)).not.toBe(key);
+            }
+        });
+    }
+
+    it('no longer names Harmony in the panel title', () => {
+        for (const lang of LANGUAGES) {
+            userPrefs.setLang(lang.code);
+            expect(t('patches.title')).not.toContain('Harmony');
+        }
+    });
+});
+
 describe('exporter settings keys', () => {
     const exporterKeys = [
         'settings.exporters',

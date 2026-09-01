@@ -1,10 +1,12 @@
 namespace RimWorks.RimObs.Patching;
 
+// values are the wire contract the dashboard decodes by index. 0 is All and 5 is Reverse,
+// neither of which RimObs emits, so neither gets a member here.
 public enum PatchKind {
-    Prefix,
-    Postfix,
-    Transpiler,
-    Finalizer,
+    Prefix = 1,
+    Postfix = 2,
+    Transpiler = 3,
+    Finalizer = 4,
 }
 
 internal sealed class PatchConflict {

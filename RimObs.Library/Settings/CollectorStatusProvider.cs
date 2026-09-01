@@ -46,6 +46,8 @@ public static class CollectorStatusProvider {
             FailedCount = PatchInstaller.FailedCount,
             OwnerCount = OwnerRegistry.Count,
             ConflictCount = PatchConflictRecorder.Count,
+            PatchBackend = PatchBackends.Active?.Name ?? string.Empty,
+            PatchBackendPriority = PatchBackends.ActivePriority,
             GcObserverRunning = GcObserverHost.IsRunning,
             TpsFpsObserverRunning = TpsFpsObserverHost.IsRunning,
             AllocationSamplerRunning = AllocationSamplerHost.IsRunning,

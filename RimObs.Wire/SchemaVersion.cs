@@ -7,5 +7,7 @@ public static class SchemaVersion {
     //     SessionMeta (back-compat in ReadSessionMeta via array-header count branch).
     // v3: SectionRegistrationsBatch gains Subsystems array. Readers built for v2 see
     //     only 2 fields and return an empty Subsystems array.
-    public const int Current = 3;
+    // v4: PatchConflictsBatch gains ConflictsKnown. Readers built for v3 see only 6 fields
+    //     and keep the default of true, which is what every v3 producer meant.
+    public const int Current = 4;
 }

@@ -1,4 +1,5 @@
 using System;
+using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Settings;
 using FluentAssertions;
 using Xunit;
@@ -23,6 +24,20 @@ public sealed class CollectorStatusProviderTests : IDisposable {
         status.OwnerId.Should().Be("Author.Mod");
         status.DashboardUrl.Should().Be("http://127.0.0.1:19001/");
         status.DashboardAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CaptureReportsTheActivePatchBackend() {
+        TestBackend.Activate();
+        try {
+            CollectorStatus status = CollectorStatusProvider.CaptureCurrent();
+
+            status.PatchBackend.Should().Be("Harmony");
+            status.PatchBackendPriority.Should().Be(PatchBackends.HarmonyPriority);
+        }
+        finally {
+            TestBackend.Deactivate();
+        }
     }
 
     [Fact]

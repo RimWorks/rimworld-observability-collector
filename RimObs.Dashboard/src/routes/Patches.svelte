@@ -18,6 +18,7 @@
     }
 
     let conflicts = $derived(res.data?.conflicts ?? []);
+    let known = $derived(res.data?.conflicts_known ?? true);
     let groups = $derived.by(() => {
         const map = new Map<string, Group>();
         for (const c of conflicts) {
@@ -36,8 +37,8 @@
     state={res.state}
     error={res.error}
     empty={conflicts.length === 0}
-    emptyTitle={t('patches.empty')}
-    emptyHint={t('patches.empty.hint')}
+    emptyTitle={known ? t('patches.empty') : t('patches.unknown')}
+    emptyHint={known ? t('patches.empty.hint') : t('patches.unknown.hint')}
     onretry={() => res.refresh()}
 >
     <p class="intro">{t('patches.intro')}</p>
