@@ -130,10 +130,17 @@ public sealed class RimObsMod : Mod {
     // See InstrumentationInstall for why.
     private static void InstallInstrumentation(ProfilingXmlLoader.LoadResult declared, int port) {
         try {
+            PatchBackends.SelectBest();
+            if (PatchBackends.Active == null) {
+                Log.Warning("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
+                return;
+            }
+
+            Log.Message($"[RimObs] Patching via {PatchBackends.Active.Name} (priority {PatchBackends.ActivePriority}).");
             PatchInstaller.InstallAll();
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();
-            s_Sink?.SetPatchConflicts(HarmonyConflictRecorder.BuildBatch());
+            s_Sink?.SetPatchConflicts(PatchConflictRecorder.BuildBatch());
             Profiler.SetEnabled(true);
             GcObserverHost.Start();
             TpsFpsObserverHost.Start();
@@ -182,7 +189,7 @@ public sealed class RimObsMod : Mod {
             $"[RimObs] Loaded. Core: {coreInstalled}/{coreCount} sections installed. "
                 + $"Declared: {declaredInstalled}/{declaredCount} sections from {declared.FilesLoaded}/{declared.FilesScanned} profiling.xml files. "
                 + $"Attributes: {attrs.Registered} registered ({attrs.SkippedDuplicate} duplicate, {attrs.SkippedUnsupported} unsupported, {attrs.Failed} failed) from {attrs.AssembliesScanned} assemblies. "
-                + $"(unresolved={PatchInstaller.UnresolvedCount}, failed={PatchInstaller.FailedCount}, conflicts={HarmonyConflictRecorder.Count}). "
+                + $"(unresolved={PatchInstaller.UnresolvedCount}, failed={PatchInstaller.FailedCount}, conflicts={PatchConflictRecorder.Count}). "
                 + $"Owner registry: {OwnerRegistry.Count} mods. GcObserver: maxGen={GcObserverHost.Instance.MaxGeneration}."
         );
 

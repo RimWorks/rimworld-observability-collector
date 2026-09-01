@@ -6,6 +6,7 @@ using System.Reflection.Emit;
 using RimWorks.RimObs.Api;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Tests;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -17,6 +18,7 @@ public sealed class ObservedSectionScanBench : IDisposable {
 
     public ObservedSectionScanBench(ITestOutputHelper output) {
         _output = output;
+        TestBackend.Activate();
         PatchInstaller.ResetForTests();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
@@ -25,6 +27,7 @@ public sealed class ObservedSectionScanBench : IDisposable {
 
     public void Dispose() {
         PatchInstaller.ResetForTests();
+        TestBackend.Deactivate();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         OwnerRegistry.Clear();

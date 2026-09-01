@@ -17,6 +17,7 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
 
     public ObservedSectionOverheadBench(ITestOutputHelper output) {
         _out = output;
+        TestBackend.Activate();
         PatchInstaller.ResetForTests();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
@@ -28,6 +29,7 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
     public void Dispose() {
         ObservedSectionScanner.AttributesEnabledForTests = null;
         PatchInstaller.ResetForTests();
+        TestBackend.Deactivate();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         OwnerRegistry.Clear();

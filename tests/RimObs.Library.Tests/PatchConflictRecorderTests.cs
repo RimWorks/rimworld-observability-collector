@@ -9,24 +9,23 @@ using Xunit;
 
 namespace RimWorks.RimObs.Tests;
 
-public sealed class HarmonyConflictRecorderTests : IDisposable {
-    private readonly Harmony _ourHarmony;
+public sealed class PatchConflictRecorderTests : IDisposable {
     private readonly Harmony _foreignHarmony;
 
-    public HarmonyConflictRecorderTests() {
+    public PatchConflictRecorderTests() {
+        TestBackend.Activate();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
-        HarmonyConflictRecorder.Clear();
-        _ourHarmony = new Harmony($"RimWorks.RimObs.tests.{Guid.NewGuid():N}");
+        PatchConflictRecorder.Clear();
         _foreignHarmony = new Harmony($"foreign.modder.{Guid.NewGuid():N}");
     }
 
     public void Dispose() {
-        try { _ourHarmony.UnpatchAll(_ourHarmony.Id); } catch { }
         try { _foreignHarmony.UnpatchAll(_foreignHarmony.Id); } catch { }
         SectionCatalog.Clear();
         SectionRegistry.Clear();
-        HarmonyConflictRecorder.Clear();
+        PatchConflictRecorder.Clear();
+        TestBackend.Deactivate();
     }
 
     [Fact]
@@ -37,10 +36,10 @@ public sealed class HarmonyConflictRecorderTests : IDisposable {
         HarmonyMethod prefix = new(typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.ForeignPrefix))!);
         _foreignHarmony.Patch(target, prefix: prefix);
 
-        HarmonyConflictRecorder.RecordConflicts(_ourHarmony);
+        PatchConflictRecorder.RecordConflicts();
 
-        HarmonyConflictRecorder.Count.Should().BeGreaterOrEqualTo(1);
-        HarmonyConflictRecorder.Conflicts.Should().Contain(c =>
+        PatchConflictRecorder.Count.Should().BeGreaterOrEqualTo(1);
+        PatchConflictRecorder.Conflicts.Should().Contain(c =>
             c.SectionName == "test.conflict.tracked" &&
             c.OtherOwner == _foreignHarmony.Id &&
             c.PatchType == PatchKind.Prefix);
@@ -51,22 +50,35 @@ public sealed class HarmonyConflictRecorderTests : IDisposable {
         MethodInfo target = typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.OwnedByUs))!;
         SectionCatalog.RegisterDirect("test.conflict.ours", target);
 
-        HarmonyMethod prefix = new(typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.OurPrefix))!);
-        _ourHarmony.Patch(target, prefix: prefix);
+        PatchBackends.Active!.Patch(target);
 
-        HarmonyConflictRecorder.RecordConflicts(_ourHarmony);
+        PatchConflictRecorder.RecordConflicts();
 
-        HarmonyConflictRecorder.Conflicts.Should().NotContain(c => c.SectionName == "test.conflict.ours");
+        PatchConflictRecorder.Conflicts.Should().NotContain(c => c.SectionName == "test.conflict.ours");
     }
 
     [Fact]
     public void RecordConflicts_ignores_unresolved_entries() {
         SectionCatalog.Register("test.conflict.unresolved", "NoSuchType.Ever", "Op", null);
 
-        Action act = () => HarmonyConflictRecorder.RecordConflicts(_ourHarmony);
+        Action act = PatchConflictRecorder.RecordConflicts;
 
         act.Should().NotThrow();
-        HarmonyConflictRecorder.Conflicts.Should().NotContain(c => c.SectionName == "test.conflict.unresolved");
+        PatchConflictRecorder.Conflicts.Should().NotContain(c => c.SectionName == "test.conflict.unresolved");
+    }
+
+    // regression: no backend means nothing to ask about conflicts, not a null dereference.
+    [Fact]
+    public void RecordConflicts_records_nothing_without_a_backend() {
+        MethodInfo target = typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.Tracked))!;
+        SectionCatalog.RegisterDirect("test.conflict.no_backend", target);
+        _foreignHarmony.Patch(target, prefix: new HarmonyMethod(
+            typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.ForeignPrefix))!));
+        PatchBackends.ResetForTests();
+
+        PatchConflictRecorder.RecordConflicts();
+
+        PatchConflictRecorder.Count.Should().Be(0);
     }
 
     [Fact]
@@ -76,13 +88,13 @@ public sealed class HarmonyConflictRecorderTests : IDisposable {
 
         HarmonyMethod prefix = new(typeof(ConflictTargets).GetMethod(nameof(ConflictTargets.ForeignPrefix))!);
         _foreignHarmony.Patch(target, prefix: prefix);
-        HarmonyConflictRecorder.RecordConflicts(_ourHarmony);
-        HarmonyConflictRecorder.Count.Should().BeGreaterOrEqualTo(1);
+        PatchConflictRecorder.RecordConflicts();
+        PatchConflictRecorder.Count.Should().BeGreaterOrEqualTo(1);
 
-        HarmonyConflictRecorder.Clear();
+        PatchConflictRecorder.Clear();
 
-        HarmonyConflictRecorder.Count.Should().Be(0);
-        HarmonyConflictRecorder.Conflicts.Should().BeEmpty();
+        PatchConflictRecorder.Count.Should().Be(0);
+        PatchConflictRecorder.Conflicts.Should().BeEmpty();
     }
 
     public static class ConflictTargets {
@@ -96,7 +108,5 @@ public sealed class HarmonyConflictRecorderTests : IDisposable {
         public static void ClearedAfter() { }
 
         public static void ForeignPrefix() { }
-
-        public static void OurPrefix() { }
     }
 }

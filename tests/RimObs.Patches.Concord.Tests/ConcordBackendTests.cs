@@ -35,7 +35,7 @@ public sealed class ConcordBackendTests : IDisposable {
     [Fact]
     public void RegistersItselfAtTheConcordPriority() {
         PatchBackends.Register(_backend, PatchBackends.ConcordPriority);
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active!.Name.Should().Be("Concord");
     }

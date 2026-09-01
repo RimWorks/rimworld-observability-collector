@@ -9,8 +9,6 @@
         <OutDir>$(MSBuildProjectDirectory)\..\..\Harmony\Assemblies\</OutDir>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-        <!-- TODO(backends): drop when RimObs.Library stops compiling MethodTransplanter.cs too. -->
-        <NoWarn>$(NoWarn);CS0436</NoWarn>
         <!-- RimObs.Library copies RimObs.Wire.dll local; without this it lands here too. -->
         <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
     </PropertyGroup>

@@ -45,7 +45,7 @@ public static class CollectorStatusProvider {
             UnresolvedCount = PatchInstaller.UnresolvedCount,
             FailedCount = PatchInstaller.FailedCount,
             OwnerCount = OwnerRegistry.Count,
-            ConflictCount = HarmonyConflictRecorder.Count,
+            ConflictCount = PatchConflictRecorder.Count,
             GcObserverRunning = GcObserverHost.IsRunning,
             TpsFpsObserverRunning = TpsFpsObserverHost.IsRunning,
             AllocationSamplerRunning = AllocationSamplerHost.IsRunning,

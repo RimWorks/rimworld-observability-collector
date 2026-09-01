@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using RimWorks.RimObs.Wire;
-using HarmonyLib;
 
 namespace RimWorks.RimObs.Patching;
 
-internal static class HarmonyConflictRecorder {
+internal static class PatchConflictRecorder {
     private static readonly List<PatchConflict> s_Conflicts = new();
     private static readonly object s_Lock = new();
 
@@ -54,44 +53,32 @@ internal static class HarmonyConflictRecorder {
         }
     }
 
-    public static void RecordConflicts(Harmony harmony) {
+    public static void RecordConflicts() {
+        IPatchBackend? backend = PatchBackends.Active;
+        if (backend == null)
+            return;
+
         lock (s_Lock) {
             foreach (CatalogEntry entry in SectionCatalog.Entries) {
                 if (entry.Resolved == null)
                     continue;
 
-                HarmonyLib.Patches? patches = Harmony.GetPatchInfo(entry.Resolved);
-                if (patches == null)
-                    continue;
-
-                RecordList(entry, patches.Prefixes, PatchKind.Prefix, harmony.Id);
-                RecordList(entry, patches.Postfixes, PatchKind.Postfix, harmony.Id);
-                RecordList(entry, patches.Transpilers, PatchKind.Transpiler, harmony.Id);
-                RecordList(entry, patches.Finalizers, PatchKind.Finalizer, harmony.Id);
+                string target = entry.Resolved.DeclaringType?.FullName + "." + entry.Resolved.Name;
+                IReadOnlyList<ForeignPatch> found = backend.ConflictsFor(entry.Resolved);
+                for (int i = 0; i < found.Count; i++) {
+                    ForeignPatch patch = found[i];
+                    s_Conflicts.Add(
+                        new PatchConflict(
+                            sectionName: entry.Name,
+                            targetMethod: target,
+                            otherOwner: patch.Owner,
+                            patchType: patch.Kind,
+                            priority: patch.Priority,
+                            patchMethod: patch.PatchMethod
+                        )
+                    );
+                }
             }
-        }
-    }
-
-    private static void RecordList(CatalogEntry entry, IReadOnlyCollection<Patch> patches, PatchKind kind, string ownId) {
-        if (patches == null)
-            return;
-
-        foreach (Patch patch in patches) {
-            if (patch.owner == ownId)
-                continue;
-
-            string target = entry.Resolved!.DeclaringType?.FullName + "." + entry.Resolved.Name;
-            string patchMethodName = patch.PatchMethod.DeclaringType?.FullName + "." + patch.PatchMethod.Name;
-            s_Conflicts.Add(
-                new PatchConflict(
-                    sectionName: entry.Name,
-                    targetMethod: target,
-                    otherOwner: patch.owner,
-                    patchType: kind,
-                    priority: patch.priority,
-                    patchMethod: patchMethodName
-                )
-            );
         }
     }
 }

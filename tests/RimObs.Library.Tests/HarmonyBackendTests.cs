@@ -32,7 +32,7 @@ public sealed class HarmonyBackendTests : IDisposable {
     [Fact]
     public void RegistersItselfAtTheHarmonyPriority() {
         PatchBackends.Register(_backend, PatchBackends.HarmonyPriority);
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active!.Name.Should().Be("Harmony");
     }

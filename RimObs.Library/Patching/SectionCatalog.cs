@@ -21,7 +21,7 @@ internal static class SectionCatalog {
 
     private static readonly (string Name, string TypeName, string MethodName)[] s_CorePackSections =
     [
-        ("Verse.TickManager.DoSingleTick", "Verse.TickManager", "DoSingleTick"),
+        (FrameTickPatches.TickSection, "Verse.TickManager", "DoSingleTick"),
         ("Verse.Map.MapPreTick", "Verse.Map", "MapPreTick"),
         ("Verse.Map.MapPostTick", "Verse.Map", "MapPostTick"),
         ("RimWorld.Planet.World.WorldTick", "RimWorld.Planet.World", "WorldTick"),
@@ -39,7 +39,7 @@ internal static class SectionCatalog {
         ("RimWorld.Alert.Recalculate", "RimWorld.Alert", "Recalculate"),
         ("RimWorld.Pawn_NeedsTracker.NeedsTrackerTickInterval", "RimWorld.Pawn_NeedsTracker", "NeedsTrackerTickInterval"),
         ("RimWorld.Planet.WorldPawns.WorldPawnsTick", "RimWorld.Planet.WorldPawns", "WorldPawnsTick"),
-        ("Verse.Root_Play.Update", "Verse.Root_Play", "Update"),
+        (FrameTickPatches.FrameSection, "Verse.Root_Play", "Update"),
     ];
 
     public static void RegisterCorePack() {

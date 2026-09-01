@@ -9,7 +9,7 @@ namespace RimWorks.RimObs.Patches.Harmony;
 /// RimObs instrumentation expressed as Harmony patches.
 /// </summary>
 public sealed class HarmonyBackend : IPatchBackend {
-    private const string Id = PatchInstaller.HarmonyId;
+    private const string Id = "RimWorks.RimObs.library";
 
     private static readonly HarmonyLib.Harmony s_Harmony = new(Id);
 

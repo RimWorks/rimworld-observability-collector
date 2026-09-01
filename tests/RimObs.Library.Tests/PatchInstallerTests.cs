@@ -11,17 +11,19 @@ namespace RimWorks.RimObs.Tests;
 
 public sealed class PatchInstallerTests : IDisposable {
     public PatchInstallerTests() {
+        TestBackend.Activate();
         PatchInstaller.ResetForTests();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
-        HarmonyConflictRecorder.Clear();
+        PatchConflictRecorder.Clear();
     }
 
     public void Dispose() {
         PatchInstaller.ResetForTests();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
-        HarmonyConflictRecorder.Clear();
+        PatchConflictRecorder.Clear();
+        TestBackend.Deactivate();
     }
 
     [Fact]
@@ -68,17 +70,15 @@ public sealed class PatchInstallerTests : IDisposable {
         }
     }
 
+    // regression: with no patching library present, bootstrap must install nothing instead of
+    // throwing a NullReferenceException on a missing backend.
     [Fact]
-    public void Instance_is_null_before_install_and_set_after() {
-        PatchInstaller.Instance.Should().BeNull();
-
-        MethodInfo resolved = typeof(InstallTargets).GetMethod(nameof(InstallTargets.Ok))!;
-        SectionCatalog.RegisterDirect("test.install.instance", resolved);
+    public void InstallAllIsANoOpWithoutABackend() {
+        PatchBackends.ResetForTests();
 
         PatchInstaller.InstallAll();
 
-        PatchInstaller.Instance.Should().NotBeNull();
-        PatchInstaller.Instance!.Id.Should().Be(PatchInstaller.HarmonyId);
+        PatchInstaller.InstalledCount.Should().Be(0);
     }
 
     [Fact]

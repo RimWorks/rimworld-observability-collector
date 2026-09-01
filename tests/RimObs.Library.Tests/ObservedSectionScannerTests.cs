@@ -11,6 +11,7 @@ namespace RimWorks.RimObs.Tests;
 
 public class ObservedSectionScannerTests : System.IDisposable {
     public ObservedSectionScannerTests() {
+        TestBackend.Activate();
         PatchInstaller.ResetForTests();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
@@ -20,6 +21,7 @@ public class ObservedSectionScannerTests : System.IDisposable {
 
     public void Dispose() {
         PatchInstaller.ResetForTests();
+        TestBackend.Deactivate();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         OwnerRegistry.Clear();

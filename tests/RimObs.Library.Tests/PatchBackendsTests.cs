@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using FluentAssertions;
+using RimWorks.RimObs.Patches.Harmony;
 using RimWorks.RimObs.Patching;
 using Xunit;
 
@@ -27,7 +28,7 @@ public sealed class PatchBackendsTests : IDisposable {
         PatchBackends.Register(new FakeBackend("Harmony"), PatchBackends.HarmonyPriority);
         PatchBackends.Register(new FakeBackend("Concord"), PatchBackends.ConcordPriority);
 
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active!.Name.Should().Be("Concord");
     }
@@ -36,26 +37,48 @@ public sealed class PatchBackendsTests : IDisposable {
     public void ASingleBackendWinsUnopposed() {
         PatchBackends.Register(new FakeBackend("Harmony"), PatchBackends.HarmonyPriority);
 
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active!.Name.Should().Be("Harmony");
     }
 
     // regression: with no library loaded the mod must degrade to "no instrumentation",
-    // never throw during bootstrap.
+    // never throw during bootstrap. scan is off because this assembly compiles HarmonyBackend in.
     [Fact]
     public void NoBackendLeavesActiveNull() {
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active.Should().BeNull();
+    }
+
+    // regression: CallAll runs after our install is queued, so a backend that only registers from
+    // its static constructor is invisible at SelectBest time. The scan is what finds it.
+    [Fact]
+    public void FindsABackendThatNeverRegistered() {
+        PatchBackends.SelectBest();
+
+        PatchBackends.Active.Should().NotBeNull(
+            "the scan must find backends whose static constructors have not run yet");
+    }
+
+    // regression: the scan now runs even when a backend registered itself, so it must not add a
+    // second instance. registering below HarmonyPriority means a scanned duplicate would win.
+    [Fact]
+    public void ScanSkipsATypeThatAlreadyRegistered() {
+        HarmonyBackend backend = new();
+        PatchBackends.Register(backend, PatchBackends.HarmonyPriority - 1);
+
+        PatchBackends.SelectBest();
+
+        PatchBackends.Active.Should().BeSameAs(backend);
     }
 
     [Fact]
     public void SelectingTwiceKeepsTheFirstWinner() {
         PatchBackends.Register(new FakeBackend("Harmony"), PatchBackends.HarmonyPriority);
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
         PatchBackends.Register(new FakeBackend("Concord"), PatchBackends.ConcordPriority);
-        PatchBackends.SelectBest();
+        PatchBackends.SelectBest(scan: false);
 
         PatchBackends.Active!.Name.Should().Be("Harmony");
     }

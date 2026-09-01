@@ -3,7 +3,6 @@ using System.Reflection;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
 using RimWorks.RimObs.Wire.Control;
-using HarmonyLib;
 
 namespace RimWorks.RimObs.Library.Control;
 
@@ -44,12 +43,15 @@ internal static class PatchRegistry {
             if (SectionRegistry.Count >= SectionRegistry.MaxSections)
                 return ApplyResult.Refused("section cap reached");
 
+            IPatchBackend? backend = PatchBackends.Active;
+            if (backend == null)
+                return ApplyResult.Refused("no patching backend loaded");
+
             string sectionName = frameworkPackageId + DynamicSegment + signature;
             CatalogEntry catalogEntry = SectionCatalog.RegisterDirect(sectionName, target);
             int sectionId = catalogEntry.SectionId;
 
-            Harmony harmony = PatchInstaller.EnsureHarmony(PatchInstaller.HarmonyId);
-            harmony.Patch(target, transpiler: new HarmonyMethod(MethodTransplanter.TranspilerMethod));
+            backend.Patch(target);
 
             int id = s_NextId++;
             s_BySignature[signature] = id;
@@ -64,8 +66,7 @@ internal static class PatchRegistry {
             if (!s_ById.TryGetValue(patchId, out Entry? entry))
                 return false;
 
-            Harmony harmony = PatchInstaller.EnsureHarmony(PatchInstaller.HarmonyId);
-            harmony.Unpatch(entry.Target, HarmonyPatchType.Transpiler, PatchInstaller.HarmonyId);
+            PatchBackends.Active?.Unpatch(entry.Target);
 
             SectionRegistry.SetActive(entry.SectionId, false);
             s_ById.Remove(patchId);

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Tests;
 using RimWorks.RimObs.Wire;
 using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
@@ -21,6 +22,7 @@ public class ControlServerTests : IDisposable {
     private readonly Task _drainTask;
 
     public ControlServerTests() {
+        TestBackend.Activate();
         PatchInstaller.ResetForTests();
         PatchRegistry.ResetForTests();
         SectionCatalog.Clear();
@@ -54,6 +56,7 @@ public class ControlServerTests : IDisposable {
 
         PatchRegistry.ResetForTests();
         PatchInstaller.ResetForTests();
+        TestBackend.Deactivate();
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         ControlServices.ResetForTests();

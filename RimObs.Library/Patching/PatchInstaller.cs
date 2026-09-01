@@ -1,28 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using HarmonyLib;
 
 namespace RimWorks.RimObs.Patching;
 
 internal static class PatchInstaller {
-    public const string HarmonyId = "RimWorks.RimObs.library";
-
-    private static Harmony? s_Harmony;
-
     public static int InstalledCount { get; private set; }
     public static int FailedCount { get; private set; }
     public static int UnresolvedCount { get; private set; }
 
     public static void InstallAll() {
+        if (PatchBackends.Active == null)
+            return;
+
         SectionCatalog.RegisterCorePack();
         SectionCatalog.ResolveAll();
-
-        s_Harmony ??= new Harmony(HarmonyId);
-
-        HarmonyMethod transpiler = new(MethodTransplanter.TranspilerMethod) {
-            priority = Priority.Low,
-        };
 
         foreach (CatalogEntry entry in SectionCatalog.Entries) {
             if (entry.Installed)
@@ -33,21 +25,15 @@ internal static class PatchInstaller {
                 continue;
             }
 
-            PatchOne(entry, entry.Resolved, transpiler);
+            PatchOne(entry, entry.Resolved);
         }
 
-        HarmonyConflictRecorder.RecordConflicts(s_Harmony);
+        PatchConflictRecorder.RecordConflicts();
     }
 
     internal static void PatchAttributeMethod(MethodBase method) {
         if (method == null)
             throw new ArgumentNullException(nameof(method));
-
-        s_Harmony ??= new Harmony(HarmonyId);
-
-        HarmonyMethod transpiler = new(MethodTransplanter.TranspilerMethod) {
-            priority = Priority.Low,
-        };
 
         CatalogEntry? entry = null;
         foreach (CatalogEntry e in SectionCatalog.Entries) {
@@ -57,10 +43,16 @@ internal static class PatchInstaller {
             }
         }
 
-        PatchOne(entry, method, transpiler);
+        PatchOne(entry, method);
     }
 
-    private static void PatchOne(CatalogEntry? entry, MethodBase method, HarmonyMethod transpiler) {
+    private static void PatchOne(CatalogEntry? entry, MethodBase method) {
+        IPatchBackend? backend = PatchBackends.Active;
+        if (backend == null) {
+            FailedCount++;
+            return;
+        }
+
         if (IsUnpatchable(method, out string reason)) {
             if (entry != null)
                 entry.InstallError = new NotSupportedException(reason);
@@ -69,7 +61,7 @@ internal static class PatchInstaller {
         }
 
         try {
-            s_Harmony!.Patch(method, transpiler: transpiler);
+            backend.Patch(method);
             if (entry != null) {
                 entry.Installed = true;
                 InstalledCount++;
@@ -106,29 +98,8 @@ internal static class PatchInstaller {
         }
     }
 
-    public static Harmony? Instance => s_Harmony;
-
-    internal static Harmony EnsureHarmony(string id) {
-        s_Harmony ??= new Harmony(id);
-        return s_Harmony;
-    }
-
-    internal static void PatchSingleForTests(MethodBase target) {
-        Harmony harmony = EnsureHarmony("RimWorks.RimObs.tests");
-        HarmonyMethod transpiler = new(MethodTransplanter.TranspilerMethod);
-        harmony.Patch(target, transpiler: transpiler);
-    }
-
     internal static void ResetForTests() {
-        if (s_Harmony != null) {
-            try {
-                s_Harmony.UnpatchAll(s_Harmony.Id);
-            }
-            catch {
-                // Best-effort cleanup; ignore failures during test teardown.
-            }
-        }
-        s_Harmony = null;
+        PatchBackends.Active?.UnpatchAllForTests();
         InstalledCount = 0;
         FailedCount = 0;
         UnresolvedCount = 0;

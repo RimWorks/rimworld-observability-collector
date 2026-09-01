@@ -1,43 +1,47 @@
 using System.Reflection;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Observers;
-using HarmonyLib;
 
 namespace RimWorks.RimObs.Patching;
 
-// Installs zero-arg Harmony postfixes on the game's per-tick and per-frame entry points so the
-// TpsFpsObserver can derive live TPS/FPS by differencing call counts. These compose with the
-// timing transpiler already applied to the same methods (Harmony chains postfix + transpiler).
+// Zero-arg prefixes and postfixes on the game's tick and frame entry points, so TpsFpsObserver
+// can derive live TPS/FPS by differencing call counts.
 internal static class FrameTickPatches {
+    internal const string TickSection = "Verse.TickManager.DoSingleTick";
+    internal const string FrameSection = "Verse.Root_Play.Update";
+
     public static int InstalledCount { get; private set; }
 
     public static void InstallAll() {
-        Harmony harmony = PatchInstaller.EnsureHarmony(PatchInstaller.HarmonyId);
-
-        TryPatch(harmony, "Verse.TickManager:DoSingleTick", nameof(TickPostfix));
-        TryPatch(harmony, "Verse.Root_Play:Update", nameof(FramePostfix));
-        TryPatchPrefix(harmony, "Verse.TickManager:DoSingleTick", nameof(DrainControlOpsPrefix));
-    }
-
-    private static void TryPatch(Harmony harmony, string targetName, string postfixName) {
-        MethodBase? target = AccessTools.Method(targetName);
-        if (target == null)
+        IPatchBackend? backend = PatchBackends.Active;
+        if (backend == null)
             return;
 
-        MethodInfo postfix = AccessTools.Method(typeof(FrameTickPatches), postfixName);
-        harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-        InstalledCount++;
+        MethodBase? tick = ResolvedSection(TickSection);
+        if (tick != null) {
+            backend.PatchPostfix(tick, Own(nameof(TickPostfix)));
+            backend.PatchPrefix(tick, Own(nameof(DrainControlOpsPrefix)));
+            InstalledCount += 2;
+        }
+
+        MethodBase? frame = ResolvedSection(FrameSection);
+        if (frame != null) {
+            backend.PatchPostfix(frame, Own(nameof(FramePostfix)));
+            InstalledCount++;
+        }
     }
 
-    private static void TryPatchPrefix(Harmony harmony, string targetName, string prefixName) {
-        MethodBase? target = AccessTools.Method(targetName);
-        if (target == null)
-            return;
-
-        MethodInfo prefix = AccessTools.Method(typeof(FrameTickPatches), prefixName);
-        harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-        InstalledCount++;
+    // the core pack resolved both of these already, so reuse that instead of a second lookup.
+    private static MethodBase? ResolvedSection(string sectionName) {
+        foreach (CatalogEntry entry in SectionCatalog.Entries) {
+            if (entry.Name == sectionName)
+                return entry.Resolved;
+        }
+        return null;
     }
+
+    private static MethodInfo Own(string name) =>
+        typeof(FrameTickPatches).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static void DrainControlOpsPrefix() => ControlServices.Queue.Drain();
 
