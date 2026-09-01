@@ -27,9 +27,9 @@ public static class StateMachineTarget {
     }
 
     private static Type? StateMachineType(MethodBase method) {
-        AsyncStateMachineAttribute? async = method.GetCustomAttribute<AsyncStateMachineAttribute>();
-        if (async != null)
-            return async.StateMachineType;
+        AsyncStateMachineAttribute? asyncMachine = method.GetCustomAttribute<AsyncStateMachineAttribute>();
+        if (asyncMachine != null)
+            return asyncMachine.StateMachineType;
 
         IteratorStateMachineAttribute? iterator = method.GetCustomAttribute<IteratorStateMachineAttribute>();
         return iterator?.StateMachineType;
