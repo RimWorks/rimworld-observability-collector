@@ -64,6 +64,7 @@ jobs:
         shell: powershell
         run: |
           ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"RimWorks_rimworld-observability-collector" /o:"rimworks" /d:sonar.exclusions="RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          dotnet build RimObs.sln
-          dotnet test RimObs.sln --no-build --collect:"XPlat Code Coverage;Format=opencover"
+          dotnet build RimObs.sln -nodeReuse:false
+          dotnet test tests/RimObs.Library.Tests --no-build --collect:"XPlat Code Coverage;Format=opencover"
+          dotnet test tests/RimObs.Collector.Tests --no-build --collect:"XPlat Code Coverage;Format=opencover"
           ${{ runner.temp }}\scanner\dotnet-sonarscanner end
