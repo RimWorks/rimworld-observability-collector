@@ -13,6 +13,8 @@ using RimWorks.RimObs.Session;
 using RimWorks.RimObs.Settings;
 using RimWorks.RimObs.Transport;
 using Verse;
+using RimWorks.RimObs.Logging;
+using Log = RimWorks.RimLogging.Log;
 
 namespace RimWorks.RimObs.Bootstrap;
 
@@ -51,24 +53,28 @@ public sealed class RimObsMod : Mod {
                 continue;
             string collectorDir = Path.Combine(rootDir, CollectorScanner.CollectorDirName);
             if (Directory.Exists(collectorDir)) {
-                Log.Message(
-                    $"[RimObs] Collector discovery: scanning '{collectorDir}' (mod '{pack.PackageId}')."
+                Log.Info(
+                    LogChannels.Collector,
+                    "scanning {Dir} for a collector binary, from mod {Mod}",
+                    new object?[] { collectorDir, pack.PackageId }
                 );
             }
             CollectorScanner.ReadCandidates(collectorDir, candidates);
         }
 
         if (candidates.Count == 0) {
-            Log.Warning(
-                "[RimObs] Collector discovery found 0 candidates across all running mods' Collector directories. "
-                    + "No collector binary could be located to launch."
+            Log.Warn(
+                LogChannels.Collector,
+                "no collector binary found in any running mod's Collector directory"
             );
         }
         else {
             for (int i = 0; i < candidates.Count; i++) {
                 CollectorCandidate candidate = candidates[i];
-                Log.Message(
-                    $"[RimObs] Collector discovery: candidate {i + 1}/{candidates.Count} -> '{candidate.ExecutablePath}' (version {candidate.Version})."
+                Log.Info(
+                    LogChannels.Collector,
+                    "candidate {Index}/{Total}: {Path} version {Version}",
+                    new object?[] { i + 1, candidates.Count, candidate.ExecutablePath, candidate.Version }
                 );
             }
         }
@@ -102,20 +108,19 @@ public sealed class RimObsMod : Mod {
             CollectorRuntimeInfo.Set(CollectorHost, port, collector.IsRunning, collector.LaunchAttempted, ownerId);
             if (!collector.IsRunning) {
                 Log.Error(
-                    "[RimObs] No collector is running and none could be launched from any installed mod's "
-                        + "Collector directory. Telemetry instrumentation is disabled for this session "
-                        + $"(no patches installed). launchAttempted={collector.LaunchAttempted}. "
-                        + "Install the collector binary to enable profiling. (PRD §35.66)"
+                    LogChannels.Collector,
+                    "no collector running and none could be launched, so nothing is instrumented this session",
+                    new { launch_attempted = collector.LaunchAttempted, prd = "35.66" }
                 );
                 return;
             }
 
-            Log.Message($"[RimObs] Dashboard: {CollectorRuntimeInfo.DashboardUrl}");
+            Log.Info(LogChannels.Collector, "dashboard at {Url}", new object?[] { CollectorRuntimeInfo.DashboardUrl });
 
             InstrumentationInstall.Schedule(LongEventHandler.ExecuteWhenFinished, () => InstallInstrumentation(declared, port));
         }
         catch (Exception ex) {
-            Log.Error($"[RimObs] Bootstrap failed: {ex}");
+            Log.Error(LogChannels.Bootstrap, ex, "bootstrap failed");
         }
     }
 
@@ -136,7 +141,11 @@ public sealed class RimObsMod : Mod {
                 return;
             }
 
-            Log.Message($"[RimObs] Patching via {PatchBackends.Active.Name} (priority {PatchBackends.ActivePriority}).");
+            Log.Info(
+                LogChannels.Patching,
+                "patching via {Backend} at priority {Priority}",
+                new object?[] { PatchBackends.Active.Name, PatchBackends.ActivePriority }
+            );
             PatchInstaller.InstallAll();
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();
@@ -152,12 +161,13 @@ public sealed class RimObsMod : Mod {
             LogBootstrapSummary(declared, attrs);
         }
         catch (Exception ex) {
-            Log.Error($"[RimObs] Instrumentation install failed: {ex}");
+            Log.Error(LogChannels.Patching, ex, "instrumentation install failed");
         }
     }
 
-    // About.xml declares no modDependencies, so RimWorld raises no missing-dependency
-    // warning of its own. this replaces it, and is not DevMode-gated because players run this.
+    // About.xml lists no patching library as a dependency, so RimWorld raises no
+    // missing-dependency warning for one. this replaces it, and is not DevMode-gated
+    // because players run this.
     private static void ReportMissingBackend() {
         string? text = MissingBackendNotice.ClaimOnce();
         if (text == null)
@@ -169,7 +179,11 @@ public sealed class RimObsMod : Mod {
         // would cover the dialog.
         LongEventHandler.QueueLongEvent(
             () => {
-                Log.Error("[RimObs] No patching backend loaded. RimObs needs Harmony or Concord active.");
+                Log.Error(
+                    LogChannels.Patching,
+                    "no patching backend loaded, so nothing is instrumented",
+                    new { needs = "Harmony or Concord" }
+                );
                 Find.WindowStack.Add(
                     new Dialog_MessageBox(
                         text,
@@ -220,12 +234,27 @@ public sealed class RimObsMod : Mod {
     private static void LogBootstrapSummary(ProfilingXmlLoader.LoadResult declared, ObservedSectionScanner.ScanResult attrs) {
         (int coreCount, int coreInstalled, int declaredCount, int declaredInstalled) = CountSections();
 
-        Log.Message(
-            $"[RimObs] Loaded. Core: {coreInstalled}/{coreCount} sections installed. "
-                + $"Declared: {declaredInstalled}/{declaredCount} sections from {declared.FilesLoaded}/{declared.FilesScanned} profiling.xml files. "
-                + $"Attributes: {attrs.Registered} registered ({attrs.SkippedDuplicate} duplicate, {attrs.SkippedUnsupported} unsupported, {attrs.Failed} failed) from {attrs.AssembliesScanned} assemblies. "
-                + $"(unresolved={PatchInstaller.UnresolvedCount}, failed={PatchInstaller.FailedCount}, conflicts={PatchConflictRecorder.Count}). "
-                + $"Owner registry: {OwnerRegistry.Count} mods. GcObserver: maxGen={GcObserverHost.Instance.MaxGeneration}."
+        Log.Info(
+            LogChannels.Bootstrap,
+            "loaded",
+            new {
+                core_installed = coreInstalled,
+                core_total = coreCount,
+                declared_installed = declaredInstalled,
+                declared_total = declaredCount,
+                xml_files_loaded = declared.FilesLoaded,
+                xml_files_scanned = declared.FilesScanned,
+                attrs_registered = attrs.Registered,
+                attrs_duplicate = attrs.SkippedDuplicate,
+                attrs_unsupported = attrs.SkippedUnsupported,
+                attrs_failed = attrs.Failed,
+                assemblies_scanned = attrs.AssembliesScanned,
+                unresolved = PatchInstaller.UnresolvedCount,
+                install_failed = PatchInstaller.FailedCount,
+                conflicts = PatchConflictRecorder.Count,
+                owner_mods = OwnerRegistry.Count,
+                gc_max_generation = GcObserverHost.Instance.MaxGeneration,
+            }
         );
 
         LogLoadWarnings(declared, attrs);
@@ -254,18 +283,26 @@ public sealed class RimObsMod : Mod {
 
     private static void LogLoadWarnings(ProfilingXmlLoader.LoadResult declared, ObservedSectionScanner.ScanResult attrs) {
         foreach (string warning in declared.Warnings)
-            Log.Warning($"[RimObs] profiling.xml: {warning}");
+            Log.Warn(LogChannels.Sections, "profiling.xml: {Warning}", new object?[] { warning });
 
         foreach (string warning in attrs.Warnings)
-            Log.Warning($"[RimObs] [ObservedSection]: {warning}");
+            Log.Warn(LogChannels.Sections, "[ObservedSection]: {Warning}", new object?[] { warning });
     }
 
     private static void LogSectionResolutionIssues() {
         foreach (CatalogEntry entry in SectionCatalog.Entries) {
             if (!entry.Installed && entry.ResolutionError != null)
-                Log.Warning($"[RimObs] Section '{entry.Name}' unresolved: {entry.ResolutionError.Message}");
+                Log.Warn(
+                    LogChannels.Sections,
+                    "section {Section} unresolved: {Reason}",
+                    new object?[] { entry.Name, entry.ResolutionError.Message }
+                );
             else if (entry.InstallError != null)
-                Log.Error($"[RimObs] Section '{entry.Name}' install failed: {entry.InstallError.Message}");
+                Log.Error(
+                    LogChannels.Sections,
+                    "section {Section} install failed: {Reason}",
+                    new object?[] { entry.Name, entry.InstallError.Message }
+                );
         }
     }
 

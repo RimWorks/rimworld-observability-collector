@@ -96,6 +96,13 @@
         </Reference>
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- unconditional: RimLogging is not tied to whether RimWorld is installed locally.
+             ExcludeAssets=runtime comes from the ItemDefinitionGroup, so it compiles in and
+             never ships - the Workshop copy is the only one loaded. -->
+        <PackageReference Include="RimWorks.RimLogging" Version="2.4.*"/>
+    </ItemGroup>
+
     <ItemGroup Condition="'$(HasLocalRimWorld)' == 'false'">
         <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.*" PrivateAssets="all" />
     </ItemGroup>
