@@ -8,5 +8,11 @@ export default defineConfig({
         environment: 'jsdom',
         include: ['src/**/*.{test,spec}.{ts,svelte.ts}'],
         setupFiles: ['./vitest-setup.ts'],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text-summary', 'lcov'],
+            include: ['src/**/*.{ts,svelte}'],
+            exclude: ['src/**/*.{test,spec}.*', 'src/report/**'],
+        },
     },
 });

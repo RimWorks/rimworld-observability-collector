@@ -11,6 +11,9 @@ riderModule.iml
 
 node_modules/
 RimObs.Dashboard/dist/
+RimObs.Dashboard/coverage/
+coverage.xml
+TestResults/
 
 **/Assemblies/
 /Collector/
