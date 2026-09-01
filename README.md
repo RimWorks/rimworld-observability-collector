@@ -3,11 +3,15 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
 
+<img src="https://raw.githubusercontent.com/RimWorks/rimworld-observability-collector/main/About/ModIcon.png" alt="RimObs icon" width="96" align="right">
+
 A telemetry framework for RimWorld mods. Mod authors register named sections
 and metrics; an out-of-process collector aggregates the data, serves a
 dashboard, and can export diagnostic bundles.
 
 [**Full documentation -->**](https://github.com/RimWorks/rimworld-observability-collector/wiki)
+
+![RimObs preview card](https://raw.githubusercontent.com/RimWorks/rimworld-observability-collector/main/About/Preview.png)
 
 ## For mod authors
 
