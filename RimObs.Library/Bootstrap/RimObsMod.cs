@@ -53,7 +53,7 @@ public sealed class RimObsMod : Mod {
                 continue;
             string collectorDir = Path.Combine(rootDir, CollectorScanner.CollectorDirName);
             if (Directory.Exists(collectorDir)) {
-                Log.Info(
+                Log.InfoTo(
                     LogChannels.Collector,
                     "scanning {Dir} for a collector binary, from mod {Mod}",
                     new object?[] { collectorDir, pack.PackageId }
@@ -63,7 +63,7 @@ public sealed class RimObsMod : Mod {
         }
 
         if (candidates.Count == 0) {
-            Log.Warn(
+            Log.WarnTo(
                 LogChannels.Collector,
                 "no collector binary found in any running mod's Collector directory"
             );
@@ -71,7 +71,7 @@ public sealed class RimObsMod : Mod {
         else {
             for (int i = 0; i < candidates.Count; i++) {
                 CollectorCandidate candidate = candidates[i];
-                Log.Info(
+                Log.InfoTo(
                     LogChannels.Collector,
                     "candidate {Index}/{Total}: {Path} version {Version}",
                     new object?[] { i + 1, candidates.Count, candidate.ExecutablePath, candidate.Version }
@@ -107,7 +107,7 @@ public sealed class RimObsMod : Mod {
             CollectorLaunchResult collector = EnsureCollectorRunning(ownerId, port, parentPid, !_settings.AutoOpenDashboard);
             CollectorRuntimeInfo.Set(CollectorHost, port, collector.IsRunning, collector.LaunchAttempted, ownerId);
             if (!collector.IsRunning) {
-                Log.Error(
+                Log.ErrorTo(
                     LogChannels.Collector,
                     "no collector running and none could be launched, so nothing is instrumented this session",
                     new { launch_attempted = collector.LaunchAttempted, prd = "35.66" }
@@ -115,12 +115,12 @@ public sealed class RimObsMod : Mod {
                 return;
             }
 
-            Log.Info(LogChannels.Collector, "dashboard at {Url}", new object?[] { CollectorRuntimeInfo.DashboardUrl });
+            Log.InfoTo(LogChannels.Collector, "dashboard at {Url}", new object?[] { CollectorRuntimeInfo.DashboardUrl });
 
             InstrumentationInstall.Schedule(LongEventHandler.ExecuteWhenFinished, () => InstallInstrumentation(declared, port));
         }
         catch (Exception ex) {
-            Log.Error(LogChannels.Bootstrap, ex, "bootstrap failed");
+            Log.ErrorTo(LogChannels.Bootstrap, ex, "bootstrap failed");
         }
     }
 
@@ -154,7 +154,7 @@ public sealed class RimObsMod : Mod {
             LogBootstrapSummary(declared, attrs);
         }
         catch (Exception ex) {
-            Log.Error(LogChannels.Patching, ex, "instrumentation install failed");
+            Log.ErrorTo(LogChannels.Patching, ex, "instrumentation install failed");
         }
     }
 
@@ -169,7 +169,7 @@ public sealed class RimObsMod : Mod {
         // the debug log until PlayDataLoader.loadedInt flips. queueing puts both after that.
         LongEventHandler.QueueLongEvent(
             () => {
-                Log.Error(
+                Log.ErrorTo(
                     LogChannels.Patching,
                     "no patching backend loaded, so nothing is instrumented",
                     new { needs = "Harmony or Concord" }
@@ -224,7 +224,7 @@ public sealed class RimObsMod : Mod {
     private static void LogBootstrapSummary(ProfilingXmlLoader.LoadResult declared, ObservedSectionScanner.ScanResult attrs) {
         (int coreCount, int coreInstalled, int declaredCount, int declaredInstalled) = CountSections();
 
-        Log.Info(
+        Log.InfoTo(
             LogChannels.Bootstrap,
             "loaded",
             new {
@@ -273,22 +273,22 @@ public sealed class RimObsMod : Mod {
 
     private static void LogLoadWarnings(ProfilingXmlLoader.LoadResult declared, ObservedSectionScanner.ScanResult attrs) {
         foreach (string warning in declared.Warnings)
-            Log.Warn(LogChannels.Sections, "profiling.xml: {Warning}", new object?[] { warning });
+            Log.WarnTo(LogChannels.Sections, "profiling.xml: {Warning}", new object?[] { warning });
 
         foreach (string warning in attrs.Warnings)
-            Log.Warn(LogChannels.Sections, "[ObservedSection]: {Warning}", new object?[] { warning });
+            Log.WarnTo(LogChannels.Sections, "[ObservedSection]: {Warning}", new object?[] { warning });
     }
 
     private static void LogSectionResolutionIssues() {
         foreach (CatalogEntry entry in SectionCatalog.Entries) {
             if (!entry.Installed && entry.ResolutionError != null)
-                Log.Warn(
+                Log.WarnTo(
                     LogChannels.Sections,
                     "section {Section} unresolved: {Reason}",
                     new object?[] { entry.Name, entry.ResolutionError.Message }
                 );
             else if (entry.InstallError != null)
-                Log.Error(
+                Log.ErrorTo(
                     LogChannels.Sections,
                     "section {Section} install failed: {Reason}",
                     new object?[] { entry.Name, entry.InstallError.Message }

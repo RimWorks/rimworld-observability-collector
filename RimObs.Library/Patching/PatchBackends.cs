@@ -47,7 +47,7 @@ public static class PatchBackends {
 
         // the caller owns the no-backend case: it also raises the player-facing dialog.
         if (best != null) {
-            Log.Info(
+            Log.InfoTo(
                 LogChannels.Patching,
                 "patching via {Backend} at priority {Priority}, {Candidates} candidate(s) seen",
                 new object?[] { best.Name, bestPriority, s_Registered.Count }
@@ -59,18 +59,23 @@ public static class PatchBackends {
     // yet. Find them directly. See Verse.PlayDataLoader.DoPlayLoad.
     private static void ScanForBackends() {
         Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-        for (int i = 0; i < assemblies.Length; i++) {
-            Type[] types;
-            try {
-                types = assemblies[i].GetTypes();
-            }
-            catch (ReflectionTypeLoadException ex) {
-                types = SalvageTypes(ex);
-            }
-            catch (Exception) {
-                continue;
-            }
+        for (int i = 0; i < assemblies.Length; i++)
+            ScanAssembly(assemblies[i]);
+    }
 
+    private static void ScanAssembly(Assembly assembly) {
+        Type[] types;
+        try {
+            types = assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex) {
+            types = SalvageTypes(ex);
+        }
+        catch (Exception) {
+            return;
+        }
+
+        {
             for (int t = 0; t < types.Length; t++) {
                 // IsAssignableFrom walks the interface map, so a salvaged type whose interfaces
                 // live in a missing assembly throws here. one broken mod must not stop the scan.
@@ -87,7 +92,7 @@ public static class PatchBackends {
                 catch (Exception ex) {
                     // a type we cannot inspect or construct is not a backend. try the next one.
                     // trace, not warn: a half-loaded assembly can hit this for hundreds of types.
-                    Log.Trace(
+                    Log.TraceTo(
                         LogChannels.Patching,
                         "backend scan skipped {Type}: {Reason}",
                         new object?[] { types[t].FullName, ex.Message }

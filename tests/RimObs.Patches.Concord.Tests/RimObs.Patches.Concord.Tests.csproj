@@ -37,7 +37,7 @@
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="2.5.302"/>
         <PackageReference Include="Lib.Harmony" Version="2.4.2"/>
-        <PackageReference Include="RimWorks.RimLogging" Version="2.4.*"/>
+        <PackageReference Include="RimWorks.RimLogging" Version="2.4.2"/>
         <!-- TODO(concord-pin): unpin with Concord.Ref, once EndExceptionBlock placement is a
              documented contract or Concord reaches 1.0. the two must move together. -->
         <PackageReference Include="Concord.Runtime" Version="0.14.2"/>

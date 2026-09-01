@@ -100,7 +100,9 @@
         <!-- unconditional: RimLogging is not tied to whether RimWorld is installed locally.
              ExcludeAssets=runtime comes from the ItemDefinitionGroup, so it compiles in and
              never ships - the Workshop copy is the only one loaded. -->
-        <PackageReference Include="RimWorks.RimLogging" Version="2.4.*"/>
+        <!-- TODO(rimlogging-pin): float again once RimLogging stops shipping breaking API
+             changes in patch releases. 2.4.2 renamed every channel overload to *To. -->
+        <PackageReference Include="RimWorks.RimLogging" Version="2.4.2"/>
     </ItemGroup>
 
     <ItemGroup Condition="'$(HasLocalRimWorld)' == 'false'">

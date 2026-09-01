@@ -62,7 +62,7 @@ public static class CollectorScanner {
         // boot-time discovery, not the steady-state send path the hot-path rule guards, and
         // RimLogging does not render the template unless a sink wants the level.
         catch (System.Exception ex) when (ex is System.ArgumentException or System.FormatException) {
-            Log.Warn(
+            Log.WarnTo(
                 LogChannels.Collector,
                 "ignoring collector at {Path}, version {Version} did not parse: {Reason}",
                 new object?[] { executable, manifest.Version, ex.Message }
