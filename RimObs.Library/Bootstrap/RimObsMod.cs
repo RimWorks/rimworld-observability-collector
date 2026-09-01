@@ -226,24 +226,30 @@ public sealed class RimObsMod : Mod {
 
         Log.InfoTo(
             LogChannels.Bootstrap,
-            "loaded",
-            new {
-                core_installed = coreInstalled,
-                core_total = coreCount,
-                declared_installed = declaredInstalled,
-                declared_total = declaredCount,
-                xml_files_loaded = declared.FilesLoaded,
-                xml_files_scanned = declared.FilesScanned,
-                attrs_registered = attrs.Registered,
-                attrs_duplicate = attrs.SkippedDuplicate,
-                attrs_unsupported = attrs.SkippedUnsupported,
-                attrs_failed = attrs.Failed,
-                assemblies_scanned = attrs.AssembliesScanned,
-                unresolved = PatchInstaller.UnresolvedCount,
-                install_failed = PatchInstaller.FailedCount,
-                conflicts = PatchConflictRecorder.Count,
-                owner_mods = OwnerRegistry.Count,
-                gc_max_generation = GcObserverHost.Instance.MaxGeneration,
+            // templated, not structured context: the Verse writeback sink renders the message
+            // but drops context, and Player.log is what people share when reporting a problem.
+            "loaded. core {CoreInstalled}/{CoreTotal}, declared {DeclaredInstalled}/{DeclaredTotal} "
+                + "from {XmlLoaded}/{XmlScanned} profiling.xml, attributes {AttrsRegistered} from "
+                + "{AssembliesScanned} assemblies ({AttrsDuplicate} duplicate, {AttrsUnsupported} "
+                + "unsupported, {AttrsFailed} failed), unresolved {Unresolved}, install failed "
+                + "{InstallFailed}, conflicts {Conflicts}, owner mods {OwnerMods}, gc maxgen {GcMaxGen}",
+            new object?[] {
+                coreInstalled,
+                coreCount,
+                declaredInstalled,
+                declaredCount,
+                declared.FilesLoaded,
+                declared.FilesScanned,
+                attrs.Registered,
+                attrs.AssembliesScanned,
+                attrs.SkippedDuplicate,
+                attrs.SkippedUnsupported,
+                attrs.Failed,
+                PatchInstaller.UnresolvedCount,
+                PatchInstaller.FailedCount,
+                PatchConflictRecorder.Count,
+                OwnerRegistry.Count,
+                GcObserverHost.Instance.MaxGeneration,
             }
         );
 
