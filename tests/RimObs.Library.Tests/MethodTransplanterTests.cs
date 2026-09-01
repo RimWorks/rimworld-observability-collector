@@ -173,17 +173,4 @@ public sealed class MethodTransplanterTests : IDisposable {
             return "other";
         }
     }
-
-    private sealed class RecordingSink : ISampleSink {
-        public readonly List<Sample> Samples = new();
-        private readonly object _lock = new();
-
-        public void RecordSection(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
-            lock (_lock) {
-                Samples.Add(new Sample(sectionId, parentId, startTimestamp, elapsedTicks));
-            }
-        }
-    }
-
-    private readonly record struct Sample(int SectionId, int ParentId, long StartTimestamp, long ElapsedTicks);
 }

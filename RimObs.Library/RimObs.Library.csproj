@@ -79,6 +79,7 @@
         <InternalsVisibleTo Include="RimObs.Library.Tests"/>
         <!-- the backends link MethodTransplanter.cs, which resolves sections through SectionCatalog. -->
         <InternalsVisibleTo Include="RimObs.Patches.Harmony"/>
+        <InternalsVisibleTo Include="RimObs.Patches.Concord"/>
     </ItemGroup>
 
     <ItemGroup>

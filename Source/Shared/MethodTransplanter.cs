@@ -3,9 +3,21 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using RimWorks.RimObs.Profile;
+#if RIMOBS_CONCORD
+using CodeInstruction = Concord.CodeInstruction;
+using ExceptionBlock = Concord.ExceptionBlock;
+using ExceptionBlockType = Concord.ExceptionBlockType;
+using ILGenerator = Concord.ITranspilerContext;
+using Label = Concord.Label;
+using LocalBuilder = Concord.LocalRef;
+#else
 using CodeInstruction = HarmonyLib.CodeInstruction;
 using ExceptionBlock = HarmonyLib.ExceptionBlock;
 using ExceptionBlockType = HarmonyLib.ExceptionBlockType;
+using ILGenerator = System.Reflection.Emit.ILGenerator;
+using Label = System.Reflection.Emit.Label;
+using LocalBuilder = System.Reflection.Emit.LocalBuilder;
+#endif
 
 namespace RimWorks.RimObs.Patching;
 
@@ -25,15 +37,25 @@ internal static class MethodTransplanter {
         BindingFlags.Public | BindingFlags.Static
     ) ?? throw new InvalidOperationException("MethodTransplanter.Transpile not found.");
 
+#if RIMOBS_CONCORD
+    // concord only accepts (instructions) or (instructions, context); the original arrives on the context.
+    public static IEnumerable<CodeInstruction> Transpile(
+        IEnumerable<CodeInstruction> instructions,
+        ILGenerator generator
+    ) {
+        MethodBase original = generator.Original;
+#else
     public static IEnumerable<CodeInstruction> Transpile(
         IEnumerable<CodeInstruction> instructions,
         ILGenerator generator,
         MethodBase __originalMethod
     ) {
-        if (!SectionCatalog.TryGetSectionId(__originalMethod, out int sectionId))
+        MethodBase original = __originalMethod;
+#endif
+        if (!SectionCatalog.TryGetSectionId(original, out int sectionId))
             return instructions;
 
-        return Instrument(instructions, generator, __originalMethod, sectionId);
+        return Instrument(instructions, generator, original, sectionId);
     }
 
     private static IEnumerable<CodeInstruction> Instrument(
@@ -129,23 +151,26 @@ internal static class MethodTransplanter {
         yield return new CodeInstruction(OpCodes.Call, s_StopByIdMethod);
 
         CodeInstruction endFinally = new(OpCodes.Endfinally);
+#if !RIMOBS_CONCORD
         endFinally.blocks.Add(new ExceptionBlock(ExceptionBlockType.EndExceptionBlock));
+#endif
         yield return endFinally;
     }
 
     private static IEnumerable<CodeInstruction> EmitEpilogue(
         LocalBuilder? returnLocal, Label endLabel, bool hasReturn
     ) {
-        if (hasReturn) {
-            CodeInstruction ldlocRet = new(OpCodes.Ldloc, returnLocal!);
-            ldlocRet.labels.Add(endLabel);
-            yield return ldlocRet;
+        CodeInstruction first = hasReturn
+            ? new CodeInstruction(OpCodes.Ldloc, returnLocal!)
+            : new CodeInstruction(OpCodes.Ret);
+        first.labels.Add(endLabel);
+#if RIMOBS_CONCORD
+        // concord closes a handler at the instruction after it; harmony closes at the last one inside.
+        first.blocks.Add(new ExceptionBlock(ExceptionBlockType.EndExceptionBlock));
+#endif
+        yield return first;
+
+        if (hasReturn)
             yield return new CodeInstruction(OpCodes.Ret);
-        }
-        else {
-            CodeInstruction ret = new(OpCodes.Ret);
-            ret.labels.Add(endLabel);
-            yield return ret;
-        }
     }
 }

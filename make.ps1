@@ -23,6 +23,7 @@ function Invoke-Clean {
     Get-ChildItem -Path . -Recurse -Force -Include 'bin','obj' -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$DashboardDir/dist"
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'Assemblies/*.dll','Assemblies/*.pdb'
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'Harmony/Assemblies','Concord/Assemblies'
 }
 
 function Invoke-Restore {

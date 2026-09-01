@@ -50,6 +50,9 @@ clean:
 	rm -rf RimObs.Wire/bin RimObs.Wire/obj
 	rm -rf RimObs.Collector/bin RimObs.Collector/obj
 	rm -rf tests/RimObs.Collector.Tests/bin tests/RimObs.Collector.Tests/obj
+	rm -rf Source/RimObs.Patches.Harmony/bin Source/RimObs.Patches.Harmony/obj Harmony/Assemblies
+	rm -rf Source/RimObs.Patches.Concord/bin Source/RimObs.Patches.Concord/obj Concord/Assemblies
+	rm -rf tests/RimObs.Patches.Concord.Tests/bin tests/RimObs.Patches.Concord.Tests/obj
 	rm -rf $(DASHBOARD_DIR)/dist
 
 restore:

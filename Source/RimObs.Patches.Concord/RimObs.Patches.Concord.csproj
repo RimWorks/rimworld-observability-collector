@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <DebugType>embedded</DebugType>
+        <AssemblyName>RimObs.Patches.Concord</AssemblyName>
+        <RootNamespace>RimWorks.RimObs.Patches.Concord</RootNamespace>
+        <OutDir>$(MSBuildProjectDirectory)\..\..\Concord\Assemblies\</OutDir>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+        <DefineConstants>$(DefineConstants);RIMOBS_CONCORD</DefineConstants>
+        <!-- TODO(backends): drop when RimObs.Library stops compiling MethodTransplanter.cs too. -->
+        <NoWarn>$(NoWarn);CS0436</NoWarn>
+        <!-- RimObs.Library copies RimObs.Wire.dll local; without this it lands here too. -->
+        <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    </PropertyGroup>
+
+    <ItemDefinitionGroup>
+        <Reference>
+            <Private>False</Private>
+        </Reference>
+        <ProjectReference>
+            <Private>False</Private>
+        </ProjectReference>
+        <PackageReference>
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </PackageReference>
+    </ItemDefinitionGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.*" ExcludeAssets="runtime" PrivateAssets="all"/>
+        <!-- TODO(concord-pin): float again once EndExceptionBlock placement is a documented
+             contract, or Concord reaches 1.0. see MethodTransplanter.EmitEpilogue. -->
+        <PackageReference Include="Concord.Ref" Version="0.14.2" ExcludeAssets="runtime" PrivateAssets="all"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="..\Shared\MethodTransplanter.cs" Link="MethodTransplanter.cs"/>
+        <!-- private=false: RimObs.dll ships once, in the root Assemblies folder. a second copy
+             here would load the same types twice. -->
+        <ProjectReference Include="..\..\RimObs.Library\RimObs.Library.csproj" Private="false"/>
+    </ItemGroup>
+</Project>
