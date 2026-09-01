@@ -1,0 +1,16 @@
+[*.cs]
+# these log lines run once per process, so an IsEnabled guard buys nothing.
+dotnet_diagnostic.CA1873.severity = none
+
+[Aggregation/*.cs]
+# lock-free accumulators. Interlocked.Read/Add need a ref to a field.
+dotnet_diagnostic.S1104.severity = none
+
+[Api/SessionsEndpoints.cs]
+# the loop body calls seen.Add, so a Where predicate would carry the side effect.
+dotnet_diagnostic.S3267.severity = none
+
+[Storage/SessionStore.cs]
+# SQLite has no parameter slot for a table name. DropAllTables quotes it with QuoteIdentifier,
+# which doubles embedded quotes the way SQLite itself does.
+dotnet_diagnostic.S2077.severity = none

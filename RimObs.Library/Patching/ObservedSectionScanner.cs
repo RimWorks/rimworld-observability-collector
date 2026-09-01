@@ -86,21 +86,7 @@ internal static class ObservedSectionScanner {
             return true;
         }
         catch (ReflectionTypeLoadException ex) {
-            List<Type> salvaged = new();
-            if (ex.Types != null) {
-                foreach (Type? t in ex.Types) {
-                    if (t != null)
-                        salvaged.Add(t);
-                }
-            }
-            if (ex.LoaderExceptions != null) {
-                foreach (Exception? le in ex.LoaderExceptions) {
-                    if (le != null)
-                        result.Warnings.Add(
-                            $"[{packageId}] {assembly.GetName().Name}: loader exception: {le.Message}");
-                }
-            }
-            types = salvaged.ToArray();
+            types = SalvageLoadedTypes(ex, assembly, packageId, result);
             return true;
         }
         catch (Exception ex) {
@@ -110,6 +96,25 @@ internal static class ObservedSectionScanner {
             types = Array.Empty<Type>();
             return false;
         }
+    }
+
+    private static Type[] SalvageLoadedTypes(
+        ReflectionTypeLoadException ex, Assembly assembly, string packageId, ScanResult result) {
+        List<Type> salvaged = new();
+        if (ex.Types != null) {
+            foreach (Type? t in ex.Types) {
+                if (t != null)
+                    salvaged.Add(t);
+            }
+        }
+        if (ex.LoaderExceptions != null) {
+            foreach (Exception? le in ex.LoaderExceptions) {
+                if (le != null)
+                    result.Warnings.Add(
+                        $"[{packageId}] {assembly.GetName().Name}: loader exception: {le.Message}");
+            }
+        }
+        return salvaged.ToArray();
     }
 
     private static void ScanType(Type type, string packageId, ScanResult result) {

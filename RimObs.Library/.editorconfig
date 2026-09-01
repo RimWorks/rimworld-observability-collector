@@ -6,3 +6,30 @@ dotnet_naming_rule.private_static_fields_pascal.style = s_pascal_case
 
 dotnet_naming_style.s_pascal_case.capitalization = pascal_case
 dotnet_naming_style.s_pascal_case.required_prefix = s_
+
+# these sources also compile under net10 in RimObs.Library.Tests, so the modern analyzers offer
+# APIs net48 does not have: Contains(StringComparison), EndsWith(char), ThrowIfNull,
+# ThrowIfLessThan.
+dotnet_diagnostic.CA2249.severity = none
+dotnet_diagnostic.CA1866.severity = none
+dotnet_diagnostic.CA1510.severity = none
+dotnet_diagnostic.CA1512.severity = none
+dotnet_diagnostic.S6610.severity = none
+
+# Interlocked.Read and Scribe_Values.Look both need a ref to a field, and a property cannot be
+# passed by ref. Profiler.Enabled is the hot-path branch, PRD 11.6.
+dotnet_diagnostic.S1104.severity = none
+dotnet_diagnostic.CA2211.severity = none
+
+# explicit loops instead of LINQ. see .claude/rules/hot-path.md.
+dotnet_diagnostic.S3267.severity = none
+
+# reflecting over private members is what this library does.
+dotnet_diagnostic.S3011.severity = none
+
+# the collector binds loopback only. no cert, no remote peer.
+dotnet_diagnostic.S5332.severity = none
+
+[Polyfills.cs]
+# IsExternalInit is a compiler marker type. it has to be empty.
+dotnet_diagnostic.S2094.severity = none

@@ -1,0 +1,12 @@
+[*.cs]
+# these tests assert behaviour over a real elapsed window, so the sleep is the thing under test.
+# where a condition exists to wait on, they already use SpinUntil.
+dotnet_diagnostic.S2925.severity = none
+
+# Harmony and reflection fixtures, where the shape is the point. a static probe target changes
+# the signature the resolver sees, Targets.Counter is written by transplanted IL, and the extern
+# exists to test a real DllImport.
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA2211.severity = none
+dotnet_diagnostic.CA1507.severity = none
+dotnet_diagnostic.SYSLIB1054.severity = none

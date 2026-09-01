@@ -25,6 +25,9 @@ csharp_new_line_before_open_brace = false
 dotnet_style_prefer_collection_expression = true
 dotnet_diagnostic.CA1707.severity = none
 
+# explanatory prose that the dead-code heuristic reads as commented-out code.
+dotnet_diagnostic.S125.severity = none
+
 # Private static fields default to PascalCase with no prefix (RimObs.Collector, RimObs.Wire).
 # RimObs.Library deliberately overrides this with an s_ prefix in its own .editorconfig to match
 # the Unity Mono / Roslyn house style. The per-project split is intentional and documented here

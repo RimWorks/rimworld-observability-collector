@@ -9,20 +9,6 @@
         <IsTestProject>true</IsTestProject>
         <RootNamespace>RimWorks.RimObs.Tests</RootNamespace>
         <AssemblyName>RimObs.Library.Tests</AssemblyName>
-        <!--
-          This project compiles the net48 library sources under net10, so the modern
-          analyzers offer APIs the library cannot use:
-            CA1510  ArgumentNullException.ThrowIfNull            (net6+)
-            CA1512  ArgumentOutOfRangeException.ThrowIfLessThan  (net8+)
-            CA2249  string.Contains(string, StringComparison)    (netstandard2.1+)
-            CA1866  string.EndsWith(char)                        (netcore2.0+)
-          The rest fire on reflection and Harmony fixtures, where the shape is the point:
-            CA1822      making a probe target static changes the signature the resolver sees
-            CA2211      Targets.Counter is written by transplanted IL
-            CA1507      the literal names the API's parameter, not the local
-            SYSLIB1054  the fixture exists to test a real DllImport extern
-        -->
-        <NoWarn>$(NoWarn);CA1510;CA1512;CA2249;CA1866;CA1822;CA2211;CA1507;SYSLIB1054</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
