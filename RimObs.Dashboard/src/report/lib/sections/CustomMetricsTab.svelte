@@ -17,9 +17,24 @@
 </section>
 
 <style>
-    .tab-pane { padding: 1rem 0; }
-    .empty { color: #888; font-style: italic; }
-    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
-    dt { font-weight: 600; color: #444; }
-    dd { margin: 0; font-family: 'IBM Plex Mono', monospace; }
+    .tab-pane {
+        padding: 1rem 0;
+    }
+    .empty {
+        color: #888;
+        font-style: italic;
+    }
+    dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+    }
+    dt {
+        font-weight: 600;
+        color: #444;
+    }
+    dd {
+        margin: 0;
+        font-family: 'IBM Plex Mono', monospace;
+    }
 </style>

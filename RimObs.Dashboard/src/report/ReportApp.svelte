@@ -31,22 +31,38 @@
             </p>
         </header>
         <nav class="tabs">
-            <button class:active={active === 'summary'} onclick={() => (active = 'summary')}>Summary</button>
-            <button class:active={active === 'hotspots'} onclick={() => (active = 'hotspots')}>Hotspots</button>
-            <button class:active={active === 'metrics'} onclick={() => (active = 'metrics')}>Custom metrics</button>
-            <button class:active={active === 'loadorder'} onclick={() => (active = 'loadorder')}>Load order</button>
-            <button class:active={active === 'health'} onclick={() => (active = 'health')}>Health</button>
+            <button class:active={active === 'summary'} onclick={() => (active = 'summary')}
+                >Summary</button
+            >
+            <button class:active={active === 'hotspots'} onclick={() => (active = 'hotspots')}
+                >Hotspots</button
+            >
+            <button class:active={active === 'metrics'} onclick={() => (active = 'metrics')}
+                >Custom metrics</button
+            >
+            <button class:active={active === 'loadorder'} onclick={() => (active = 'loadorder')}
+                >Load order</button
+            >
+            <button class:active={active === 'health'} onclick={() => (active = 'health')}
+                >Health</button
+            >
             {#if data.hasAllocations}
-                <button class:active={active === 'alloc'} onclick={() => (active = 'alloc')}>Allocations</button>
+                <button class:active={active === 'alloc'} onclick={() => (active = 'alloc')}
+                    >Allocations</button
+                >
             {/if}
             {#if data.hasGcEvents}
                 <button class:active={active === 'gc'} onclick={() => (active = 'gc')}>GC</button>
             {/if}
             {#if data.hasPatches}
-                <button class:active={active === 'patches'} onclick={() => (active = 'patches')}>Patches</button>
+                <button class:active={active === 'patches'} onclick={() => (active = 'patches')}
+                    >Patches</button
+                >
             {/if}
             {#if data.hasCallHierarchy}
-                <button class:active={active === 'calls'} onclick={() => (active = 'calls')}>Call hierarchy</button>
+                <button class:active={active === 'calls'} onclick={() => (active = 'calls')}
+                    >Call hierarchy</button
+                >
             {/if}
         </nav>
         {#if active === 'summary'}<SummaryTab data={data.sessionSummary} />{/if}
@@ -57,24 +73,45 @@
         {#if active === 'alloc' && data.allocations}<AllocationsTab data={data.allocations} />{/if}
         {#if active === 'gc' && data.gcEvents}<GcTab data={data.gcEvents} />{/if}
         {#if active === 'patches' && data.patches}<PatchesTab data={data.patches} />{/if}
-        {#if active === 'calls' && data.callHierarchy}<CallHierarchyTab data={data.callHierarchy} />{/if}
+        {#if active === 'calls' && data.callHierarchy}<CallHierarchyTab
+                data={data.callHierarchy}
+            />{/if}
     </main>
 {/if}
 
 <style>
-    .report-root, .empty-root {
+    .report-root,
+    .empty-root {
         font-family: 'Hanken Grotesk', sans-serif;
         max-width: 1280px;
         margin: 0 auto;
         padding: 2rem;
     }
-    header { margin-bottom: 1.5rem; }
-    .meta { color: #666; font-size: 0.9rem; }
-    .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid #ddd; margin-bottom: 1rem; flex-wrap: wrap; }
-    .tabs button {
-        background: none; border: none; padding: 0.5rem 1rem;
-        cursor: pointer; border-bottom: 2px solid transparent;
-        font: inherit; color: #444;
+    header {
+        margin-bottom: 1.5rem;
     }
-    .tabs button.active { border-bottom-color: #2563eb; color: #2563eb; }
+    .meta {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    .tabs {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+    .tabs button {
+        background: none;
+        border: none;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        font: inherit;
+        color: #444;
+    }
+    .tabs button.active {
+        border-bottom-color: #2563eb;
+        color: #2563eb;
+    }
 </style>
