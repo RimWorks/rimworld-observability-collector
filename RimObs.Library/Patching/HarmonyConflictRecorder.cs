@@ -60,7 +60,7 @@ internal static class HarmonyConflictRecorder {
                 if (entry.Resolved == null)
                     continue;
 
-                Patches? patches = Harmony.GetPatchInfo(entry.Resolved);
+                HarmonyLib.Patches? patches = Harmony.GetPatchInfo(entry.Resolved);
                 if (patches == null)
                     continue;
 
