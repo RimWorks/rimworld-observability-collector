@@ -7,6 +7,12 @@ public static class CollectorRuntimeInfo {
     public static bool LaunchAttempted { get; private set; }
     public static string OwnerId { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Where the dashboard is served, or empty when no collector is up.
+    /// </summary>
+    public static string DashboardUrl =>
+        CollectorRunning && Port > 0 ? "http://" + Host + ":" + Port + "/" : string.Empty;
+
     public static void Set(string host, int port, bool collectorRunning, bool launchAttempted, string ownerId) {
         Host = string.IsNullOrEmpty(host) ? "127.0.0.1" : host;
         Port = port;

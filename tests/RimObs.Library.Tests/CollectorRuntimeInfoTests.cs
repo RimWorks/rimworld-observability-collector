@@ -47,4 +47,25 @@ public sealed class CollectorRuntimeInfoTests : IDisposable {
         CollectorRuntimeInfo.LaunchAttempted.Should().BeFalse();
         CollectorRuntimeInfo.OwnerId.Should().Be(string.Empty);
     }
+
+    [Fact]
+    public void DashboardUrlUsesTheHostAndPort() {
+        CollectorRuntimeInfo.Set("127.0.0.1", 46075, collectorRunning: true, launchAttempted: true, "owner");
+
+        CollectorRuntimeInfo.DashboardUrl.Should().Be("http://127.0.0.1:46075/");
+    }
+
+    // regression: the URL only ever reached the collector's own stdout, so nobody reading
+    // RimWorld's in-game debug log could find the dashboard.
+    [Fact]
+    public void DashboardUrlIsEmptyBeforeAPortIsAllocated() {
+        CollectorRuntimeInfo.DashboardUrl.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DashboardUrlIsEmptyWhenNoCollectorIsRunning() {
+        CollectorRuntimeInfo.Set("127.0.0.1", 46075, collectorRunning: false, launchAttempted: true, "owner");
+
+        CollectorRuntimeInfo.DashboardUrl.Should().BeEmpty();
+    }
 }

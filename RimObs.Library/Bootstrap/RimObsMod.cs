@@ -110,6 +110,8 @@ public sealed class RimObsMod : Mod {
                 return;
             }
 
+            Log.Message($"[RimObs] Dashboard: {CollectorRuntimeInfo.DashboardUrl}");
+
             InstrumentationInstall.Schedule(LongEventHandler.ExecuteWhenFinished, () => InstallInstrumentation(declared, port));
         }
         catch (Exception ex) {
