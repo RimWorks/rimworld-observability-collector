@@ -83,7 +83,7 @@ public sealed class SessionAggregatorTests {
         agg.OnSectionRegistrations(batch);
 
         agg.SectionCount.Should().Be(3);
-        SectionStats[] sections = agg.Sections.ToArray();
+        SectionStats[] sections = agg.SnapshotSections().ToArray();
         sections.Should().Contain(s => s.SectionId == 2 && s.Name == "bravo");
     }
 
@@ -112,7 +112,7 @@ public sealed class SessionAggregatorTests {
         agg.OnSectionBatch(batch);
 
         agg.TotalSamples.Should().Be(3);
-        SectionStats stats = agg.Sections.Single(s => s.SectionId == 1);
+        SectionStats stats = agg.SnapshotSections().Single(s => s.SectionId == 1);
         stats.SampleCount.Should().Be(3);
         stats.TotalElapsedTicks.Should().Be(170);
         stats.MinElapsedTicks.Should().Be(20);
@@ -132,11 +132,11 @@ public sealed class SessionAggregatorTests {
 
         agg.OnSectionBatch(batch);
 
-        CallEdgeStats root = agg.CallEdges.Single(e => e.SectionId == 1 && e.ParentId == CallTreeBuilder.NoParent);
+        CallEdgeStats root = agg.SnapshotCallEdges().Single(e => e.SectionId == 1 && e.ParentId == CallTreeBuilder.NoParent);
         root.CallCount.Should().Be(1);
         root.TotalElapsedTicks.Should().Be(500);
 
-        CallEdgeStats childEdge = agg.CallEdges.Single(e => e.SectionId == 2 && e.ParentId == 1);
+        CallEdgeStats childEdge = agg.SnapshotCallEdges().Single(e => e.SectionId == 2 && e.ParentId == 1);
         childEdge.CallCount.Should().Be(2);
         childEdge.TotalElapsedTicks.Should().Be(100);
     }
@@ -152,7 +152,7 @@ public sealed class SessionAggregatorTests {
 
         agg.OnSectionBatch(batch);
 
-        CallEdgeStats edge = agg.CallEdges.Single();
+        CallEdgeStats edge = agg.SnapshotCallEdges().Single();
         edge.SectionId.Should().Be(5);
         edge.ParentId.Should().Be(CallTreeBuilder.NoParent);
         edge.CallCount.Should().Be(2);
@@ -178,7 +178,7 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [1000],
         });
 
-        SectionStats stats = agg.Sections.Single(s => s.SectionId == 1);
+        SectionStats stats = agg.SnapshotSections().Single(s => s.SectionId == 1);
         stats.MinElapsedTicks.Should().Be(10);
         stats.MaxElapsedTicks.Should().Be(1000);
     }
@@ -334,11 +334,11 @@ public sealed class SessionAggregatorTests {
         agg.OnMetricRegistrations(batch);
 
         agg.MetricCount.Should().Be(2);
-        MetricStats m10 = agg.Metrics.Single(m => m.MetricId == 10);
+        MetricStats m10 = agg.SnapshotMetrics().Single(m => m.MetricId == 10);
         m10.Name.Should().Be("my.mod.frames_drawn");
         m10.Kind.Should().Be(MetricKind.Counter);
         m10.Unit.Should().Be("count");
-        MetricStats m11 = agg.Metrics.Single(m => m.MetricId == 11);
+        MetricStats m11 = agg.SnapshotMetrics().Single(m => m.MetricId == 11);
         m11.Name.Should().Be("my.mod.heap_used");
         m11.Kind.Should().Be(MetricKind.Gauge);
         m11.Unit.Should().Be("bytes");
@@ -370,7 +370,7 @@ public sealed class SessionAggregatorTests {
         });
 
         agg.TotalMetricObservations.Should().Be(3);
-        MetricStats stats = agg.Metrics.Single();
+        MetricStats stats = agg.SnapshotMetrics().Single();
         MetricLabelStats mapLabel = stats.Labels["scene=map"];
         mapLabel.LatestValue.Should().Be(99);
         mapLabel.TotalSampleCount.Should().Be(4);
@@ -390,7 +390,7 @@ public sealed class SessionAggregatorTests {
             SampleCounts = [1],
         });
 
-        MetricStats stats = agg.Metrics.Single();
+        MetricStats stats = agg.SnapshotMetrics().Single();
         stats.MetricId.Should().Be(99);
         stats.Kind.Should().Be(MetricKind.Histogram);
         stats.Labels[""].LatestValue.Should().Be(123);
@@ -415,7 +415,7 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = elapsed,
         });
 
-        SectionStats stats = agg.Sections.Single(s => s.SectionId == 7);
+        SectionStats stats = agg.SnapshotSections().Single(s => s.SectionId == 7);
         PercentileSnapshot snap = stats.Distribution.SnapshotPercentiles();
         snap.P50Ticks.Should().BeInRange(95, 105);
         snap.P95Ticks.Should().BeInRange(185, 200);
@@ -448,7 +448,7 @@ public sealed class SessionAggregatorTests {
             Names = ["late.name"],
         });
 
-        SectionStats stats = agg.Sections.Single(s => s.SectionId == 42);
+        SectionStats stats = agg.SnapshotSections().Single(s => s.SectionId == 42);
         stats.Name.Should().Be("late.name");
         stats.SampleCount.Should().Be(1);
         stats.TotalElapsedTicks.Should().Be(200);

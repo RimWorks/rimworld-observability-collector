@@ -42,7 +42,7 @@ public sealed class CaptureManager {
             string captureId = $"cap-{Interlocked.Increment(ref _captureSequence)}-{now.Ticks}";
             CaptureSession capture = new(captureId, sessionId, trigger, now, maxBytes);
 
-            foreach (SectionStats section in _aggregator.Sections)
+            foreach (SectionStats section in _aggregator.SnapshotSections())
                 capture.RecordName(section.SectionId, section.Name);
 
             _captures.AddFirst(capture);

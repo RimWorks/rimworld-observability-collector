@@ -84,7 +84,11 @@ public sealed class BundleImportService {
             string? destDir = Path.GetDirectoryName(destPath);
             if (destDir is not null) Directory.CreateDirectory(destDir);
             using Stream src = e.Open();
-            using FileStream dst = File.Create(destPath);
+            // File.Create hands back a synchronous stream, so CopyToAsync would block a
+            // thread pool thread per entry. useAsync: true makes the copy really async.
+            await using FileStream dst = new(
+                destPath, FileMode.Create, FileAccess.Write, FileShare.None,
+                bufferSize: 4096, useAsync: true);
             await src.CopyToAsync(dst);
         }
         return true;

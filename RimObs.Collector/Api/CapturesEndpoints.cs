@@ -69,7 +69,7 @@ public static class CapturesEndpoints {
         object[] roots = [];
         if (includeTree) {
             IReadOnlyList<CallTreeNode> tree = CallTreeBuilder.Build(
-                capture.Edges,
+                capture.SnapshotEdges(),
                 capture.Names,
                 nsPerTick,
                 options.NestedSectionDepthCap,

@@ -27,24 +27,32 @@ public static class CallTreeBuilder {
             list.Add(edge);
         }
 
+        Level ctx = new(childrenByParent, sectionNames, nsPerTick, depthCap, topN);
         return BuildLevel(
             childrenByParent.TryGetValue(NoParent, out List<CallEdgeStats>? roots) ? roots : [],
-            childrenByParent,
-            sectionNames,
-            nsPerTick,
-            depthCap,
-            topN,
+            ctx,
             depth: 0,
             path: new HashSet<int>());
     }
 
-    private static List<CallTreeNode> BuildLevel(
-        List<CallEdgeStats> levelEdges,
+    // Everything that stays the same for the whole recursion, so BuildLevel only
+    // carries what actually changes per level.
+    private sealed class Level(
         Dictionary<int, List<CallEdgeStats>> childrenByParent,
         IReadOnlyDictionary<int, string> sectionNames,
         double nsPerTick,
         int depthCap,
-        int topN,
+        int topN) {
+        public Dictionary<int, List<CallEdgeStats>> ChildrenByParent { get; } = childrenByParent;
+        public IReadOnlyDictionary<int, string> SectionNames { get; } = sectionNames;
+        public double NsPerTick { get; } = nsPerTick;
+        public int DepthCap { get; } = depthCap;
+        public int TopN { get; } = topN;
+    }
+
+    private static List<CallTreeNode> BuildLevel(
+        List<CallEdgeStats> levelEdges,
+        Level ctx,
         int depth,
         HashSet<int> path) {
         List<CallTreeNode> result = [];
@@ -56,31 +64,30 @@ public static class CallTreeBuilder {
             .ThenBy(e => e.SectionId)
             .ToList();
 
-        int kept = ordered.Count <= topN ? ordered.Count : topN;
+        int kept = ordered.Count <= ctx.TopN ? ordered.Count : ctx.TopN;
         for (int i = 0; i < kept; i++) {
             CallEdgeStats edge = ordered[i];
             CallTreeNode node = new() {
                 SectionId = edge.SectionId,
-                Name = sectionNames.TryGetValue(edge.SectionId, out string? name) ? name : string.Empty,
+                Name = ctx.SectionNames.TryGetValue(edge.SectionId, out string? name) ? name : string.Empty,
                 CallCount = edge.CallCount,
-                TotalNs = (long)(edge.TotalElapsedTicks * nsPerTick),
+                TotalNs = (long)(edge.TotalElapsedTicks * ctx.NsPerTick),
             };
 
-            bool canDescend = depth + 1 < depthCap && !path.Contains(edge.SectionId);
-            if (canDescend && childrenByParent.TryGetValue(edge.SectionId, out List<CallEdgeStats>? grandchildren)) {
+            bool canDescend = depth + 1 < ctx.DepthCap && !path.Contains(edge.SectionId);
+            if (canDescend && ctx.ChildrenByParent.TryGetValue(edge.SectionId, out List<CallEdgeStats>? grandchildren)) {
                 path.Add(edge.SectionId);
-                node.Children.AddRange(BuildLevel(
-                    grandchildren, childrenByParent, sectionNames, nsPerTick, depthCap, topN, depth + 1, path));
+                node.Children.AddRange(BuildLevel(grandchildren, ctx, depth + 1, path));
                 path.Remove(edge.SectionId);
             }
 
             result.Add(node);
         }
 
-        if (ordered.Count > topN) {
+        if (ordered.Count > ctx.TopN) {
             long otherCalls = 0;
             long otherTicks = 0;
-            for (int i = topN; i < ordered.Count; i++) {
+            for (int i = ctx.TopN; i < ordered.Count; i++) {
                 otherCalls += ordered[i].CallCount;
                 otherTicks += ordered[i].TotalElapsedTicks;
             }
@@ -88,7 +95,7 @@ public static class CallTreeBuilder {
                 SectionId = OtherSectionId,
                 Name = "(other)",
                 CallCount = otherCalls,
-                TotalNs = (long)(otherTicks * nsPerTick),
+                TotalNs = (long)(otherTicks * ctx.NsPerTick),
                 IsOther = true,
             });
         }

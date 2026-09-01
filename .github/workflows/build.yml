@@ -68,7 +68,7 @@ jobs:
         shell: powershell
         run: |
           dotnet tool update --global dotnet-coverage
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"RimWorks_rimworld-observability-collector" /o:"rimworks" /d:sonar.exclusions="RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**" /d:sonar.coverage.exclusions="**/*.test.*,**/*.spec.*,RimObs.Dashboard/src/report/**" /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml" /d:sonar.javascript.lcov.reportPaths="RimObs.Dashboard/coverage/lcov.info"
+          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"RimWorks_rimworld-observability-collector" /o:"rimworks" /s:"${{ github.workspace }}\sonar-analysis.xml"
           dotnet build RimObs.sln
           dotnet-coverage collect "dotnet test RimObs.sln --no-build" -f xml -o coverage.xml
           ${{ runner.temp }}\scanner\dotnet-sonarscanner end

@@ -31,16 +31,16 @@ public sealed class RimObsMod : Mod {
 
     private static CollectorLaunchResult EnsureCollectorRunning(string ownerId, int port, int parentPid, bool noBrowser) {
         List<CollectorCandidate> candidates = CollectCandidates();
-        return CollectorLauncher.EnsureRunning(
-            candidates,
-            CollectorHost,
-            port,
-            ownerId,
-            CollectorLauncher.DefaultProbeTimeout,
-            s_LaunchTimeout,
-            parentPid: parentPid,
-            noBrowser: noBrowser
-        );
+        return CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+            Candidates = candidates,
+            Host = CollectorHost,
+            Port = port,
+            OwnerId = ownerId,
+            ProbeTimeout = CollectorLauncher.DefaultProbeTimeout,
+            LaunchTimeout = s_LaunchTimeout,
+            ParentPid = parentPid,
+            NoBrowser = noBrowser,
+        });
     }
 
     private static List<CollectorCandidate> CollectCandidates() {

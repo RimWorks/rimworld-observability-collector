@@ -27,34 +27,34 @@ public static class CollectorLauncher {
     public static readonly TimeSpan DefaultLaunchTimeout = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(150);
 
-    public static CollectorLaunchResult EnsureRunning(
-        IEnumerable<CollectorCandidate> candidates,
-        string host,
-        int port,
-        string ownerId,
-        TimeSpan probeTimeout,
-        TimeSpan launchTimeout,
-        Action<CollectorCandidate>? launchAction = null,
-        int parentPid = 0,
-        bool noBrowser = false) {
-        if (string.IsNullOrEmpty(host))
-            throw new ArgumentException("host must be provided", nameof(host));
-        if (port <= 0 || port > 65535)
-            throw new ArgumentOutOfRangeException(nameof(port));
-        if (probeTimeout <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(probeTimeout));
-        if (launchTimeout < TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(launchTimeout));
+    public static CollectorLaunchResult EnsureRunning(CollectorLaunchRequest request) {
+        if (request is null)
+            throw new ArgumentNullException(nameof(request));
 
-        PongMessage? pong = CollectorHandshake.TryPing(host, port, ownerId, probeTimeout);
+        string host = request.Host;
+        int port = request.Port;
+        TimeSpan probeTimeout = request.ProbeTimeout;
+        TimeSpan launchTimeout = request.LaunchTimeout;
+
+        if (string.IsNullOrEmpty(host))
+            throw new ArgumentException("host must be provided", nameof(request));
+        if (port <= 0 || port > 65535)
+            throw new ArgumentOutOfRangeException(nameof(request), "port must be 1-65535");
+        if (probeTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(request), "probeTimeout must be positive");
+        if (launchTimeout < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(request), "launchTimeout must not be negative");
+
+        PongMessage? pong = CollectorHandshake.TryPing(host, port, request.OwnerId, probeTimeout);
         if (pong != null)
             return new CollectorLaunchResult(true, pong, null, false);
 
-        CollectorCandidate? best = CollectorDiscovery.SelectHighest(candidates);
+        CollectorCandidate? best = CollectorDiscovery.SelectHighest(request.Candidates);
         if (best is null)
             return new CollectorLaunchResult(false, null, null, false);
 
-        Action<CollectorCandidate> launch = launchAction ?? (candidate => DefaultLaunch(candidate, port, parentPid, noBrowser));
+        Action<CollectorCandidate> launch = request.LaunchAction
+            ?? (candidate => DefaultLaunch(candidate, port, request.ParentPid, request.NoBrowser));
         try {
             launch(best);
         }
@@ -64,7 +64,7 @@ public static class CollectorLauncher {
 
         DateTime deadline = DateTime.UtcNow + launchTimeout;
         while (DateTime.UtcNow < deadline) {
-            pong = CollectorHandshake.TryPing(host, port, ownerId, probeTimeout);
+            pong = CollectorHandshake.TryPing(host, port, request.OwnerId, probeTimeout);
             if (pong != null)
                 return new CollectorLaunchResult(true, pong, best, true);
             Thread.Sleep((int)PollInterval.TotalMilliseconds);

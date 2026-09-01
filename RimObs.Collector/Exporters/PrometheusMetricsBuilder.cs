@@ -70,7 +70,7 @@ public sealed class PrometheusMetricsBuilder {
         double nsPerTick = NsPerTick(aggregator.Meta);
         double secPerTick = nsPerTick / 1_000_000_000.0;
 
-        List<SectionStats> sections = new(aggregator.Sections);
+        List<SectionStats> sections = new(aggregator.SnapshotSections());
         sections.Sort(static (a, b) => b.TotalElapsedTicks.CompareTo(a.TotalElapsedTicks));
 
         bool metaWritten = false;
@@ -137,7 +137,7 @@ public sealed class PrometheusMetricsBuilder {
 
     private int WriteCustomMetrics(PrometheusExposition ex, SessionAggregator aggregator) {
         int samples = 0;
-        foreach (MetricStats metric in aggregator.Metrics) {
+        foreach (MetricStats metric in aggregator.SnapshotMetrics()) {
             if (string.IsNullOrEmpty(metric.Name))
                 continue;
 

@@ -184,10 +184,7 @@ public static class SessionComparer {
             else
                 added.Add(owner);
         }
-        foreach (string owner in baseOwners) {
-            if (!headOwners.Contains(owner))
-                removed.Add(owner);
-        }
+        removed.AddRange(baseOwners.Where(owner => !headOwners.Contains(owner)));
 
         return new LoadOrderDiff(added, removed, common);
     }

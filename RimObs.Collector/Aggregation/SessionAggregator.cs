@@ -52,9 +52,10 @@ public sealed class SessionAggregator {
     public double LatestFps => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _latestFpsBits));
     public long LatestTpsFpsTick => Interlocked.Read(ref _latestTpsFpsTick);
 
-    public IReadOnlyCollection<SectionStats> Sections => _sections.Values.ToArray();
-    public IReadOnlyCollection<MetricStats> Metrics => _metrics.Values.ToArray();
-    public IReadOnlyCollection<CallEdgeStats> CallEdges => _callEdges.Values.ToArray();
+    // Each of these copies the whole dictionary, so they are methods, not properties.
+    public IReadOnlyCollection<SectionStats> SnapshotSections() => _sections.Values.ToArray();
+    public IReadOnlyCollection<MetricStats> SnapshotMetrics() => _metrics.Values.ToArray();
+    public IReadOnlyCollection<CallEdgeStats> SnapshotCallEdges() => _callEdges.Values.ToArray();
 
     public SectionStats? FindSection(int id) => _sections.TryGetValue(id, out SectionStats? stats) ? stats : null;
 

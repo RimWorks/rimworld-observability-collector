@@ -110,14 +110,15 @@ public sealed class CollectorLauncherTests {
         using PongResponder responder = new("5.5.5", "already-up");
         bool launched = false;
 
-        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(
-            [new CollectorCandidate("/never/run", new Version(1, 0, 0))],
-            "127.0.0.1",
-            responder.Port,
-            "owner",
-            TimeSpan.FromSeconds(1),
-            TimeSpan.FromSeconds(2),
-            _ => launched = true);
+        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+            Candidates = [new CollectorCandidate("/never/run", new Version(1, 0, 0))],
+            Host = "127.0.0.1",
+            Port = responder.Port,
+            OwnerId = "owner",
+            ProbeTimeout = TimeSpan.FromSeconds(1),
+            LaunchTimeout = TimeSpan.FromSeconds(2),
+            LaunchAction = _ => launched = true,
+        });
 
         result.IsRunning.Should().BeTrue();
         result.LaunchAttempted.Should().BeFalse();
@@ -129,13 +130,14 @@ public sealed class CollectorLauncherTests {
     public void EnsureRunning_returns_not_running_when_no_candidates_and_dead_port() {
         int deadPort = GetFreePort();
 
-        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(
-            new List<CollectorCandidate>(),
-            "127.0.0.1",
-            deadPort,
-            "owner",
-            TimeSpan.FromMilliseconds(200),
-            TimeSpan.FromMilliseconds(200));
+        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+            Candidates = new List<CollectorCandidate>(),
+            Host = "127.0.0.1",
+            Port = deadPort,
+            OwnerId = "owner",
+            ProbeTimeout = TimeSpan.FromMilliseconds(200),
+            LaunchTimeout = TimeSpan.FromMilliseconds(200),
+        });
 
         result.IsRunning.Should().BeFalse();
         result.LaunchAttempted.Should().BeFalse();
@@ -147,20 +149,21 @@ public sealed class CollectorLauncherTests {
         int port = GetFreePort();
         PongResponder? responder = null;
         try {
-            CollectorLaunchResult result = CollectorLauncher.EnsureRunning(
-                [
+            CollectorLaunchResult result = CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+                Candidates = [
                     new CollectorCandidate("/low", new Version(1, 0, 0)),
                     new CollectorCandidate("/high", new Version(3, 0, 0)),
                 ],
-                "127.0.0.1",
-                port,
-                "owner",
-                TimeSpan.FromMilliseconds(200),
-                TimeSpan.FromSeconds(3),
-                candidate => {
+                Host = "127.0.0.1",
+                Port = port,
+                OwnerId = "owner",
+                ProbeTimeout = TimeSpan.FromMilliseconds(200),
+                LaunchTimeout = TimeSpan.FromSeconds(3),
+                LaunchAction = candidate => {
                     candidate.ExecutablePath.Should().Be("/high");
                     responder = new PongResponder("7.0.0", "spawned", port);
-                });
+                },
+            });
 
             result.IsRunning.Should().BeTrue();
             result.LaunchAttempted.Should().BeTrue();
@@ -177,14 +180,15 @@ public sealed class CollectorLauncherTests {
         int deadPort = GetFreePort();
         bool launched = false;
 
-        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(
-            [new CollectorCandidate("/x", new Version(1, 0, 0))],
-            "127.0.0.1",
-            deadPort,
-            "owner",
-            TimeSpan.FromMilliseconds(150),
-            TimeSpan.FromMilliseconds(400),
-            _ => launched = true);
+        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+            Candidates = [new CollectorCandidate("/x", new Version(1, 0, 0))],
+            Host = "127.0.0.1",
+            Port = deadPort,
+            OwnerId = "owner",
+            ProbeTimeout = TimeSpan.FromMilliseconds(150),
+            LaunchTimeout = TimeSpan.FromMilliseconds(400),
+            LaunchAction = _ => launched = true,
+        });
 
         launched.Should().BeTrue();
         result.IsRunning.Should().BeFalse();
@@ -196,14 +200,15 @@ public sealed class CollectorLauncherTests {
         int deadPort = GetFreePort();
         InvalidOperationException thrown = new("launch failed");
 
-        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(
-            [new CollectorCandidate("/x", new Version(1, 0, 0))],
-            "127.0.0.1",
-            deadPort,
-            "owner",
-            TimeSpan.FromMilliseconds(150),
-            TimeSpan.FromMilliseconds(400),
-            _ => throw thrown);
+        CollectorLaunchResult result = CollectorLauncher.EnsureRunning(new CollectorLaunchRequest {
+            Candidates = [new CollectorCandidate("/x", new Version(1, 0, 0))],
+            Host = "127.0.0.1",
+            Port = deadPort,
+            OwnerId = "owner",
+            ProbeTimeout = TimeSpan.FromMilliseconds(150),
+            LaunchTimeout = TimeSpan.FromMilliseconds(400),
+            LaunchAction = _ => throw thrown,
+        });
 
         result.IsRunning.Should().BeFalse();
         result.LaunchAttempted.Should().BeTrue();

@@ -3,66 +3,42 @@ using System.Collections.Generic;
 namespace RimWorks.RimObs.Settings;
 
 public sealed class CollectorStatus {
-    public CollectorStatus(
-        bool collectorRunning,
-        bool launchAttempted,
-        string host,
-        int port,
-        int controlPort,
-        bool profilerEnabled,
-        int coreInstalled,
-        int coreTotal,
-        int declaredInstalled,
-        int declaredTotal,
-        int unresolvedCount,
-        int failedCount,
-        int ownerCount,
-        int conflictCount,
-        bool gcObserverRunning,
-        bool tpsFpsObserverRunning,
-        bool allocationSamplerRunning,
-        string sessionId,
-        string ownerId) {
-        CollectorRunning = collectorRunning;
-        LaunchAttempted = launchAttempted;
-        Host = string.IsNullOrEmpty(host) ? "127.0.0.1" : host;
-        Port = port;
-        ControlPort = controlPort;
-        ProfilerEnabled = profilerEnabled;
-        CoreInstalled = coreInstalled;
-        CoreTotal = coreTotal;
-        DeclaredInstalled = declaredInstalled;
-        DeclaredTotal = declaredTotal;
-        UnresolvedCount = unresolvedCount;
-        FailedCount = failedCount;
-        OwnerCount = ownerCount;
-        ConflictCount = conflictCount;
-        GcObserverRunning = gcObserverRunning;
-        TpsFpsObserverRunning = tpsFpsObserverRunning;
-        AllocationSamplerRunning = allocationSamplerRunning;
-        SessionId = sessionId ?? string.Empty;
-        OwnerId = ownerId ?? string.Empty;
+    private readonly string _host = "127.0.0.1";
+    private readonly string _sessionId = string.Empty;
+    private readonly string _ownerId = string.Empty;
+
+    public bool CollectorRunning { get; init; }
+    public bool LaunchAttempted { get; init; }
+
+    public string Host {
+        get => _host;
+        init => _host = string.IsNullOrEmpty(value) ? "127.0.0.1" : value;
     }
 
-    public bool CollectorRunning { get; }
-    public bool LaunchAttempted { get; }
-    public string Host { get; }
-    public int Port { get; }
-    public int ControlPort { get; }
-    public bool ProfilerEnabled { get; }
-    public int CoreInstalled { get; }
-    public int CoreTotal { get; }
-    public int DeclaredInstalled { get; }
-    public int DeclaredTotal { get; }
-    public int UnresolvedCount { get; }
-    public int FailedCount { get; }
-    public int OwnerCount { get; }
-    public int ConflictCount { get; }
-    public bool GcObserverRunning { get; }
-    public bool TpsFpsObserverRunning { get; }
-    public bool AllocationSamplerRunning { get; }
-    public string SessionId { get; }
-    public string OwnerId { get; }
+    public int Port { get; init; }
+    public int ControlPort { get; init; }
+    public bool ProfilerEnabled { get; init; }
+    public int CoreInstalled { get; init; }
+    public int CoreTotal { get; init; }
+    public int DeclaredInstalled { get; init; }
+    public int DeclaredTotal { get; init; }
+    public int UnresolvedCount { get; init; }
+    public int FailedCount { get; init; }
+    public int OwnerCount { get; init; }
+    public int ConflictCount { get; init; }
+    public bool GcObserverRunning { get; init; }
+    public bool TpsFpsObserverRunning { get; init; }
+    public bool AllocationSamplerRunning { get; init; }
+
+    public string SessionId {
+        get => _sessionId;
+        init => _sessionId = value ?? string.Empty;
+    }
+
+    public string OwnerId {
+        get => _ownerId;
+        init => _ownerId = value ?? string.Empty;
+    }
 
     public bool DashboardAvailable => CollectorRunning && Port > 0;
     public string DashboardUrl => Port > 0 ? $"http://{Host}:{Port}/" : string.Empty;

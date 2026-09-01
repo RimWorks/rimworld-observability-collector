@@ -102,10 +102,10 @@ describe('Hotspots route', () => {
         const themeCss = readFileSync(resolve(here, '../lib/theme.css'), 'utf-8');
         const hotspotsSrc = readFileSync(resolve(here, './Hotspots.svelte'), 'utf-8');
 
-        const rootBlock = themeCss.match(/:root\s*\{([\s\S]*?)\}/);
+        const rootBlock = /:root\s*\{([\s\S]*?)\}/.exec(themeCss);
         expect(rootBlock, ':root block in theme.css').not.toBeNull();
         const definedTokens = new Set<string>();
-        for (const m of rootBlock![1].matchAll(/(--[a-z0-9-]+)\s*:/gi)) {
+        for (const m of rootBlock![1].matchAll(/(--[a-z0-9]+(?:-[a-z0-9]+)*)\s*:/gi)) {
             definedTokens.add(m[1]);
         }
 

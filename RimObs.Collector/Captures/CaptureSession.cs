@@ -69,7 +69,8 @@ public sealed class CaptureSession {
         StoppedUtc = stoppedUtc;
     }
 
-    public IReadOnlyCollection<CallEdgeStats> Edges => _edges.Values.ToArray();
+    // Copies the whole edge map, so this is a method, not a property.
+    public IReadOnlyCollection<CallEdgeStats> SnapshotEdges() => _edges.Values.ToArray();
 
     public IReadOnlyDictionary<int, string> Names => _names;
 

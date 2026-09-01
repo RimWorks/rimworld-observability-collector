@@ -18,40 +18,46 @@ internal static class ControlSearchService {
 
         List<ControlMethodDescriptor> hits = new List<ControlMethodDescriptor>();
         foreach (Assembly assembly in assemblies) {
-            System.Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch (ReflectionTypeLoadException ex) { types = ex.Types!; }
-
-            for (int t = 0; t < types.Length; t++) {
-                System.Type? type = types[t];
-                if (type is null) continue;
-                if (type.FullName is null) continue;
-
-                MethodInfo[] methods = type.GetMethods(
-                    BindingFlags.Public | BindingFlags.NonPublic |
-                    BindingFlags.Instance | BindingFlags.Static |
-                    BindingFlags.DeclaredOnly);
-
-                for (int m = 0; m < methods.Length; m++) {
-                    MethodInfo method = methods[m];
-                    if (!Matches(needle, type.FullName, method.Name)) continue;
-                    if (hits.Count >= cap) goto done;
-
-                    hits.Add(BuildDescriptor(type, method, assembly));
-                }
-            }
+            if (!ScanAssembly(assembly, needle, cap, hits))
+                break;
         }
-    done:
+
         return new ControlSearchResponse { Results = hits.ToArray() };
     }
 
-    private static bool Matches(string needle, string typeFullName, string methodName) {
-        if (typeFullName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-        if (methodName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-        return false;
+    // Returns false once the cap is full so the caller stops walking assemblies.
+    private static bool ScanAssembly(
+        Assembly assembly, string needle, int cap, List<ControlMethodDescriptor> hits) {
+        System.Type[] types;
+        try { types = assembly.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { types = ex.Types!; }
+
+        for (int t = 0; t < types.Length; t++) {
+            System.Type? type = types[t];
+            if (type is null) continue;
+            if (type.FullName is null) continue;
+
+            MethodInfo[] methods = type.GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Instance | BindingFlags.Static |
+                BindingFlags.DeclaredOnly);
+
+            for (int m = 0; m < methods.Length; m++) {
+                MethodInfo method = methods[m];
+                if (!Matches(needle, type.FullName, method.Name)) continue;
+                if (hits.Count >= cap) return false;
+
+                hits.Add(BuildDescriptor(type, method, assembly));
+            }
+        }
+
+        return true;
     }
+
+    // net48 has no string.Contains(string, StringComparison), so IndexOf stays.
+    private static bool Matches(string needle, string typeFullName, string methodName) =>
+        typeFullName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0
+        || methodName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static ControlMethodDescriptor BuildDescriptor(System.Type type, MethodInfo method, Assembly assembly) {
         ParameterInfo[] ps = method.GetParameters();

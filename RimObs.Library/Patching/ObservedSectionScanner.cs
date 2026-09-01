@@ -58,66 +58,81 @@ internal static class ObservedSectionScanner {
             if (string.IsNullOrEmpty(packageId) || assemblies == null)
                 continue;
 
-            foreach (Assembly assembly in assemblies) {
-                if (assembly == null)
-                    continue;
-                if (assembly.GetName().Name == "RimObs")
-                    continue;
+            for (int i = 0; i < assemblies.Count; i++)
+                ScanAssembly(assemblies[i], packageId, result);
+        }
+        return result;
+    }
 
-                result.AssembliesScanned++;
-                Type[] types;
-                try {
-                    types = assembly.GetTypes();
+    private static void ScanAssembly(Assembly assembly, string packageId, ScanResult result) {
+        if (assembly == null)
+            return;
+        if (assembly.GetName().Name == "RimObs")
+            return;
+
+        result.AssembliesScanned++;
+        if (!TryLoadTypes(assembly, packageId, result, out Type[] types))
+            return;
+
+        for (int i = 0; i < types.Length; i++)
+            ScanType(types[i], packageId, result);
+    }
+
+    // A partly broken assembly still yields the types that did load, so salvage those and
+    // record the loader errors rather than dropping the whole assembly.
+    private static bool TryLoadTypes(Assembly assembly, string packageId, ScanResult result, out Type[] types) {
+        try {
+            types = assembly.GetTypes();
+            return true;
+        }
+        catch (ReflectionTypeLoadException ex) {
+            List<Type> salvaged = new();
+            if (ex.Types != null) {
+                foreach (Type? t in ex.Types) {
+                    if (t != null)
+                        salvaged.Add(t);
                 }
-                catch (ReflectionTypeLoadException ex) {
-                    List<Type> salvaged = new();
-                    if (ex.Types != null) {
-                        foreach (Type? t in ex.Types) {
-                            if (t != null)
-                                salvaged.Add(t);
-                        }
-                    }
-                    types = salvaged.ToArray();
-                    if (ex.LoaderExceptions != null) {
-                        foreach (Exception? le in ex.LoaderExceptions) {
-                            if (le != null)
-                                result.Warnings.Add(
-                                    $"[{packageId}] {assembly.GetName().Name}: loader exception: {le.Message}");
-                        }
-                    }
+            }
+            if (ex.LoaderExceptions != null) {
+                foreach (Exception? le in ex.LoaderExceptions) {
+                    if (le != null)
+                        result.Warnings.Add(
+                            $"[{packageId}] {assembly.GetName().Name}: loader exception: {le.Message}");
+                }
+            }
+            types = salvaged.ToArray();
+            return true;
+        }
+        catch (Exception ex) {
+            result.Failed++;
+            result.Warnings.Add(
+                $"[{packageId}] {assembly.GetName().Name}: GetTypes failed: {ex.Message}");
+            types = Array.Empty<Type>();
+            return false;
+        }
+    }
+
+    private static void ScanType(Type type, string packageId, ScanResult result) {
+        try {
+            foreach (MethodInfo method in type.GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Instance | BindingFlags.Static |
+                BindingFlags.DeclaredOnly)) {
+                try {
+                    ScanMethod(method, type, packageId, result);
                 }
                 catch (Exception ex) {
                     result.Failed++;
                     result.Warnings.Add(
-                        $"[{packageId}] {assembly.GetName().Name}: GetTypes failed: {ex.Message}");
-                    continue;
-                }
-
-                foreach (Type type in types) {
-                    try {
-                        foreach (MethodInfo method in type.GetMethods(
-                            BindingFlags.Public | BindingFlags.NonPublic |
-                            BindingFlags.Instance | BindingFlags.Static |
-                            BindingFlags.DeclaredOnly)) {
-                            try {
-                                ScanMethod(method, type, packageId, result);
-                            }
-                            catch (Exception ex) {
-                                result.Failed++;
-                                result.Warnings.Add(
-                                    $"[{packageId}] {type.FullName}.{method.Name}: scan failed: {ex.Message}");
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        result.Failed++;
-                        result.Warnings.Add(
-                            $"[{packageId}] {type.FullName}: type scan failed: {ex.Message}");
-                    }
+                        $"[{packageId}] {type.FullName}.{method.Name}: scan failed: {ex.Message}");
                 }
             }
         }
-        return result;
+        catch (Exception ex) {
+            result.Failed++;
+            result.Warnings.Add(
+                $"[{packageId}] {type.FullName}: type scan failed: {ex.Message}");
+        }
     }
 
     private static void ScanMethod(MethodInfo method, Type type, string packageId, ScanResult result) {

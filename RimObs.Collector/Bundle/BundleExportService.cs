@@ -110,7 +110,7 @@ public sealed class BundleExportService {
             SectionCount = _aggregator.SectionCount,
             MetricCount = _aggregator.MetricCount,
             AllocationRowCount = 0,
-            CallEdgeCount = _aggregator.CallEdges.Count,
+            CallEdgeCount = _aggregator.SnapshotCallEdges().Count,
             GcEventCount = (int)_aggregator.TotalGcEvents,
             PatchConflictCount = _aggregator.PatchConflicts.Count,
             MetricsSqliteBytes = 0,
@@ -207,7 +207,7 @@ public sealed class BundleExportService {
 
     private object BuildMetricDescriptors() {
         return new {
-            metrics = _aggregator.Metrics.Select(m => new {
+            metrics = _aggregator.SnapshotMetrics().Select(m => new {
                 id = m.MetricId,
                 name = m.Name,
                 kind = (byte)m.Kind,
@@ -219,7 +219,7 @@ public sealed class BundleExportService {
     private object BuildHotspots(SessionMeta meta) {
         double nsPerTick = TickConverter.NsPerTick(meta);
         return new {
-            hotspots = _aggregator.Sections
+            hotspots = _aggregator.SnapshotSections()
                 .OrderByDescending(s => s.TotalElapsedTicks)
                 .Select(s => new {
                     id = s.SectionId,
@@ -233,7 +233,7 @@ public sealed class BundleExportService {
 
     private object BuildCustomMetrics() {
         return new {
-            metrics = _aggregator.Metrics.Select(m => new {
+            metrics = _aggregator.SnapshotMetrics().Select(m => new {
                 id = m.MetricId,
                 name = m.Name,
                 labels = m.Labels.Values.Select(l => new {
@@ -291,8 +291,8 @@ public sealed class BundleExportService {
 
     private object BuildCallHierarchy(SessionMeta meta) {
         double nsPerTick = TickConverter.NsPerTick(meta);
-        Dictionary<int, string> names = _aggregator.Sections.ToDictionary(s => s.SectionId, s => s.Name);
-        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(_aggregator.CallEdges, names, nsPerTick, CallTreeBuilder.DefaultDepthCap, CallTreeBuilder.DefaultTopN);
+        Dictionary<int, string> names = _aggregator.SnapshotSections().ToDictionary(s => s.SectionId, s => s.Name);
+        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(_aggregator.SnapshotCallEdges(), names, nsPerTick, CallTreeBuilder.DefaultDepthCap, CallTreeBuilder.DefaultTopN);
         return new { roots = roots };
     }
 

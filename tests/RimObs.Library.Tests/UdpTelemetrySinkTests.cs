@@ -23,7 +23,7 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
 
     [Fact]
     public void Constructor_throws_on_null_owner_id() {
-        Action act = () => new UdpTelemetrySink(null!);
+        Action act = () => _ = new UdpTelemetrySink(null!);
         act.Should().Throw<ArgumentNullException>();
     }
 

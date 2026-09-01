@@ -16,24 +16,27 @@ public sealed class ServeOptions {
         int parentPid = 0;
         bool noBrowser = false;
 
-        for (int i = 0; i < args.Length; i++) {
+        int i = 0;
+        while (i < args.Length) {
+            int consumed = 1;
             switch (args[i]) {
                 case "--port":
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out int parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
                         port = parsedPort;
-                        i++;
+                        consumed = 2;
                     }
                     break;
                 case "--parent-pid":
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out int parsedPid) && parsedPid > 0) {
                         parentPid = parsedPid;
-                        i++;
+                        consumed = 2;
                     }
                     break;
                 case "--no-browser":
                     noBrowser = true;
                     break;
             }
+            i += consumed;
         }
 
         return new ServeOptions(port, parentPid, noBrowser);

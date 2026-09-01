@@ -54,15 +54,14 @@ public static class PanelsEndpoints {
             return Results.BadRequest(new { schema_version = SchemaVersion.Current, reason = "owner_id is required" });
         }
 
-        foreach (PanelDefinition panel in registration.Panels) {
-            foreach (PanelLayoutItem item in panel.Layout) {
-                if (!PanelWidgets.IsValid(item.Widget)) {
-                    return Results.BadRequest(new {
-                        schema_version = SchemaVersion.Current,
-                        reason = $"unknown widget '{item.Widget}'",
-                    });
-                }
-            }
+        PanelLayoutItem? unknown = registration.Panels
+            .SelectMany(p => p.Layout)
+            .FirstOrDefault(item => !PanelWidgets.IsValid(item.Widget));
+        if (unknown is not null) {
+            return Results.BadRequest(new {
+                schema_version = SchemaVersion.Current,
+                reason = $"unknown widget '{unknown.Widget}'",
+            });
         }
 
         registry.Replace(registration.OwnerId, registration.Panels.ToArray());

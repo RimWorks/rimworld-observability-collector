@@ -9,7 +9,7 @@ public static class BrowserCommand {
                 return ("cmd", ["/c", "start", string.Empty]);
             default:
                 if (!string.IsNullOrWhiteSpace(browserEnv))
-                    return (browserEnv!, []);
+                    return (browserEnv, []);
                 return ("xdg-open", []);
         }
     }

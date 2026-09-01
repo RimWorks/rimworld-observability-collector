@@ -32,7 +32,12 @@
         <RepositoryType>git</RepositoryType>
         <PackageProjectUrl>https://github.com/RimWorks/rimworld-observability-collector</PackageProjectUrl>
         <IncludeSymbols>false</IncludeSymbols>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!--
+          CS0436  Polyfills.cs defines MaybeNullWhenAttribute for net48. Dropping it would
+                  leave a dangling type reference that Mono's attribute reader chokes on.
+          CA2211  Profiler.Enabled is the hot-path branch and must stay a volatile field.
+        -->
+        <NoWarn>$(NoWarn);CS1591;CS0436;CA2211</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>

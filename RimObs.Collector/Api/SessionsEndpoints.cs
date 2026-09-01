@@ -78,7 +78,7 @@ public static class SessionsEndpoints {
 
         double nsPerTick = NsPerTick(meta);
         long totalSectionTicks = 0;
-        foreach (SectionStats section in aggregator.Sections)
+        foreach (SectionStats section in aggregator.SnapshotSections())
             totalSectionTicks += section.TotalElapsedTicks;
 
         return Results.Ok(new {
@@ -101,7 +101,7 @@ public static class SessionsEndpoints {
         double nsPerTick = NsPerTick(aggregator.Meta);
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
-            sections = aggregator.Sections.Select(s => {
+            sections = aggregator.SnapshotSections().Select(s => {
                 PercentileSnapshot p = s.Distribution.SnapshotPercentiles();
                 return new {
                     id = s.SectionId,
@@ -123,7 +123,7 @@ public static class SessionsEndpoints {
         int take = QueryLimit.Clamp(limit, DefaultHotspotLimit, MaxHotspotLimit);
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
-            hotspots = aggregator.Sections
+            hotspots = aggregator.SnapshotSections()
                 .OrderByDescending(s => s.TotalElapsedTicks)
                 .Take(take)
                 .Select(s => {
@@ -189,7 +189,7 @@ public static class SessionsEndpoints {
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
             total_observations = aggregator.TotalMetricObservations,
-            metrics = aggregator.Metrics.Select(m => new {
+            metrics = aggregator.SnapshotMetrics().Select(m => new {
                 id = m.MetricId,
                 name = m.Name,
                 kind = (byte)m.Kind,
@@ -222,8 +222,8 @@ public static class SessionsEndpoints {
         int depthCap = depth is int d && d > 0 ? Math.Min(d, MaxCallTreeDepth) : CallTreeBuilder.DefaultDepthCap;
         int topN = top is int t && t > 0 ? Math.Min(t, MaxCallTreeTopN) : CallTreeBuilder.DefaultTopN;
 
-        Dictionary<int, string> names = aggregator.Sections.ToDictionary(s => s.SectionId, s => s.Name);
-        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(aggregator.CallEdges, names, nsPerTick, depthCap, topN);
+        Dictionary<int, string> names = aggregator.SnapshotSections().ToDictionary(s => s.SectionId, s => s.Name);
+        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(aggregator.SnapshotCallEdges(), names, nsPerTick, depthCap, topN);
 
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
@@ -236,7 +236,7 @@ public static class SessionsEndpoints {
     private static IResult GetSections(SessionAggregator aggregator) {
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
-            sections = aggregator.Sections.Select(s => new {
+            sections = aggregator.SnapshotSections().Select(s => new {
                 id = s.SectionId,
                 name = s.Name,
                 subsystem = s.Subsystem,

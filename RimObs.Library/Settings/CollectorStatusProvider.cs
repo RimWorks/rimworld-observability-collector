@@ -31,25 +31,26 @@ public static class CollectorStatusProvider {
 
         string sessionId = SessionAnchor.IsInitialized ? SessionAnchor.SessionId : string.Empty;
 
-        return new CollectorStatus(
-            CollectorRuntimeInfo.CollectorRunning,
-            CollectorRuntimeInfo.LaunchAttempted,
-            CollectorRuntimeInfo.Host,
-            CollectorRuntimeInfo.Port,
-            controlPort,
-            Profiler.Enabled,
-            coreInstalled,
-            coreTotal,
-            declaredInstalled,
-            declaredTotal,
-            PatchInstaller.UnresolvedCount,
-            PatchInstaller.FailedCount,
-            OwnerRegistry.Count,
-            HarmonyConflictRecorder.Count,
-            GcObserverHost.IsRunning,
-            TpsFpsObserverHost.IsRunning,
-            AllocationSamplerHost.IsRunning,
-            sessionId,
-            CollectorRuntimeInfo.OwnerId);
+        return new CollectorStatus {
+            CollectorRunning = CollectorRuntimeInfo.CollectorRunning,
+            LaunchAttempted = CollectorRuntimeInfo.LaunchAttempted,
+            Host = CollectorRuntimeInfo.Host,
+            Port = CollectorRuntimeInfo.Port,
+            ControlPort = controlPort,
+            ProfilerEnabled = Profiler.Enabled,
+            CoreInstalled = coreInstalled,
+            CoreTotal = coreTotal,
+            DeclaredInstalled = declaredInstalled,
+            DeclaredTotal = declaredTotal,
+            UnresolvedCount = PatchInstaller.UnresolvedCount,
+            FailedCount = PatchInstaller.FailedCount,
+            OwnerCount = OwnerRegistry.Count,
+            ConflictCount = HarmonyConflictRecorder.Count,
+            GcObserverRunning = GcObserverHost.IsRunning,
+            TpsFpsObserverRunning = TpsFpsObserverHost.IsRunning,
+            AllocationSamplerRunning = AllocationSamplerHost.IsRunning,
+            SessionId = sessionId,
+            OwnerId = CollectorRuntimeInfo.OwnerId,
+        };
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using RimWorks.RimObs.Wire.Control;
 
 namespace RimWorks.RimObs.Wire;
@@ -230,50 +231,36 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    // One entry per wire type. A dispatch chain here was 17 sequential type compares and
+    // the most complex method in the codec.
+    private static readonly Dictionary<Type, Func<byte[], object>> s_Readers = new() {
+        [typeof(TelemetryBatch)] = data => ReadTelemetryBatch(data),
+        [typeof(PingMessage)] = data => ReadPingMessage(data),
+        [typeof(PongMessage)] = data => ReadPongMessage(data),
+        [typeof(SessionMeta)] = data => ReadSessionMeta(data),
+        [typeof(SectionRegistrationsBatch)] = data => ReadSectionRegistrationsBatch(data),
+        [typeof(SectionBatch)] = data => ReadSectionBatch(data),
+        [typeof(MetricRegistrationsBatch)] = data => ReadMetricRegistrationsBatch(data),
+        [typeof(MetricsBatch)] = data => ReadMetricsBatch(data),
+        [typeof(GcEventsBatch)] = data => ReadGcEventsBatch(data),
+        [typeof(AllocationsBatch)] = data => ReadAllocationsBatch(data),
+        [typeof(PatchConflictsBatch)] = data => ReadPatchConflictsBatch(data),
+        [typeof(TpsFpsBatch)] = data => ReadTpsFpsBatch(data),
+        [typeof(ControlSearchRequest)] = data => ReadControlSearchRequest(data),
+        [typeof(ControlSearchResponse)] = data => ReadControlSearchResponse(data),
+        [typeof(ControlPatchRequest)] = data => ReadControlPatchRequest(data),
+        [typeof(ControlPatchResponse)] = data => ReadControlPatchResponse(data),
+        [typeof(ControlPatchListResponse)] = data => ReadControlPatchListResponse(data),
+    };
+
     public static T Deserialize<T>(byte[] data) where T : class {
         if (data == null)
             throw new ArgumentNullException(nameof(data));
 
-        Type t = typeof(T);
-        object result;
-        if (t == typeof(TelemetryBatch))
-            result = ReadTelemetryBatch(data);
-        else if (t == typeof(PingMessage))
-            result = ReadPingMessage(data);
-        else if (t == typeof(PongMessage))
-            result = ReadPongMessage(data);
-        else if (t == typeof(SessionMeta))
-            result = ReadSessionMeta(data);
-        else if (t == typeof(SectionRegistrationsBatch))
-            result = ReadSectionRegistrationsBatch(data);
-        else if (t == typeof(SectionBatch))
-            result = ReadSectionBatch(data);
-        else if (t == typeof(MetricRegistrationsBatch))
-            result = ReadMetricRegistrationsBatch(data);
-        else if (t == typeof(MetricsBatch))
-            result = ReadMetricsBatch(data);
-        else if (t == typeof(GcEventsBatch))
-            result = ReadGcEventsBatch(data);
-        else if (t == typeof(AllocationsBatch))
-            result = ReadAllocationsBatch(data);
-        else if (t == typeof(PatchConflictsBatch))
-            result = ReadPatchConflictsBatch(data);
-        else if (t == typeof(TpsFpsBatch))
-            result = ReadTpsFpsBatch(data);
-        else if (t == typeof(ControlSearchRequest))
-            result = ReadControlSearchRequest(data);
-        else if (t == typeof(ControlSearchResponse))
-            result = ReadControlSearchResponse(data);
-        else if (t == typeof(ControlPatchRequest))
-            result = ReadControlPatchRequest(data);
-        else if (t == typeof(ControlPatchResponse))
-            result = ReadControlPatchResponse(data);
-        else if (t == typeof(ControlPatchListResponse))
-            result = ReadControlPatchListResponse(data);
-        else
-            throw new NotSupportedException($"WireCodec cannot deserialize {t}.");
+        if (!s_Readers.TryGetValue(typeof(T), out Func<byte[], object> read))
+            throw new NotSupportedException($"WireCodec cannot deserialize {typeof(T)}.");
 
-        return (T)result;
+        return (T)read(data);
     }
 
     private static TelemetryBatch ReadTelemetryBatch(byte[] data) {

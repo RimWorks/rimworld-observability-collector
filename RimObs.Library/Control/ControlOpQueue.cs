@@ -11,7 +11,7 @@ internal sealed class ControlOpQueue {
 
     public void Drain() {
         while (_ops.TryDequeue(out ControlOp? op))
-            op!.Execute();
+            op.Execute();
     }
 
     public int PendingCount => _ops.Count;

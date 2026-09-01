@@ -15,7 +15,7 @@ $Sln = 'RimObs.sln'
 $DashboardDir = 'RimObs.Dashboard'
 $Rids = @('win-x64','linux-x64','osx-arm64','osx-x64')
 
-function Invoke-Help {
+function Show-Help {
     Write-Host "Targets: help, all, clean, restore, build, build-library, build-collector, build-dashboard, test, format, lint, watch, publish-collector"
 }
 
@@ -68,7 +68,7 @@ function Invoke-Watch {
 function Invoke-Publish {
     Invoke-BuildDashboard
     foreach ($rid in $Rids) {
-        Write-Host "==> publish $rid"
+        Write-Information "==> publish $rid" -InformationAction Continue
         dotnet publish RimObs.Collector/RimObs.Collector.csproj `
             -c Release -r $rid --self-contained true `
             -p:PublishSingleFile=true `
@@ -78,7 +78,7 @@ function Invoke-Publish {
 }
 
 switch ($Target) {
-    'help'              { Invoke-Help }
+    'help'              { Show-Help }
     'all'               { Invoke-Restore; Invoke-BuildDashboard; Invoke-Build }
     'clean'             { Invoke-Clean }
     'restore'           { Invoke-Restore }

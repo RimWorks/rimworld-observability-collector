@@ -36,18 +36,12 @@ describe('t', () => {
 });
 
 describe('getLang', () => {
-    it('defaults to en with no query param', () => {
-        setSearch('');
-        expect(getLang()).toBe('en');
-    });
-
-    it('honours a valid ?lang= override', () => {
-        setSearch('?lang=en');
-        expect(getLang()).toBe('en');
-    });
-
-    it('ignores an unknown ?lang= and falls back to en', () => {
-        setSearch('?lang=zz');
+    it.each([
+        ['no query param', ''],
+        ['a valid ?lang= override', '?lang=en'],
+        ['an unknown ?lang=', '?lang=zz'],
+    ])('resolves to en with %s', (_label, search) => {
+        setSearch(search);
         expect(getLang()).toBe('en');
     });
 

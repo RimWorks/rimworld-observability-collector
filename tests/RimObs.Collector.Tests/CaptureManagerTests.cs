@@ -87,7 +87,7 @@ public sealed class CaptureManagerTests {
         capture.EdgeCount.Should().Be(2);
         capture.Names.Should().ContainKey(1).WhoseValue.Should().Be("root");
 
-        CallEdgeStats rootEdge = capture.Edges.Single(e => e.SectionId == 1);
+        CallEdgeStats rootEdge = capture.SnapshotEdges().Single(e => e.SectionId == 1);
         rootEdge.CallCount.Should().Be(1);
         rootEdge.TotalElapsedTicks.Should().Be(1000);
     }
@@ -102,7 +102,7 @@ public sealed class CaptureManagerTests {
         manager.Stop();
         aggregator.OnSectionBatch(Batch([3], [-1], [500]));
 
-        capture.Edges.Select(e => e.SectionId).Should().BeEquivalentTo([2]);
+        capture.SnapshotEdges().Select(e => e.SectionId).Should().BeEquivalentTo([2]);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class CaptureManagerTests {
         CaptureSession? active = manager.Active;
         active.Should().NotBeNull();
         active!.Trigger.Should().Be(CaptureTrigger.SlowTick);
-        active.Edges.Should().ContainSingle(e => e.SectionId == 1);
+        active.SnapshotEdges().Should().ContainSingle(e => e.SectionId == 1);
     }
 
     [Fact]

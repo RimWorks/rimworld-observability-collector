@@ -8,26 +8,27 @@ namespace RimWorks.RimObs.Tests;
 
 public sealed class CollectorStatusTests {
     private static CollectorStatus Running(int port = 17654) =>
-        new(
-            collectorRunning: true,
-            launchAttempted: true,
-            host: "127.0.0.1",
-            port: port,
-            controlPort: 55555,
-            profilerEnabled: true,
-            coreInstalled: 12,
-            coreTotal: 13,
-            declaredInstalled: 4,
-            declaredTotal: 5,
-            unresolvedCount: 1,
-            failedCount: 0,
-            ownerCount: 7,
-            conflictCount: 0,
-            gcObserverRunning: true,
-            tpsFpsObserverRunning: true,
-            allocationSamplerRunning: false,
-            sessionId: "abc123",
-            ownerId: "Author.Mod");
+        new() {
+            CollectorRunning = true,
+            LaunchAttempted = true,
+            Host = "127.0.0.1",
+            Port = port,
+            ControlPort = 55555,
+            ProfilerEnabled = true,
+            CoreInstalled = 12,
+            CoreTotal = 13,
+            DeclaredInstalled = 4,
+            DeclaredTotal = 5,
+            UnresolvedCount = 1,
+            FailedCount = 0,
+            OwnerCount = 7,
+            ConflictCount = 0,
+            GcObserverRunning = true,
+            TpsFpsObserverRunning = true,
+            AllocationSamplerRunning = false,
+            SessionId = "abc123",
+            OwnerId = "Author.Mod",
+        };
 
     [Fact]
     public void DashboardIsAvailableWhenRunningWithPort() {
@@ -39,26 +40,27 @@ public sealed class CollectorStatusTests {
 
     [Fact]
     public void DashboardUnavailableWhenNotRunning() {
-        CollectorStatus status = new(
-            collectorRunning: false,
-            launchAttempted: true,
-            host: "127.0.0.1",
-            port: 18080,
-            controlPort: 0,
-            profilerEnabled: false,
-            coreInstalled: 0,
-            coreTotal: 0,
-            declaredInstalled: 0,
-            declaredTotal: 0,
-            unresolvedCount: 0,
-            failedCount: 0,
-            ownerCount: 0,
-            conflictCount: 0,
-            gcObserverRunning: false,
-            tpsFpsObserverRunning: false,
-            allocationSamplerRunning: false,
-            sessionId: "",
-            ownerId: "");
+        CollectorStatus status = new() {
+            CollectorRunning = false,
+            LaunchAttempted = true,
+            Host = "127.0.0.1",
+            Port = 18080,
+            ControlPort = 0,
+            ProfilerEnabled = false,
+            CoreInstalled = 0,
+            CoreTotal = 0,
+            DeclaredInstalled = 0,
+            DeclaredTotal = 0,
+            UnresolvedCount = 0,
+            FailedCount = 0,
+            OwnerCount = 0,
+            ConflictCount = 0,
+            GcObserverRunning = false,
+            TpsFpsObserverRunning = false,
+            AllocationSamplerRunning = false,
+            SessionId = "",
+            OwnerId = "",
+        };
 
         status.DashboardAvailable.Should().BeFalse();
     }
@@ -82,26 +84,27 @@ public sealed class CollectorStatusTests {
 
     [Fact]
     public void BuildLinesFlagsNotRunningCollectorAsUnhealthy() {
-        CollectorStatus status = new(
-            collectorRunning: false,
-            launchAttempted: false,
-            host: "127.0.0.1",
-            port: 0,
-            controlPort: 0,
-            profilerEnabled: false,
-            coreInstalled: 0,
-            coreTotal: 0,
-            declaredInstalled: 0,
-            declaredTotal: 0,
-            unresolvedCount: 0,
-            failedCount: 0,
-            ownerCount: 0,
-            conflictCount: 0,
-            gcObserverRunning: false,
-            tpsFpsObserverRunning: false,
-            allocationSamplerRunning: false,
-            sessionId: "",
-            ownerId: "");
+        CollectorStatus status = new() {
+            CollectorRunning = false,
+            LaunchAttempted = false,
+            Host = "127.0.0.1",
+            Port = 0,
+            ControlPort = 0,
+            ProfilerEnabled = false,
+            CoreInstalled = 0,
+            CoreTotal = 0,
+            DeclaredInstalled = 0,
+            DeclaredTotal = 0,
+            UnresolvedCount = 0,
+            FailedCount = 0,
+            OwnerCount = 0,
+            ConflictCount = 0,
+            GcObserverRunning = false,
+            TpsFpsObserverRunning = false,
+            AllocationSamplerRunning = false,
+            SessionId = "",
+            OwnerId = "",
+        };
 
         StatusLine collector = status.BuildLines().Single(l => l.Label == "Collector");
         collector.Healthy.Should().BeFalse();

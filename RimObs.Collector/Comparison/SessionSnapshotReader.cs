@@ -40,7 +40,7 @@ public sealed class SessionSnapshotReader {
         double nsPerTick = NsPerTick(meta.StopwatchFrequency);
 
         List<SectionSnapshot> sections = [];
-        foreach (SectionStats section in _aggregator.Sections) {
+        foreach (SectionStats section in _aggregator.SnapshotSections()) {
             long samples = Interlocked.Read(ref section.SampleCount);
             long total = Interlocked.Read(ref section.TotalElapsedTicks);
             long min = Interlocked.Read(ref section.MinElapsedTicks);
@@ -56,7 +56,7 @@ public sealed class SessionSnapshotReader {
         }
 
         List<MetricSnapshot> metrics = [];
-        foreach (MetricStats metric in _aggregator.Metrics) {
+        foreach (MetricStats metric in _aggregator.SnapshotMetrics()) {
             long value = 0;
             long samples = 0;
             foreach (MetricLabelStats label in metric.Labels.Values) {

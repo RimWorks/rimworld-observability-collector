@@ -34,9 +34,9 @@ public sealed class PersistenceFlusher : BackgroundService {
         if (string.IsNullOrWhiteSpace(sessionId))
             return;
 
-        IReadOnlyCollection<SectionStats> sections = _aggregator.Sections;
-        IReadOnlyCollection<MetricStats> metrics = _aggregator.Metrics;
-        IReadOnlyCollection<CallEdgeStats> callEdges = _aggregator.CallEdges;
+        IReadOnlyCollection<SectionStats> sections = _aggregator.SnapshotSections();
+        IReadOnlyCollection<MetricStats> metrics = _aggregator.SnapshotMetrics();
+        IReadOnlyCollection<CallEdgeStats> callEdges = _aggregator.SnapshotCallEdges();
         GcEventRecord[] gc = _aggregator.SnapshotGcEvents(GcSnapshotLimit);
 
         if (sections.Count > 0)

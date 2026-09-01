@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Passed to dotnet-sonarscanner with /s: from .github/workflows/build.yml.
+
+  Every entry below is a rule that fires on code we cannot or should not change.
+  If you add one, say why. "It was noisy" is not a reason.
+-->
+<SonarQubeAnalysisProperties xmlns="http://www.sonarsource.com/msbuild/integration/2015/1">
+
+  <Property Name="sonar.exclusions">RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**</Property>
+  <Property Name="sonar.coverage.exclusions">**/*.test.*,**/*.spec.*,RimObs.Dashboard/src/report/**</Property>
+  <Property Name="sonar.cs.vscoveragexml.reportsPaths">coverage.xml</Property>
+  <Property Name="sonar.javascript.lcov.reportPaths">RimObs.Dashboard/coverage/lcov.info</Property>
+
+  <Property Name="sonar.issue.ignore.multicriteria">sql,http,fields,vfields,deadcomment,linq,reflect,sleep,netfx</Property>
+
+  <!-- SQLite has no parameter slot for a table name. DropAllTables quotes the identifier
+       with QuoteIdentifier, which doubles embedded quotes the way SQLite itself does. -->
+  <Property Name="sonar.issue.ignore.multicriteria.sql.ruleKey">csharpsquid:S2077</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.sql.resourceKey">**/Storage/SessionStore.cs</Property>
+
+  <!-- The collector binds loopback only. There is no certificate and no remote peer. -->
+  <Property Name="sonar.issue.ignore.multicriteria.http.ruleKey">csharpsquid:S5332</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.http.resourceKey">RimObs.Library/**</Property>
+
+  <!-- Lock-free accumulators. Interlocked.Read/Add need a ref to a field, and a property
+       cannot be passed by ref. -->
+  <Property Name="sonar.issue.ignore.multicriteria.fields.ruleKey">csharpsquid:S1104</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.fields.resourceKey">RimObs.Collector/Aggregation/**</Property>
+
+  <!-- Profiler.Enabled is the hot-path branch (PRD 11.6). RimObsSettings fields are passed
+       to Scribe_Values.Look by ref, which RimWorld requires. -->
+  <Property Name="sonar.issue.ignore.multicriteria.vfields.ruleKey">csharpsquid:S1104</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.vfields.resourceKey">RimObs.Library/**</Property>
+
+  <!-- Explanatory prose that the heuristic reads as commented-out code. -->
+  <Property Name="sonar.issue.ignore.multicriteria.deadcomment.ruleKey">csharpsquid:S125</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.deadcomment.resourceKey">**/*.cs</Property>
+
+  <!-- The library keeps explicit loops instead of LINQ. See .claude/rules/hot-path.md. -->
+  <Property Name="sonar.issue.ignore.multicriteria.linq.ruleKey">csharpsquid:S3267</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.linq.resourceKey">RimObs.Library/**</Property>
+
+  <!-- Reflecting over private members is what this library does. -->
+  <Property Name="sonar.issue.ignore.multicriteria.reflect.ruleKey">csharpsquid:S3011</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.reflect.resourceKey">RimObs.Library/**</Property>
+
+  <!-- These tests assert behaviour over a real elapsed window, so the sleep is the thing
+       under test. Where a condition exists to wait on, the tests already use SpinUntil. -->
+  <Property Name="sonar.issue.ignore.multicriteria.sleep.ruleKey">csharpsquid:S2925</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.sleep.resourceKey">tests/**</Property>
+
+  <!-- string.EndsWith(char) does not exist on net48, which the library must target. -->
+  <Property Name="sonar.issue.ignore.multicriteria.netfx.ruleKey">csharpsquid:S6610</Property>
+  <Property Name="sonar.issue.ignore.multicriteria.netfx.resourceKey">RimObs.Library/**</Property>
+
+</SonarQubeAnalysisProperties>
