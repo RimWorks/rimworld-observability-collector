@@ -5,10 +5,10 @@ using HarmonyLib;
 namespace RimWorks.RimObs.Patching;
 
 internal static class HarmonyConflictRecorder {
-    private static readonly List<HarmonyConflict> s_Conflicts = new();
+    private static readonly List<PatchConflict> s_Conflicts = new();
     private static readonly object s_Lock = new();
 
-    public static IReadOnlyList<HarmonyConflict> Conflicts {
+    public static IReadOnlyList<PatchConflict> Conflicts {
         get {
             lock (s_Lock) {
                 return s_Conflicts.ToArray();
@@ -42,7 +42,7 @@ internal static class HarmonyConflictRecorder {
                 PatchMethods = new string[n],
             };
             for (int i = 0; i < n; i++) {
-                HarmonyConflict conflict = s_Conflicts[i];
+                PatchConflict conflict = s_Conflicts[i];
                 batch.SectionNames[i] = conflict.SectionName;
                 batch.TargetMethods[i] = conflict.TargetMethod;
                 batch.OtherOwners[i] = conflict.OtherOwner;
@@ -64,15 +64,15 @@ internal static class HarmonyConflictRecorder {
                 if (patches == null)
                     continue;
 
-                RecordList(entry, patches.Prefixes, HarmonyPatchType.Prefix, harmony.Id);
-                RecordList(entry, patches.Postfixes, HarmonyPatchType.Postfix, harmony.Id);
-                RecordList(entry, patches.Transpilers, HarmonyPatchType.Transpiler, harmony.Id);
-                RecordList(entry, patches.Finalizers, HarmonyPatchType.Finalizer, harmony.Id);
+                RecordList(entry, patches.Prefixes, PatchKind.Prefix, harmony.Id);
+                RecordList(entry, patches.Postfixes, PatchKind.Postfix, harmony.Id);
+                RecordList(entry, patches.Transpilers, PatchKind.Transpiler, harmony.Id);
+                RecordList(entry, patches.Finalizers, PatchKind.Finalizer, harmony.Id);
             }
         }
     }
 
-    private static void RecordList(CatalogEntry entry, IReadOnlyCollection<Patch> patches, HarmonyPatchType kind, string ownId) {
+    private static void RecordList(CatalogEntry entry, IReadOnlyCollection<Patch> patches, PatchKind kind, string ownId) {
         if (patches == null)
             return;
 
@@ -83,7 +83,7 @@ internal static class HarmonyConflictRecorder {
             string target = entry.Resolved!.DeclaringType?.FullName + "." + entry.Resolved.Name;
             string patchMethodName = patch.PatchMethod.DeclaringType?.FullName + "." + patch.PatchMethod.Name;
             s_Conflicts.Add(
-                new HarmonyConflict(
+                new PatchConflict(
                     sectionName: entry.Name,
                     targetMethod: target,
                     otherOwner: patch.owner,

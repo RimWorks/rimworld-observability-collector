@@ -1,13 +1,18 @@
-using HarmonyLib;
-
 namespace RimWorks.RimObs.Patching;
 
-internal sealed class HarmonyConflict {
-    public HarmonyConflict(
+public enum PatchKind {
+    Prefix,
+    Postfix,
+    Transpiler,
+    Finalizer,
+}
+
+internal sealed class PatchConflict {
+    public PatchConflict(
         string sectionName,
         string targetMethod,
         string otherOwner,
-        HarmonyPatchType patchType,
+        PatchKind patchType,
         int priority,
         string patchMethod
     ) {
@@ -22,7 +27,7 @@ internal sealed class HarmonyConflict {
     public string SectionName { get; }
     public string TargetMethod { get; }
     public string OtherOwner { get; }
-    public HarmonyPatchType PatchType { get; }
+    public PatchKind PatchType { get; }
     public int Priority { get; }
     public string PatchMethod { get; }
 }
