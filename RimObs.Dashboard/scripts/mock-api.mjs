@@ -37,10 +37,10 @@ const RECEIVE = {
 };
 
 const SECTIONS = [
-    ['RimWorld.MapDrawer.MapMeshDrawerUpdate', 11_842_000, 214_903],
+    ['Verse.MapDrawer.MapMeshDrawerUpdate_First', 11_842_000, 214_903],
     ['Verse.TickManager.DoSingleTick', 4_218_400, 412_088],
-    ['Verse.AI.PathFinder.FindPath', 2_104_900, 38_411],
-    ['RimWorld.MapTemperature.MapTemperatureTick', 1_402_100, 412_088],
+    ['Verse.PathFinder.FindPathNow', 2_104_900, 38_411],
+    ['Verse.MapTemperature.MapTemperatureTick', 1_402_100, 412_088],
     ['vanillaexpanded.vfecore.HediffCompTick', 986_400, 209_331],
     ['Verse.Map.MapUpdate', 902_700, 214_903],
     ['RimWorld.WeatherManager.WeatherManagerUpdate', 604_800, 214_903],
@@ -74,7 +74,7 @@ const CALL_TREE = [
         children: [
             {
                 id: 2,
-                name: 'RimWorld.MapDrawer.MapMeshDrawerUpdate',
+                name: 'Verse.MapDrawer.MapMeshDrawerUpdate_First',
                 call_count: 214_903,
                 total_ns: 12_218_400_000,
                 is_other: false,
@@ -121,7 +121,7 @@ const CALL_TREE = [
                         children: [
                             {
                                 id: 11,
-                                name: 'Verse.AI.PathFinder.FindPath',
+                                name: 'Verse.PathFinder.FindPathNow',
                                 call_count: 38_411,
                                 total_ns: 2_104_900_000,
                                 is_other: false,
@@ -292,9 +292,10 @@ const INSTRUMENTATION_PATCHES = {
     persisted: [
         {
             id: 1,
-            typeFullName: 'Verse.AI.PathFinder',
-            methodName: 'FindPath',
-            paramTypesJoined: 'IntVec3, LocalTargetInfo, TraverseParms',
+            typeFullName: 'Verse.PathFinder',
+            methodName: 'FindPathNow',
+            paramTypesJoined:
+                'IntVec3, LocalTargetInfo, TraverseParms, PathFinderCostTuning?, PathEndMode, IPathGridCustomizer',
             createdUtc: '2026-08-31T14:08:44Z',
             lastStatus: 'active',
             lastError: null,
@@ -310,23 +311,38 @@ const INSTRUMENTATION_PATCHES = {
         },
     ],
     live: [
-        { patchId: 1, signature: 'Verse.AI.PathFinder.FindPath', sectionId: 3, status: 'active' },
+        { patchId: 1, signature: 'Verse.PathFinder.FindPathNow', sectionId: 3, status: 'active' },
     ],
 };
 
 const SEARCH_RESULTS = [
     {
-        typeFullName: 'Verse.AI.PathFinder',
-        methodName: 'FindPath',
-        signature: 'PawnPath FindPath(IntVec3, LocalTargetInfo, TraverseParms)',
-        paramTypeFullNames: ['Verse.IntVec3', 'Verse.LocalTargetInfo', 'Verse.AI.TraverseParms'],
+        typeFullName: 'Verse.PathFinder',
+        methodName: 'FindPathNow',
+        signature:
+            'PawnPath FindPathNow(IntVec3 start, LocalTargetInfo target, Pawn pawn, PathFinderCostTuning? tuning, PathEndMode peMode)',
+        paramTypeFullNames: [
+            'Verse.IntVec3',
+            'Verse.LocalTargetInfo',
+            'Verse.Pawn',
+            'Verse.PathFinderCostTuning',
+            'Verse.AI.PathEndMode',
+        ],
         assemblyName: 'Assembly-CSharp',
     },
     {
-        typeFullName: 'Verse.AI.PathFinder',
+        typeFullName: 'Verse.PathFinder',
         methodName: 'FindPathNow',
-        signature: 'PawnPath FindPathNow(IntVec3, LocalTargetInfo)',
-        paramTypeFullNames: ['Verse.IntVec3', 'Verse.LocalTargetInfo'],
+        signature:
+            'PawnPath FindPathNow(IntVec3 start, LocalTargetInfo target, TraverseParms traverseParms, PathFinderCostTuning? tuning, PathEndMode peMode, IPathGridCustomizer customizer)',
+        paramTypeFullNames: [
+            'Verse.IntVec3',
+            'Verse.LocalTargetInfo',
+            'Verse.TraverseParms',
+            'Verse.PathFinderCostTuning',
+            'Verse.AI.PathEndMode',
+            'Verse.PathRequest.IPathGridCustomizer',
+        ],
         assemblyName: 'Assembly-CSharp',
     },
 ];
@@ -390,7 +406,7 @@ const COMPARISON = {
     hotspots: [
         {
             id: 1,
-            name: 'RimWorld.MapDrawer.MapMeshDrawerUpdate',
+            name: 'Verse.MapDrawer.MapMeshDrawerUpdate_First',
             owner: 'core',
             status: 'regressed',
             base_total_ns: 9_882_400_000,
@@ -415,7 +431,7 @@ const COMPARISON = {
         },
         {
             id: 3,
-            name: 'Verse.AI.PathFinder.FindPath',
+            name: 'Verse.PathFinder.FindPathNow',
             owner: 'core',
             status: 'improved',
             base_total_ns: 3_104_800_000,
