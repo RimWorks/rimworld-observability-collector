@@ -2,6 +2,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <!-- NU1701: compiles net48 library sources under net10, so RimLogging and its
+             transitive Krafs.Rimworld.Ref restore as net48. -->
+        <NoWarn>$(NoWarn);NU1701</NoWarn>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -34,6 +37,7 @@
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="2.5.302"/>
         <PackageReference Include="Lib.Harmony" Version="2.4.2"/>
+        <PackageReference Include="RimWorks.RimLogging" Version="2.4.*"/>
         <!-- TODO(concord-pin): pinned with Concord.Ref; the two must stay in lockstep. -->
         <PackageReference Include="Concord.Runtime" Version="0.14.2"/>
     </ItemGroup>

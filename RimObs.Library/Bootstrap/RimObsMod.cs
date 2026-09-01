@@ -141,11 +141,6 @@ public sealed class RimObsMod : Mod {
                 return;
             }
 
-            Log.Info(
-                LogChannels.Patching,
-                "patching via {Backend} at priority {Priority}",
-                new object?[] { PatchBackends.Active.Name, PatchBackends.ActivePriority }
-            );
             PatchInstaller.InstallAll();
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();

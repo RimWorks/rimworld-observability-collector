@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
+using RimWorks.RimObs.Logging;
+using Log = RimWorks.RimLogging.Log;
+
 namespace RimWorks.RimObs.Patching;
 
 /// <summary>Picks one backend and holds it. Highest priority wins, so Concord beats Harmony.</summary>
@@ -39,9 +42,17 @@ public static class PatchBackends {
             }
         }
 
-        // no Log call: stays Verse-free so this compiles into the net10 test project.
         Active = best;
         ActivePriority = best == null ? 0 : bestPriority;
+
+        // the caller owns the no-backend case: it also raises the player-facing dialog.
+        if (best != null) {
+            Log.Info(
+                LogChannels.Patching,
+                "patching via {Backend} at priority {Priority}, {Candidates} candidate(s) seen",
+                new object?[] { best.Name, bestPriority, s_Registered.Count }
+            );
+        }
     }
 
     // CallAll runs after our install is queued, so the backends have not registered themselves
@@ -73,8 +84,14 @@ public static class PatchBackends {
                     if (Activator.CreateInstance(type) is IPatchBackend backend)
                         Register(backend, PriorityOf(type));
                 }
-                catch (Exception) {
+                catch (Exception ex) {
                     // a type we cannot inspect or construct is not a backend. try the next one.
+                    // trace, not warn: a half-loaded assembly can hit this for hundreds of types.
+                    Log.Trace(
+                        LogChannels.Patching,
+                        "backend scan skipped {Type}: {Reason}",
+                        new object?[] { types[t].FullName, ex.Message }
+                    );
                 }
             }
         }
