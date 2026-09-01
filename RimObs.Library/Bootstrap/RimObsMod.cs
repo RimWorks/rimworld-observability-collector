@@ -110,6 +110,24 @@ public sealed class RimObsMod : Mod {
                 return;
             }
 
+            InstrumentationInstall.Schedule(LongEventHandler.ExecuteWhenFinished, () => InstallInstrumentation(declared, port));
+        }
+        catch (Exception ex) {
+            Log.Error($"[RimObs] Bootstrap failed: {ex}");
+        }
+    }
+
+    public override string SettingsCategory() => "RimWorld Observability";
+
+    public override void DoSettingsWindowContents(UnityEngine.Rect inRect) {
+        CollectorStatus status = CollectorStatusProvider.CaptureCurrent();
+        SettingsWindow.Draw(inRect, status, _settings);
+    }
+
+    // Runs on the main thread once the loading long event finishes, not in the constructor.
+    // See InstrumentationInstall for why.
+    private static void InstallInstrumentation(ProfilingXmlLoader.LoadResult declared, int port) {
+        try {
             PatchInstaller.InstallAll();
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();
@@ -125,15 +143,8 @@ public sealed class RimObsMod : Mod {
             LogBootstrapSummary(declared, attrs);
         }
         catch (Exception ex) {
-            Log.Error($"[RimObs] Bootstrap failed: {ex}");
+            Log.Error($"[RimObs] Instrumentation install failed: {ex}");
         }
-    }
-
-    public override string SettingsCategory() => "RimWorld Observability";
-
-    public override void DoSettingsWindowContents(UnityEngine.Rect inRect) {
-        CollectorStatus status = CollectorStatusProvider.CaptureCurrent();
-        SettingsWindow.Draw(inRect, status, _settings);
     }
 
     private static void WireTelemetrySink(string ownerId, int port) {
