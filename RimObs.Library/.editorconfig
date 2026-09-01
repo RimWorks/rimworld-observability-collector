@@ -33,3 +33,8 @@ dotnet_diagnostic.S5332.severity = none
 [Polyfills.cs]
 # IsExternalInit is a compiler marker type. it has to be empty.
 dotnet_diagnostic.S2094.severity = none
+
+# the two Steam Workshop links in the missing-backend dialog. they are user-facing URLs for
+# specific workshop items, not configurable endpoints.
+[Patching/MissingBackendNotice.cs]
+dotnet_diagnostic.S1075.severity = none

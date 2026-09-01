@@ -75,29 +75,27 @@ public static class PatchBackends {
             return;
         }
 
-        {
-            for (int t = 0; t < types.Length; t++) {
-                // IsAssignableFrom walks the interface map, so a salvaged type whose interfaces
-                // live in a missing assembly throws here. one broken mod must not stop the scan.
-                try {
-                    Type type = types[t];
-                    if (type.IsAbstract || type.IsInterface || !typeof(IPatchBackend).IsAssignableFrom(type))
-                        continue;
-                    if (AlreadyRegistered(type))
-                        continue;
+        for (int t = 0; t < types.Length; t++) {
+            // IsAssignableFrom walks the interface map, so a salvaged type whose interfaces
+            // live in a missing assembly throws here. one broken mod must not stop the scan.
+            try {
+                Type type = types[t];
+                if (type.IsAbstract || type.IsInterface || !typeof(IPatchBackend).IsAssignableFrom(type))
+                    continue;
+                if (AlreadyRegistered(type))
+                    continue;
 
-                    if (Activator.CreateInstance(type) is IPatchBackend backend)
-                        Register(backend, PriorityOf(type));
-                }
-                catch (Exception ex) {
-                    // a type we cannot inspect or construct is not a backend. try the next one.
-                    // trace, not warn: a half-loaded assembly can hit this for hundreds of types.
-                    Log.TraceTo(
-                        LogChannels.Patching,
-                        "backend scan skipped {Type}: {Reason}",
-                        new object?[] { types[t].FullName, ex.Message }
-                    );
-                }
+                if (Activator.CreateInstance(type) is IPatchBackend backend)
+                    Register(backend, PriorityOf(type));
+            }
+            catch (Exception ex) {
+                // a type we cannot inspect or construct is not a backend. try the next one.
+                // trace, not warn: a half-loaded assembly can hit this for hundreds of types.
+                Log.TraceTo(
+                    LogChannels.Patching,
+                    "backend scan skipped {Type}: {Reason}",
+                    new object?[] { types[t].FullName, ex.Message }
+                );
             }
         }
     }

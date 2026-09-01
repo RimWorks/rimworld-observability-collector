@@ -28,6 +28,10 @@ dotnet_diagnostic.CA1707.severity = none
 # explanatory prose that the dead-code heuristic reads as commented-out code.
 dotnet_diagnostic.S125.severity = none
 
+# .claude/rules and the code-comments standard require TODO(tag): markers naming what
+# deletes them. S1135 flags every TODO regardless of form, so it fights our own rule.
+dotnet_diagnostic.S1135.severity = none
+
 # Private static fields default to PascalCase with no prefix (RimObs.Collector, RimObs.Wire).
 # RimObs.Library deliberately overrides this with an s_ prefix in its own .editorconfig to match
 # the Unity Mono / Roslyn house style. The per-project split is intentional and documented here
