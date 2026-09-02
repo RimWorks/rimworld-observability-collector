@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     name: Build and analyze
+    # dependabot PRs get no repository secrets, so SONAR_TOKEN is empty and the scan cannot authenticate.
+    if: github.actor != 'dependabot[bot]'
     runs-on: windows-latest
     steps:
       - name: Set up JDK 17
