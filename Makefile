@@ -88,7 +88,7 @@ format:
 
 lint:
 	dotnet format $(SLN) --verify-no-changes
-	cd $(DASHBOARD_DIR) && pnpm lint || true
+	cd $(DASHBOARD_DIR) && pnpm lint
 
 watch:
 	dotnet watch --project RimObs.Collector run -- serve
