@@ -36,13 +36,16 @@ public sealed class AllocationSamplerTests {
     public void Bytes_accumulator_resets_each_window() {
         AllocationSampler sampler = new();
 
-        byte[]? big1 = new byte[500_000];
-        big1[0] = 1;
-
-        // long.MaxValue banks the +500KB delta without emitting: a real duration could elapse on a
-        // slow runner, emit early, and discard the 500KB into a throwaway sample.
-        sampler.TryPollWindow(long.MaxValue, out _);
-        GC.KeepAlive(big1);
+        // long.MaxValue banks each delta without emitting, so a slow runner cannot emit early and
+        // discard the growth. Only a positive delta banks, so one GC cannot flatten eight chunks.
+        List<byte[]> held = new(8);
+        for (int i = 0; i < 8; i++) {
+            byte[] chunk = new byte[500_000];
+            chunk[0] = 1;
+            held.Add(chunk);
+            sampler.TryPollWindow(long.MaxValue, out _);
+        }
+        GC.KeepAlive(held);
 
         Thread.Sleep(20);
         sampler.TryPollWindow(10, out AllocationSample first).Should().BeTrue();
