@@ -31,7 +31,10 @@ internal static class SectionCatalog {
         ("RimWorld.FilthMonitor.FilthMonitorTick", "RimWorld.FilthMonitor", "FilthMonitorTick"),
         ("RimWorld.DateNotifier.DateNotifierTick", "RimWorld.DateNotifier", "DateNotifierTick"),
         ("Verse.AI.Pawn_JobTracker.DetermineNextJob", "Verse.AI.Pawn_JobTracker", "DetermineNextJob"),
-        ("Verse.AI.PathFinder.FindPathNow", "Verse.PathFinder", "FindPathNow"),
+        // pawn movement goes through PushRequest and lands here once per map tick. FindPathNow
+        // only serves the rare synchronous callers, so it stays as a separate .sync section.
+        ("Verse.PathFinder.PathFinderTick", "Verse.PathFinder", "PathFinderTick"),
+        ("Verse.PathFinder.FindPathNow.sync", "Verse.PathFinder", "FindPathNow"),
         ("Verse.AI.Pawn_PathFollower.PatherTick", "Verse.AI.Pawn_PathFollower", "PatherTick"),
         ("RimWorld.MapInterface.MapInterfaceUpdate", "RimWorld.MapInterface", "MapInterfaceUpdate"),
         ("Verse.UIRoot.UIRootOnGUI", "Verse.UIRoot", "UIRootOnGUI"),

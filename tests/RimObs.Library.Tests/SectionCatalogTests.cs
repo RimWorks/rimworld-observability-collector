@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
@@ -38,5 +39,30 @@ public sealed class SectionCatalogTests {
         entry.Subsystem.Should().Be("strings");
         entry.SectionId.Should().BeGreaterOrEqualTo(0);
         SectionRegistry.GetSubsystem(entry.SectionId).Should().Be("strings");
+    }
+
+    // regression: 1.6 batches pathfinding through Unity jobs, so a pack carrying only
+    // FindPathNow reads near-zero while pawns are moving.
+    [Fact]
+    public void CorePack_MeasuresPathFinderTick_NotJustSynchronousFindPathNow() {
+        SectionCatalog.Clear();
+        SectionRegistry.Clear();
+
+        SectionCatalog.RegisterCorePack();
+
+        SectionCatalog.Entries.Should().Contain(
+            e => e.TypeName == "Verse.PathFinder" && e.MethodName == "PathFinderTick");
+    }
+
+    // duplicate names collapse onto one section id in SectionRegistry.Register, which
+    // silently sums the two timings together.
+    [Fact]
+    public void CorePack_SectionNamesAreUnique() {
+        SectionCatalog.Clear();
+        SectionRegistry.Clear();
+
+        SectionCatalog.RegisterCorePack();
+
+        SectionCatalog.Entries.Select(e => e.Name).Should().OnlyHaveUniqueItems();
     }
 }
