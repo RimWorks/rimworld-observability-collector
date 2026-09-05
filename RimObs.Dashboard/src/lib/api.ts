@@ -37,6 +37,7 @@ export interface StatusResponse {
 export interface Hotspot {
     id: number;
     name: string;
+    subsystem: string | null;
     sample_count: number;
     total_ns: number;
     mean_ns: number;

@@ -83,6 +83,7 @@ public static class ComparisonEndpoints {
                     mean_ns = s.MeanNs,
                     min_ns = s.MinNs,
                     max_ns = s.MaxNs,
+                    subsystem = s.Subsystem,
                 })
                 .ToArray(),
         });

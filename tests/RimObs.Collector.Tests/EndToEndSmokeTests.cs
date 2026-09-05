@@ -314,6 +314,7 @@ public sealed class EndToEndSmokeTests {
             SendBatch(port, BatchType.SectionRegistrations, WireCodec.Serialize(new SectionRegistrationsBatch {
                 SectionIds = [10, 20, 30],
                 Names = ["hot.cold", "hot.warm", "hot.peak"],
+                Subsystems = ["tick", "render", "tick"],
             }));
 
             SendBatch(port, BatchType.Sections, WireCodec.Serialize(new SectionBatch {
@@ -337,6 +338,8 @@ public sealed class EndToEndSmokeTests {
             hotspots.GetArrayLength().Should().Be(2);
             hotspots[0].GetProperty("name").GetString().Should().Be("hot.peak");
             hotspots[1].GetProperty("name").GetString().Should().Be("hot.warm");
+            hotspots[0].GetProperty("subsystem").GetString().Should().Be("tick");
+            hotspots[1].GetProperty("subsystem").GetString().Should().Be("render");
             hotspots[0].GetProperty("total_ns").GetInt64().Should().BeGreaterThan(hotspots[1].GetProperty("total_ns").GetInt64());
             hotspots[0].GetProperty("mean_ns").GetInt64().Should().BeGreaterThan(0);
             hotspots[0].GetProperty("sample_count").GetInt32().Should().Be(3);

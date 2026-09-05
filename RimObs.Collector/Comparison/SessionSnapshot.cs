@@ -18,7 +18,8 @@ public sealed record SectionSnapshot(
     long SampleCount,
     long TotalNs,
     long MinNs,
-    long MaxNs) {
+    long MaxNs,
+    string? Subsystem = null) {
     public long MeanNs => SampleCount == 0 ? 0 : TotalNs / SampleCount;
 }
 

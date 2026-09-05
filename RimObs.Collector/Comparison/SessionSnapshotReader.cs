@@ -52,7 +52,8 @@ public sealed class SessionSnapshotReader {
                 SampleCount: samples,
                 TotalNs: (long)(total * nsPerTick),
                 MinNs: min == long.MaxValue ? 0 : (long)(min * nsPerTick),
-                MaxNs: (long)(max * nsPerTick)));
+                MaxNs: (long)(max * nsPerTick),
+                Subsystem: section.Subsystem));
         }
 
         List<MetricSnapshot> metrics = [];
@@ -107,7 +108,8 @@ public sealed class SessionSnapshotReader {
                 SampleCount: row.SampleCount,
                 TotalNs: (long)(row.TotalElapsedTicks * nsPerTick),
                 MinNs: (long)(row.MinElapsedTicks * nsPerTick),
-                MaxNs: (long)(row.MaxElapsedTicks * nsPerTick)));
+                MaxNs: (long)(row.MaxElapsedTicks * nsPerTick),
+                Subsystem: row.Subsystem));
         }
 
         Dictionary<int, (long Value, long Samples)> labelTotals = [];

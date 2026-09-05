@@ -4,6 +4,11 @@
     import DataState from '../lib/components/DataState.svelte';
     import LineChart from '../lib/components/LineChart.svelte';
     import Tooltip from '../lib/components/Tooltip.svelte';
+    import SubsystemFilter, {
+        readFilterFromUrl,
+        matchesFilter,
+        type SubsystemFilterValue,
+    } from '../lib/components/SubsystemFilter.svelte';
     import { ns, count, gradeFromShare } from '../lib/format';
     import { t } from '../lib/i18n';
     import { onMount, onDestroy } from 'svelte';
@@ -12,7 +17,11 @@
     onMount(() => res.start());
     onDestroy(() => res.stop());
 
-    let rows = $derived(res.data?.hotspots ?? []);
+    let activeFilter = $state<SubsystemFilterValue>(readFilterFromUrl());
+
+    let all = $derived(res.data?.hotspots ?? []);
+    // the bar scales to what is on screen, so filtering to one subsystem rescales it.
+    let rows = $derived(all.filter((h) => matchesFilter(h.subsystem, activeFilter)));
     let max = $derived(rows.reduce((m, h) => Math.max(m, h.total_ns), 1));
 
     let expandedId = $state<number | null>(null);
@@ -54,10 +63,11 @@
 <DataState
     state={res.state}
     error={res.error}
-    empty={rows.length === 0}
+    empty={all.length === 0}
     onretry={() => res.refresh()}
 >
     <p class="hint">{t('hotspots.hint')}</p>
+    <SubsystemFilter items={all} bind:filter={activeFilter} />
     <div class="table">
         <div class="head">
             <Tooltip text={t('tip.hotspots.section')}>{t('hotspots.col.section')}</Tooltip>
@@ -79,7 +89,12 @@
                 onclick={() => toggle(h.id)}
             >
                 <div class="section">
-                    <span class="name mono">{h.name}</span>
+                    <span class="title">
+                        <span class="name mono">{h.name}</span>
+                        {#if h.subsystem}
+                            <span class="sub">{h.subsystem}</span>
+                        {/if}
+                    </span>
                     <span class="bar"
                         ><span class="fill g{gradeFromShare(share)}" style="width: {share * 100}%"
                         ></span></span
@@ -181,12 +196,24 @@
         flex-direction: column;
         gap: var(--s-1);
     }
+    .title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-2);
+        min-width: 0;
+    }
     .name {
         font-size: 0.84rem;
         color: var(--text);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    .sub {
+        font-size: 0.72rem;
+        color: var(--text-faint);
+        white-space: nowrap;
+        flex-shrink: 0;
     }
     .bar {
         height: 4px;

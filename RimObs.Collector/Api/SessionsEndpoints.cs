@@ -131,6 +131,7 @@ public static class SessionsEndpoints {
                     return new {
                         id = s.SectionId,
                         name = s.Name,
+                        subsystem = s.Subsystem,
                         sample_count = s.SampleCount,
                         total_ns = (long)(s.TotalElapsedTicks * nsPerTick),
                         mean_ns = s.SampleCount == 0 ? 0 : (long)(s.TotalElapsedTicks * nsPerTick / s.SampleCount),

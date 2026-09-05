@@ -121,3 +121,89 @@ describe('Hotspots route', () => {
         }
     });
 });
+
+function hotspot(id: number, name: string, subsystem: string | null, totalNs: number) {
+    return {
+        id,
+        name,
+        subsystem,
+        sample_count: 10,
+        total_ns: totalNs,
+        mean_ns: totalNs / 10,
+        min_ns: 1,
+        max_ns: totalNs,
+        p50_ns: 1,
+        p95_ns: 2,
+        p99_ns: 3,
+    };
+}
+
+function mockHotspots(hotspots: unknown[]) {
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ({ schema_version: 1, hotspots }),
+        })),
+    );
+}
+
+// frame sections and tick sections share one ranked list, so the subsystem is the only
+// thing telling a reader which clock a row is on.
+describe('Hotspots subsystem filter', () => {
+    it('renders a subsystem badge on each row', async () => {
+        globalThis.history.replaceState({}, '', '/');
+        mockHotspots([
+            hotspot(1, 'Verse.TickList.Tick', 'tick', 5000),
+            hotspot(2, 'Verse.Root_Play.Update', 'render', 9000),
+        ]);
+        const { container } = render(Hotspots);
+
+        await screen.findByText('Verse.TickList.Tick');
+
+        const badges = [...container.querySelectorAll('.rowline .sub')].map((e) => e.textContent);
+        expect(badges).toEqual(['tick', 'render']);
+    });
+
+    it('filters rows to one subsystem when its chip is clicked', async () => {
+        globalThis.history.replaceState({}, '', '/');
+        mockHotspots([
+            hotspot(1, 'Verse.TickList.Tick', 'tick', 5000),
+            hotspot(2, 'Verse.Root_Play.Update', 'render', 9000),
+        ]);
+        render(Hotspots);
+
+        await screen.findByText('Verse.TickList.Tick');
+        await fireEvent.click(screen.getByRole('button', { name: 'tick' }));
+
+        expect(screen.getByText('Verse.TickList.Tick')).toBeInTheDocument();
+        expect(screen.queryByText('Verse.Root_Play.Update')).not.toBeInTheDocument();
+    });
+
+    it('initializes the filter from ?subsystem= URL param', async () => {
+        globalThis.history.replaceState({}, '', '/?subsystem=render');
+        mockHotspots([
+            hotspot(1, 'Verse.TickList.Tick', 'tick', 5000),
+            hotspot(2, 'Verse.Root_Play.Update', 'render', 9000),
+        ]);
+        render(Hotspots);
+
+        expect(await screen.findByText('Verse.Root_Play.Update')).toBeInTheDocument();
+        expect(screen.queryByText('Verse.TickList.Tick')).not.toBeInTheDocument();
+    });
+
+    it('writes the filter to the URL when a chip is clicked', async () => {
+        globalThis.history.replaceState({}, '', '/');
+        mockHotspots([
+            hotspot(1, 'Verse.TickList.Tick', 'tick', 5000),
+            hotspot(2, 'Verse.Root_Play.Update', 'render', 9000),
+        ]);
+        render(Hotspots);
+
+        await screen.findByText('Verse.TickList.Tick');
+        await fireEvent.click(screen.getByRole('button', { name: 'render' }));
+
+        expect(new URLSearchParams(globalThis.location.search).get('subsystem')).toBe('render');
+    });
+});

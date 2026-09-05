@@ -3,6 +3,11 @@
     import { api, type RegistrySection } from '../lib/api';
     import { Resource } from '../lib/poll.svelte';
     import DataState from '../lib/components/DataState.svelte';
+    import SubsystemFilter, {
+        readFilterFromUrl,
+        matchesFilter,
+        type SubsystemFilterValue,
+    } from '../lib/components/SubsystemFilter.svelte';
     import { t } from '../lib/i18n';
 
     const res = new Resource<{ schema_version: number; sections: RegistrySection[] }>(
@@ -12,84 +17,15 @@
     onMount(() => res.start());
     onDestroy(() => res.stop());
 
-    const NULL_SUBSYSTEM = '__unset__';
-
-    function readFilterFromUrl(): string | null | 'all' {
-        const raw = new URLSearchParams(window.location.search).get('subsystem');
-        if (raw === null) return 'all';
-        if (raw === NULL_SUBSYSTEM) return null;
-        return raw;
-    }
-
-    function writeFilterToUrl(filter: string | null | 'all'): void {
-        const params = new URLSearchParams(window.location.search);
-        if (filter === 'all') {
-            params.delete('subsystem');
-        } else {
-            params.set('subsystem', filter === null ? NULL_SUBSYSTEM : filter);
-        }
-        const qs = params.toString();
-        window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-    }
-
-    let activeFilter = $state<string | null | 'all'>(readFilterFromUrl());
+    let activeFilter = $state<SubsystemFilterValue>(readFilterFromUrl());
 
     let sections = $derived(res.data?.sections ?? []);
 
-    let subsystems = $derived.by(() => {
-        const seen = new Set<string>();
-        const result: Array<string | null> = [];
-        for (const s of sections) {
-            const key = s.subsystem ?? '\x00';
-            if (!seen.has(key)) {
-                seen.add(key);
-                result.push(s.subsystem);
-            }
-        }
-        return result;
-    });
-
-    let filtered = $derived.by(() => {
-        if (activeFilter === 'all') return sections;
-        return sections.filter((s) => s.subsystem === activeFilter);
-    });
-
-    function chipLabel(sub: string | null): string {
-        return sub === null ? t('sections.filter.unset') : sub;
-    }
-
-    function isActive(sub: string | null | 'all'): boolean {
-        return activeFilter === sub;
-    }
+    let filtered = $derived(sections.filter((s) => matchesFilter(s.subsystem, activeFilter)));
 </script>
 
 <div class="page">
-    {#if sections.length > 1}
-        <div class="chips" role="group" aria-label={t('sections.filter.label')}>
-            <button
-                class="chip"
-                class:active={isActive('all')}
-                onclick={() => {
-                    activeFilter = 'all';
-                    writeFilterToUrl('all');
-                }}
-            >
-                {t('sections.filter.all')}
-            </button>
-            {#each subsystems as sub (sub ?? '\x00')}
-                <button
-                    class="chip"
-                    class:active={isActive(sub)}
-                    onclick={() => {
-                        activeFilter = sub;
-                        writeFilterToUrl(sub);
-                    }}
-                >
-                    {chipLabel(sub)}
-                </button>
-            {/each}
-        </div>
-    {/if}
+    <SubsystemFilter items={sections} bind:filter={activeFilter} />
 
     <DataState
         state={res.state}
@@ -116,34 +52,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--s-4);
-    }
-    .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s-2);
-    }
-    .chip {
-        padding: var(--s-1) var(--s-3);
-        border-radius: 99px;
-        border: 1px solid var(--border);
-        background: var(--bg-surface);
-        color: var(--text-dim);
-        font-family: var(--font-ui);
-        font-size: 0.78rem;
-        cursor: pointer;
-        transition:
-            background var(--t-fast) var(--ease-out),
-            color var(--t-fast) var(--ease-out),
-            border-color var(--t-fast) var(--ease-out);
-    }
-    .chip:hover {
-        background: var(--bg-elev);
-        color: var(--text);
-    }
-    .chip.active {
-        background: color-mix(in srgb, var(--cyan) 14%, var(--bg-surface));
-        border-color: var(--border-strong);
-        color: var(--text);
     }
     .list {
         list-style: none;

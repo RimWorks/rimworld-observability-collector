@@ -341,7 +341,7 @@ ON CONFLICT(parent_id, section_id) DO UPDATE SET
         ThrowIfDisposed();
 
         using SqliteCommand cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT section_id, name, sample_count, total_elapsed_ticks, min_elapsed_ticks, max_elapsed_ticks FROM sections ORDER BY section_id;";
+        cmd.CommandText = "SELECT section_id, name, sample_count, total_elapsed_ticks, min_elapsed_ticks, max_elapsed_ticks, subsystem FROM sections ORDER BY section_id;";
 
         List<SectionStatsRow> rows = [];
         using SqliteDataReader reader = cmd.ExecuteReader();
@@ -352,7 +352,8 @@ ON CONFLICT(parent_id, section_id) DO UPDATE SET
                 SampleCount: reader.GetInt64(2),
                 TotalElapsedTicks: reader.GetInt64(3),
                 MinElapsedTicks: reader.GetInt64(4),
-                MaxElapsedTicks: reader.GetInt64(5)));
+                MaxElapsedTicks: reader.GetInt64(5),
+                Subsystem: reader.IsDBNull(6) ? null : reader.GetString(6)));
         }
         return rows;
     }
@@ -520,7 +521,8 @@ public sealed record SectionStatsRow(
     long SampleCount,
     long TotalElapsedTicks,
     long MinElapsedTicks,
-    long MaxElapsedTicks);
+    long MaxElapsedTicks,
+    string? Subsystem = null);
 
 public sealed record MetricRow(int MetricId, string Name, byte Kind, string Unit);
 
