@@ -19,30 +19,46 @@ internal static class SectionCatalog {
         }
     }
 
-    private static readonly (string Name, string TypeName, string MethodName)[] s_CorePackSections =
+    private const string TickSubsystem = "tick";
+    private const string AiSubsystem = "ai";
+    private const string RenderSubsystem = "render";
+    private const string UiSubsystem = "ui";
+
+    private static readonly (string Name, string TypeName, string MethodName, string Subsystem)[] s_CorePackSections =
     [
-        (FrameTickPatches.TickSection, "Verse.TickManager", "DoSingleTick"),
-        ("Verse.Map.MapPreTick", "Verse.Map", "MapPreTick"),
-        ("Verse.Map.MapPostTick", "Verse.Map", "MapPostTick"),
-        ("RimWorld.Planet.World.WorldTick", "RimWorld.Planet.World", "WorldTick"),
-        ("Verse.GameComponentUtility.GameComponentTick", "Verse.GameComponentUtility", "GameComponentTick"),
-        ("RimWorld.Storyteller.StorytellerTick", "RimWorld.Storyteller", "StorytellerTick"),
-        ("RimWorld.History.HistoryTick", "RimWorld.History", "HistoryTick"),
-        ("RimWorld.FilthMonitor.FilthMonitorTick", "RimWorld.FilthMonitor", "FilthMonitorTick"),
-        ("RimWorld.DateNotifier.DateNotifierTick", "RimWorld.DateNotifier", "DateNotifierTick"),
-        ("Verse.AI.Pawn_JobTracker.DetermineNextJob", "Verse.AI.Pawn_JobTracker", "DetermineNextJob"),
+        (FrameTickPatches.TickSection, "Verse.TickManager", "DoSingleTick", TickSubsystem),
+        ("Verse.Map.MapPreTick", "Verse.Map", "MapPreTick", TickSubsystem),
+        ("Verse.Map.MapPostTick", "Verse.Map", "MapPostTick", TickSubsystem),
+        ("Verse.TickList.Tick", "Verse.TickList", "Tick", TickSubsystem),
+        ("RimWorld.Planet.World.WorldTick", "RimWorld.Planet.World", "WorldTick", TickSubsystem),
+        ("Verse.GameComponentUtility.GameComponentTick", "Verse.GameComponentUtility", "GameComponentTick", TickSubsystem),
+        ("RimWorld.Storyteller.StorytellerTick", "RimWorld.Storyteller", "StorytellerTick", TickSubsystem),
+        ("RimWorld.History.HistoryTick", "RimWorld.History", "HistoryTick", TickSubsystem),
+        ("RimWorld.FilthMonitor.FilthMonitorTick", "RimWorld.FilthMonitor", "FilthMonitorTick", TickSubsystem),
+        ("RimWorld.DateNotifier.DateNotifierTick", "RimWorld.DateNotifier", "DateNotifierTick", TickSubsystem),
+        ("Verse.MapTemperature.MapTemperatureTick", "Verse.MapTemperature", "MapTemperatureTick", TickSubsystem),
+        ("RimWorld.SteadyEnvironmentEffects.SteadyEnvironmentEffectsTick", "RimWorld.SteadyEnvironmentEffects", "SteadyEnvironmentEffectsTick", TickSubsystem),
+        // the public TryRebuildDirtyRegionsAndRooms fires on every region lookup and returns
+        // straight away unless something is dirty. these two only run on real rebuild work.
+        ("Verse.RegionAndRoomUpdater.RegenerateNewRegionsFromDirtyCells", "Verse.RegionAndRoomUpdater", "RegenerateNewRegionsFromDirtyCells", TickSubsystem),
+        ("Verse.RegionAndRoomUpdater.CreateOrUpdateRooms", "Verse.RegionAndRoomUpdater", "CreateOrUpdateRooms", TickSubsystem),
+        ("Verse.AI.Pawn_JobTracker.DetermineNextJob", "Verse.AI.Pawn_JobTracker", "DetermineNextJob", AiSubsystem),
         // pawn movement goes through PushRequest and lands here once per map tick. FindPathNow
         // only serves the rare synchronous callers, so it stays as a separate .sync section.
-        ("Verse.PathFinder.PathFinderTick", "Verse.PathFinder", "PathFinderTick"),
-        ("Verse.PathFinder.FindPathNow.sync", "Verse.PathFinder", "FindPathNow"),
-        ("Verse.AI.Pawn_PathFollower.PatherTick", "Verse.AI.Pawn_PathFollower", "PatherTick"),
-        ("RimWorld.MapInterface.MapInterfaceUpdate", "RimWorld.MapInterface", "MapInterfaceUpdate"),
-        ("Verse.UIRoot.UIRootOnGUI", "Verse.UIRoot", "UIRootOnGUI"),
-        ("Verse.WindowStack.WindowStackOnGUI", "Verse.WindowStack", "WindowStackOnGUI"),
-        ("RimWorld.Alert.Recalculate", "RimWorld.Alert", "Recalculate"),
-        ("RimWorld.Pawn_NeedsTracker.NeedsTrackerTickInterval", "RimWorld.Pawn_NeedsTracker", "NeedsTrackerTickInterval"),
-        ("RimWorld.Planet.WorldPawns.WorldPawnsTick", "RimWorld.Planet.WorldPawns", "WorldPawnsTick"),
-        (FrameTickPatches.FrameSection, "Verse.Root_Play", "Update"),
+        ("Verse.PathFinder.PathFinderTick", "Verse.PathFinder", "PathFinderTick", AiSubsystem),
+        ("Verse.PathFinder.FindPathNow.sync", "Verse.PathFinder", "FindPathNow", AiSubsystem),
+        ("Verse.AI.Pawn_PathFollower.PatherTick", "Verse.AI.Pawn_PathFollower", "PatherTick", AiSubsystem),
+        ("Verse.AI.Group.LordManager.LordManagerTick", "Verse.AI.Group.LordManager", "LordManagerTick", AiSubsystem),
+        ("RimWorld.Pawn_NeedsTracker.NeedsTrackerTickInterval", "RimWorld.Pawn_NeedsTracker", "NeedsTrackerTickInterval", AiSubsystem),
+        ("RimWorld.Planet.WorldPawns.WorldPawnsTick", "RimWorld.Planet.WorldPawns", "WorldPawnsTick", TickSubsystem),
+        ("RimWorld.MapInterface.MapInterfaceUpdate", "RimWorld.MapInterface", "MapInterfaceUpdate", RenderSubsystem),
+        ("Verse.UIRoot.UIRootOnGUI", "Verse.UIRoot", "UIRootOnGUI", RenderSubsystem),
+        ("Verse.WindowStack.WindowStackOnGUI", "Verse.WindowStack", "WindowStackOnGUI", RenderSubsystem),
+        ("Verse.DynamicDrawManager.DrawDynamicThings", "Verse.DynamicDrawManager", "DrawDynamicThings", RenderSubsystem),
+        ("Verse.MapDrawer.DrawMapMesh", "Verse.MapDrawer", "DrawMapMesh", RenderSubsystem),
+        ("Verse.MapDrawer.MapMeshDrawerUpdate_First", "Verse.MapDrawer", "MapMeshDrawerUpdate_First", RenderSubsystem),
+        ("RimWorld.Alert.Recalculate", "RimWorld.Alert", "Recalculate", UiSubsystem),
+        (FrameTickPatches.FrameSection, "Verse.Root_Play", "Update", RenderSubsystem),
     ];
 
     public static void RegisterCorePack() {
@@ -52,8 +68,8 @@ internal static class SectionCatalog {
             s_CorePackRegistered = true;
 
             for (int i = 0; i < s_CorePackSections.Length; i++) {
-                (string name, string typeName, string methodName) = s_CorePackSections[i];
-                Register(name, typeName, methodName, null);
+                (string name, string typeName, string methodName, string subsystem) = s_CorePackSections[i];
+                Register(name, typeName, methodName, null, subsystem);
             }
         }
     }

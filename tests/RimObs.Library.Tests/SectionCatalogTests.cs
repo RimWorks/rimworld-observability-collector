@@ -65,4 +65,35 @@ public sealed class SectionCatalogTests {
 
         SectionCatalog.Entries.Select(e => e.Name).Should().OnlyHaveUniqueItems();
     }
+
+    [Theory]
+    [InlineData("Verse.TickList", "Tick")]
+    [InlineData("Verse.RegionAndRoomUpdater", "RegenerateNewRegionsFromDirtyCells")]
+    [InlineData("Verse.RegionAndRoomUpdater", "CreateOrUpdateRooms")]
+    [InlineData("Verse.MapTemperature", "MapTemperatureTick")]
+    [InlineData("RimWorld.SteadyEnvironmentEffects", "SteadyEnvironmentEffectsTick")]
+    [InlineData("Verse.AI.Group.LordManager", "LordManagerTick")]
+    [InlineData("Verse.DynamicDrawManager", "DrawDynamicThings")]
+    [InlineData("Verse.MapDrawer", "DrawMapMesh")]
+    [InlineData("Verse.MapDrawer", "MapMeshDrawerUpdate_First")]
+    public void CorePack_CoversTheExpandedTargets(string typeName, string methodName) {
+        SectionCatalog.Clear();
+        SectionRegistry.Clear();
+
+        SectionCatalog.RegisterCorePack();
+
+        SectionCatalog.Entries.Should().Contain(
+            e => e.TypeName == typeName && e.MethodName == methodName);
+    }
+
+    // hotspots ranks frame and tick sections in one list, so the subsystem is the only thing
+    // telling a reader which clock a row is on.
+    [Fact]
+    public void CorePack_SetsSubsystemOnEveryEntry() {
+        SectionCatalog.Clear();
+        SectionRegistry.Clear();
+
+        SectionCatalog.RegisterCorePack();
+        SectionCatalog.Entries.Should().OnlyContain(e => !string.IsNullOrEmpty(e.Subsystem));
+    }
 }

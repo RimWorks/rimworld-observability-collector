@@ -102,8 +102,58 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
             $"enabled section overhead too high: {bestNsPerCall:F1}ns/call");
     }
 
+    // the disabled branch is a load plus a conditional, so the honest number is the delta
+    // against an identical uninstrumented method, not the patched method's own wall time.
+    [Fact]
+    public void DisabledSection_OverheadOverPlainCall() {
+        int sectionId = InstallAndGetSectionId();
+        SectionRegistry.SetActive(sectionId, false);
+        Profiler.SetSink(null);
+
+        double patched = BestNsPerCall(static () => BenchTarget.Tick());
+        double plain = BestNsPerCall(static () => PlainTarget.Tick());
+        double delta = patched - plain;
+
+        _out.WriteLine($"disabled section: patched {patched:F2} ns/call, plain {plain:F2} ns/call, delta {delta:F2} ns");
+
+        // budget is 5ns per .claude/rules/hot-path.md. assert 20x so a virtualized runner
+        // cannot flake the build; the printed delta is what the gate decision reads.
+        delta.Should().BeLessThan(100.0, $"disabled section overhead too high: {delta:F2}ns/call");
+    }
+
+    private static double BestNsPerCall(Action work) {
+        const int iterations = 200_000;
+        const int trials = 7;
+
+        for (int warm = 0; warm < 50_000; warm++)
+            work();
+
+        double best = double.MaxValue;
+        for (int trial = 0; trial < trials; trial++) {
+            Stopwatch sw = Stopwatch.StartNew();
+            for (int i = 0; i < iterations; i++)
+                work();
+            sw.Stop();
+
+            double ns = sw.Elapsed.TotalMilliseconds * 1_000_000.0 / iterations;
+            if (ns < best)
+                best = ns;
+        }
+        return best;
+    }
+
     public static class BenchTarget {
         [ObservedSection]
+        public static int Tick() {
+            int x = 0;
+            for (int i = 0; i < 4; i++)
+                x += i;
+            return x;
+        }
+    }
+
+    // same body as BenchTarget.Tick with no attribute, so the delta isolates the patch.
+    public static class PlainTarget {
         public static int Tick() {
             int x = 0;
             for (int i = 0; i < 4; i++)
