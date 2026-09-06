@@ -69,6 +69,39 @@ public sealed class FrameRingTests {
 
         ring.Count.Should().Be(2);
         ring.Latest()!.CaptureOrdinal.Should().Be(3);
+
+        FrameRingStats stats = ring.ComputeStats();
+
+        stats.FrameCount.Should().Be(2);
+        stats.OldestOrdinal.Should().Be(2);
+        stats.NewestOrdinal.Should().Be(3);
+    }
+
+    [Fact]
+    public void Clear_resets_the_counters_and_reopens_at_a_lower_ordinal() {
+        FrameRing ring = new(8);
+        ring.Add(0, 10, -1, 1L, 5L);
+        ring.Add(5, 10, -1, 100L, 500L);
+        ring.Add(6, 10, -1, 700L, 400L);
+        ring.Add(1, 99, -1, 10L, 10L);
+
+        ring.Count.Should().Be(1);
+        ring.PreFrameSamples.Should().Be(1);
+        ring.LateSamples.Should().Be(1);
+
+        ring.Clear();
+
+        ring.Count.Should().Be(0);
+        ring.PreFrameSamples.Should().Be(0);
+        ring.LateSamples.Should().Be(0);
+        ring.Latest().Should().BeNull();
+        ring.ComputeStats().FrameCount.Should().Be(0);
+
+        ring.Add(1, 10, -1, 100L, 500L);
+        ring.Add(2, 10, -1, 700L, 400L);
+
+        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.LateSamples.Should().Be(0);
     }
 
     [Fact]
@@ -87,6 +120,7 @@ public sealed class FrameRingTests {
         stats.MinDurationTicks.Should().Be(100L);
         stats.MaxDurationTicks.Should().Be(900L);
         stats.MedianDurationTicks.Should().Be(300L);
+        stats.P99DurationTicks.Should().Be(900L);
     }
 
     [Fact]
