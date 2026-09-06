@@ -62,6 +62,48 @@ public sealed class FramesEndpointsTests {
     }
 
     [Fact]
+    public async Task Latest_subtracts_the_session_anchor_from_starts_but_not_durations() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-anchor-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-anchor",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 1000L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20, 10],
+            ParentIds = [-1, 10, -1],
+            StartTimestamps = [1100L, 1150L, 1700L],
+            ElapsedTicks = [500L, 200L, 400L],
+            FrameOrdinals = [1, 1, 2],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement frame = doc.RootElement.GetProperty("frame");
+            JsonElement nodes = frame.GetProperty("nodes");
+
+            frame.GetProperty("start_us").GetDouble().Should().BeApproximately(10.0, 0.01);
+            frame.GetProperty("end_us").GetDouble().Should().BeApproximately(60.0, 0.01);
+            frame.GetProperty("duration_us").GetDouble().Should().BeApproximately(50.0, 0.01);
+
+            nodes.GetProperty("parent_ids")[1].GetInt32().Should().Be(10);
+            nodes.GetProperty("start_us")[0].GetDouble().Should().BeApproximately(10.0, 0.01);
+            nodes.GetProperty("start_us")[1].GetDouble().Should().BeApproximately(15.0, 0.01);
+            nodes.GetProperty("dur_us")[0].GetDouble().Should().BeApproximately(50.0, 0.01);
+            nodes.GetProperty("dur_us")[1].GetDouble().Should().BeApproximately(20.0, 0.01);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task Latest_returns_a_null_frame_before_any_frame_seals() {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-empty-token");
