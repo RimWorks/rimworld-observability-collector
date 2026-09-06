@@ -114,6 +114,54 @@ public sealed class BundleEndpointsTests {
     }
 
     [Fact]
+    public async Task Export_with_frames_include_puts_frames_json_in_the_zip() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-bearer-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+            SessionMeta meta = new SessionMeta {
+                SessionId = "frames-session",
+                StartedUtcTicks = DateTime.UtcNow.Ticks,
+                StopwatchFrequency = System.Diagnostics.Stopwatch.Frequency,
+                AnchorTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(),
+                LibraryVersion = "0.0.0-bundle",
+                GameVersion = "1.6",
+            };
+            aggregator.OnSessionMeta(meta);
+
+            using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/export/bundle") {
+                Content = new StringContent(
+                    "{\"session_id\":\"frames-session\",\"include\":[\"frames\"],\"force\":false}",
+                    Encoding.UTF8,
+                    "application/json"),
+            };
+            post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+            post.Headers.Add("Authorization", $"Bearer {token.Value}");
+            HttpResponseMessage resp = await http.SendAsync(post);
+            _out.WriteLine($"export status: {resp.StatusCode}");
+            resp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            byte[] zipBytes = await resp.Content.ReadAsByteArrayAsync();
+            using MemoryStream ms = new MemoryStream(zipBytes);
+            using ZipArchive archive = new ZipArchive(ms, ZipArchiveMode.Read);
+            HashSet<string> names = archive.Entries.Select(e => e.FullName).ToHashSet();
+            names.Should().Contain("frames.json");
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Export_unknown_session_returns_404() {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("bundle-bearer-token");

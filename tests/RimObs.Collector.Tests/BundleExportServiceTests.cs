@@ -61,6 +61,7 @@ public class BundleExportServiceTests {
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
         IEnumerable<string> names = zip.Entries.Select(e => e.FullName);
         names.Should().Contain(RequiredEntries);
+        names.Should().NotContain(OptionalEntries);
     }
 
     [Fact]
@@ -239,11 +240,14 @@ public class BundleExportServiceTests {
 
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using StreamReader frames = new StreamReader(zip.GetEntry("frames.json")!.Open());
-        using StreamReader summary = new StreamReader(zip.GetEntry("session_summary.json")!.Open());
-
-        frames.ReadToEnd().Should().NotContain("\n");
-        summary.ReadToEnd().Should().Contain("\n");
+        foreach (ZipArchiveEntry jsonEntry in zip.Entries.Where(e => e.FullName.EndsWith(".json"))) {
+            using StreamReader reader = new StreamReader(jsonEntry.Open());
+            string text = reader.ReadToEnd();
+            if (jsonEntry.FullName == "frames.json")
+                text.Should().NotContain("\n");
+            else
+                text.Should().Contain("\n");
+        }
     }
 
     [Fact]
