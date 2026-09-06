@@ -79,7 +79,10 @@ public sealed class SessionAggregator {
     }
 
     public void OnSessionMeta(SessionMeta meta) {
+        string? previous = _meta?.SessionId;
         _meta = meta;
+        if (previous != null && previous != meta.SessionId)
+            _frames.Clear();
         _persister?.WriteSessionMeta(meta);
     }
 

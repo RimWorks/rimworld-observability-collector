@@ -160,6 +160,50 @@ public sealed class SessionAggregatorTests {
     }
 
     [Fact]
+    public void A_new_session_resets_the_frame_ring_so_ordinals_can_restart() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 10],
+            ParentIds = [-1, -1],
+            StartTimestamps = [100L, 700L],
+            ElapsedTicks = [500L, 400L],
+            FrameOrdinals = [5000, 5001],
+        });
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5000);
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 10],
+            ParentIds = [-1, -1],
+            StartTimestamps = [10L, 70L],
+            ElapsedTicks = [50L, 40L],
+            FrameOrdinals = [1, 2],
+        });
+
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
+        aggregator.Frames.LateSamples.Should().Be(0);
+    }
+
+    [Fact]
+    public void A_repeated_session_meta_heartbeat_does_not_clear_the_frame_ring() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 10],
+            ParentIds = [-1, -1],
+            StartTimestamps = [100L, 700L],
+            ElapsedTicks = [500L, 400L],
+            FrameOrdinals = [1, 2],
+        });
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
+
+        aggregator.Frames.Count.Should().Be(1);
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
+    }
+
+    [Fact]
     public void OnSectionBatch_files_samples_into_the_frame_ring_by_ordinal() {
         SessionAggregator aggregator = new();
         aggregator.OnSectionBatch(new SectionBatch {

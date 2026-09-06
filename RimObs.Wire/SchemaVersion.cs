@@ -9,7 +9,7 @@ public static class SchemaVersion {
     //     only 2 fields and return an empty Subsystems array.
     // v4: PatchConflictsBatch gains ConflictsKnown. Readers built for v3 see only 6 fields
     //     and keep the default of true, which is what every v3 producer meant.
-    // v5: SectionBatch gains FrameOrdinals. Readers built for v4 see only 4 fields and keep
-    //     the empty default, which drops those samples out of the frame ring.
+    // v5: SectionBatch gains FrameOrdinals. The codec's 4-field tolerance never reaches
+    //     live UDP: UdpReceiver drops any envelope whose version is not exactly Current.
     public const int Current = 5;
 }
