@@ -132,11 +132,22 @@ describe('FrameTimeline', () => {
         expect(canvas).toHaveAttribute('aria-roledescription', 'frame timeline');
     });
 
-    it('names the frame it is drawing', () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
-        const label = screen.getByRole('application').getAttribute('aria-label') ?? '';
-        expect(label).toContain('1234');
-        expect(label).toContain('3');
+    // the label used to interpolate ordinal/duration/count, re-announcing at 4Hz.
+    it('has a stable aria-label that does not change with the frame, while focus still announces', async () => {
+        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const canvas = screen.getByRole('application');
+        const label = canvas.getAttribute('aria-label') ?? '';
+        expect(label).toBe('current frame');
+        expect(screen.getByRole('status')).toHaveTextContent('');
+
+        await rerender({
+            frame: { ...FRAME, capture_ordinal: 9999, duration_us: 33000, node_count: 7 },
+            names: NAMES,
+        });
+        expect(canvas.getAttribute('aria-label')).toBe(label);
+
+        await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
+        expect(screen.getByRole('status')).toHaveTextContent('Verse.TickList.Tick');
     });
 
     it('reports the orphan count back to its parent', async () => {

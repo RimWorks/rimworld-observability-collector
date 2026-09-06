@@ -92,11 +92,8 @@
         hoverTreeIndex >= 0 ? quadIndexForNode(quads, tree.nodes[hoverTreeIndex]) : -1,
     );
 
-    let ariaLabel = $derived(
-        frame
-            ? `frame ${frame.capture_ordinal}, ${ns(frame.duration_us * 1000)}, ${frame.node_count} nodes`
-            : '',
-    );
+    // stable on purpose: a per-frame label re-announces at 4Hz. numbers live in the StatCards.
+    const ariaLabel = 'current frame';
     let rangeText = $derived(ns((effectiveView.endUs - effectiveView.startUs) * 1000));
 
     function nodeName(n: TreeNode): string {

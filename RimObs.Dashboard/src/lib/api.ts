@@ -1,3 +1,5 @@
+import type { FrameResponse } from './frameTree';
+
 export interface StatusResponse {
     schema_version: number;
     status: string;
@@ -404,6 +406,7 @@ export const api = {
         get<HotspotsResponse>(`/api/v1/sessions/current/hotspots?limit=${limit}`),
     sections: () => get<SectionsResponse>('/api/v1/sessions/current/sections'),
     allSections: () => get<RegistrySectionsResponse>('/api/v1/sections'),
+    frames: () => get<FrameResponse>('/api/v1/frames/latest'),
     sectionTimeseries: (id: number) =>
         get<SectionTimeseriesResponse>(`/api/v1/sessions/current/sections/${id}/timeseries`),
     metrics: () => get<MetricsResponse>('/api/v1/sessions/current/metrics'),

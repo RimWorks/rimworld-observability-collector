@@ -11,6 +11,7 @@
     import Instrumentation from './routes/Instrumentation.svelte';
     import Sections from './routes/Sections.svelte';
     import CallTree from './routes/CallTree.svelte';
+    import Flamegraph from './routes/Flamegraph.svelte';
     import Captures from './routes/Captures.svelte';
     import Memory from './routes/Memory.svelte';
     import Metrics from './routes/Metrics.svelte';
@@ -67,6 +68,8 @@
                     <Sections />
                 {:else if route.id === 'calltree'}
                     <CallTree />
+                {:else if route.id === 'flamegraph'}
+                    <Flamegraph />
                 {:else if route.id === 'captures'}
                     <Captures />
                 {:else if route.id === 'memory'}

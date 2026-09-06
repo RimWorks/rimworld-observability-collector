@@ -10,6 +10,7 @@
     "nav.instrumentation": "Instrumentation",
     "nav.sections": "Sections",
     "nav.calltree": "Arbre d'appels",
+    "nav.flamegraph": "Flamegraph",
     "nav.captures": "Captures",
     "nav.memory": "Mémoire",
     "nav.metrics": "Métriques",
@@ -312,5 +313,19 @@
     "comparison.col.head": "Cible",
     "comparison.col.delta": "Écart",
     "comparison.col.metric": "Métrique",
-    "comparison.col.kind": "Type"
+    "comparison.col.kind": "Type",
+    "flamegraph.hint": "One RimWorld frame, drawn on a real microsecond axis. Scroll to zoom, drag to pan, click a bar to zoom to it, Escape to fit.",
+    "flamegraph.rate": "Rate",
+    "flamegraph.ordinal": "Frame",
+    "flamegraph.duration": "Duration",
+    "flamegraph.nodes": "Nodes",
+    "flamegraph.median": "Median",
+    "flamegraph.p99": "p99",
+    "flamegraph.empty": "No frames yet",
+    "flamegraph.empty.hint": "Launch RimWorld with the framework mod and load a save to start streaming frames.",
+    "flamegraph.keys": "Arrow keys move between bars, Enter zooms in, Escape fits the whole frame.",
+    "flamegraph.dropped.late": "Late samples",
+    "flamegraph.dropped.preframe": "Pre-frame samples",
+    "flamegraph.dropped.orphans": "Orphan nodes",
+    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data."
 }
