@@ -176,6 +176,38 @@ public class BundleExportServiceTests {
         manifest.Entries.Should().Contain("report.html");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Export_ManifestListsExactlyWhatTheZipHolds(bool includeOptional) {
+        BundleExportService service = new BundleExportService(BuildAggregator(), collectorVersion: "0.1.0");
+        HashSet<BundleContentKey> includes = includeOptional
+            ? new HashSet<BundleContentKey> {
+                BundleContentKey.Allocations,
+                BundleContentKey.GcEvents,
+                BundleContentKey.Patches,
+                BundleContentKey.CallHierarchy,
+                BundleContentKey.Frames,
+            }
+            : new HashSet<BundleContentKey>();
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = includes,
+            Force = false,
+        }, CancellationToken.None);
+
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        ZipArchiveEntry manifestEntry = zip.GetEntry("manifest.json")!;
+        using StreamReader reader = new StreamReader(manifestEntry.Open());
+        BundleManifest? manifest = JsonSerializer.Deserialize<BundleManifest>(reader.ReadToEnd(), BundleManifest.JsonOptions);
+
+        // manifest.json is the index, not an indexed entry, so it's excluded here.
+        manifest!.Entries.Should().BeEquivalentTo(
+            zip.Entries.Select(e => e.FullName).Where(n => n != "manifest.json"));
+    }
+
     [Fact]
     public async Task Export_FramesEntryCarriesTheWholeRing() {
         SessionAggregator aggregator = BuildAggregator();
