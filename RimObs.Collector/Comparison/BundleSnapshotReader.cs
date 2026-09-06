@@ -57,7 +57,8 @@ public sealed class BundleSnapshotReader {
                     SampleCount: h.SampleCount,
                     TotalNs: h.TotalNs,
                     MinNs: 0,
-                    MaxNs: 0));
+                    MaxNs: 0,
+                    Subsystem: h.Subsystem));
             }
         }
         return sections;
@@ -121,7 +122,7 @@ public sealed class BundleSnapshotReader {
 
     private sealed record SummaryDto(string? SessionId, DateTime StartedUtc, string? LibraryVersion, string? GameVersion);
     private sealed record HotspotsDto(HotspotDto[]? Hotspots);
-    private sealed record HotspotDto(int Id, string Name, long SampleCount, long TotalNs);
+    private sealed record HotspotDto(int Id, string Name, long SampleCount, long TotalNs, string? Subsystem);
     private sealed record DescriptorsDto(DescriptorDto[]? Metrics);
     private sealed record DescriptorDto(int Id, string Name, byte Kind, string? Unit);
     private sealed record CustomMetricsDto(CustomMetricDto[]? Metrics);

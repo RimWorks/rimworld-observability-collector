@@ -241,6 +241,7 @@ public sealed class BundleExportService {
                     name = s.Name,
                     sample_count = s.SampleCount,
                     total_ns = (long)(s.TotalElapsedTicks * nsPerTick),
+                    subsystem = s.Subsystem,
                 })
                 .ToArray(),
         };

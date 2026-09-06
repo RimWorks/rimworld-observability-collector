@@ -149,4 +149,26 @@ public class BundleSnapshotReaderTests : IDisposable {
         result.Timing.HeadTotalNs.Should().Be(result.Timing.BaseTotalNs * 2);
         result.Timing.DeltaNs.Should().Be(result.Timing.BaseTotalNs);
     }
+
+    [Fact]
+    public void ReadFromDir_CarriesSubsystemFromHotspots() {
+        string dir = Directory.CreateTempSubdirectory("rimobs-snap-subsystem").FullName;
+        try {
+            File.WriteAllText(Path.Combine(dir, "session_summary.json"), """
+                {"session_id":"sess-a","started_utc":"2026-05-28T10:00:00Z","library_version":"0.1.0","game_version":"1.5"}
+                """);
+            File.WriteAllText(Path.Combine(dir, "hotspots.json"), """
+                {"hotspots":[{"id":10,"name":"Verse.TickList.Tick","sample_count":4,"total_ns":900,"subsystem":"tick"}]}
+                """);
+
+            SessionSnapshot? snapshot = BundleSnapshotReader.ReadFromDir(dir);
+
+            snapshot.Should().NotBeNull();
+            snapshot!.Sections.Should().HaveCount(1);
+            snapshot.Sections[0].Subsystem.Should().Be("tick");
+        }
+        finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -245,4 +245,29 @@ public class BundleExportServiceTests {
         frames.ReadToEnd().Should().NotContain("\n");
         summary.ReadToEnd().Should().Contain("\n");
     }
+
+    [Fact]
+    public async Task Export_HotspotsCarryTheSubsystem() {
+        SessionAggregator aggregator = BuildAggregator();
+        aggregator.OnSectionRegistrations(new SectionRegistrationsBatch {
+            SectionIds = [10],
+            Names = ["Verse.TickList.Tick"],
+            Subsystems = ["tick"],
+        });
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey>(),
+            Force = false,
+        }, CancellationToken.None);
+
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = zip.GetEntry("hotspots.json")!.Open();
+        using JsonDocument doc = JsonDocument.Parse(entry);
+
+        doc.RootElement.GetProperty("hotspots")[0]
+            .GetProperty("subsystem").GetString().Should().Be("tick");
+    }
 }
