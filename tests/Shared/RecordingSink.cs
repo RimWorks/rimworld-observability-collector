@@ -11,11 +11,11 @@ internal sealed class RecordingSink : ISampleSink {
     public readonly List<Sample> Samples = new();
     private readonly object _lock = new();
 
-    public void RecordSection(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
+    public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
         lock (_lock) {
-            Samples.Add(new Sample(sectionId, parentId, startTimestamp, elapsedTicks));
+            Samples.Add(new Sample(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks));
         }
     }
 }
 
-internal readonly record struct Sample(int SectionId, int ParentId, long StartTimestamp, long ElapsedTicks);
+internal readonly record struct Sample(int SectionId, int ParentId, int NodeId, int ParentNodeId, long StartTimestamp, long ElapsedTicks);

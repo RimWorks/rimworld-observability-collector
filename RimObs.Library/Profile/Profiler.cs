@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace RimWorks.RimObs.Profile;
 
@@ -10,15 +11,28 @@ public static class Profiler {
     internal const int MaxStackDepth = 64;
     public const int NoParent = -1;
 
+    private const int NodeIdCounterMask = 0x00FFFFFF;
+
     public static volatile bool Enabled = true;
 
     private static ISampleSink? Sink;
+
+    private static int s_NextThreadBlock;
 
     [ThreadStatic]
     private static int[]? s_Stack;
 
     [ThreadStatic]
     private static int s_Depth;
+
+    [ThreadStatic]
+    private static int[]? s_NodeStack;
+
+    [ThreadStatic]
+    private static int s_ThreadBlock;
+
+    [ThreadStatic]
+    private static int s_NextNodeId;
 
     internal static void SetSink(ISampleSink? sink) => Sink = sink;
 
@@ -45,6 +59,16 @@ public static class Profiler {
             stack[depth] = sectionId;
         s_Depth = depth + 1;
 
+        int[]? nodes = s_NodeStack;
+        if (nodes == null) {
+            nodes = s_NodeStack = new int[MaxStackDepth];
+            s_ThreadBlock = (Interlocked.Increment(ref s_NextThreadBlock) & 0xFF) << 24;
+        }
+        if (depth < MaxStackDepth) {
+            s_NextNodeId = (s_NextNodeId + 1) & NodeIdCounterMask;
+            nodes[depth] = s_ThreadBlock | s_NextNodeId;
+        }
+
         return Stopwatch.GetTimestamp();
     }
 
@@ -57,16 +81,25 @@ public static class Profiler {
 
         int depth = s_Depth;
         int parentId = NoParent;
+        int nodeId = NoParent;
+        int parentNodeId = NoParent;
         if (depth > 0) {
             depth--;
             s_Depth = depth;
             int[]? stack = s_Stack;
             if (stack != null && depth > 0 && depth - 1 < MaxStackDepth)
                 parentId = stack[depth - 1];
+
+            int[]? nodes = s_NodeStack;
+            if (nodes != null && depth < MaxStackDepth) {
+                nodeId = nodes[depth];
+                if (depth > 0)
+                    parentNodeId = nodes[depth - 1];
+            }
         }
 
         ISampleSink? sink = Sink;
         if (sink != null)
-            sink.RecordSection(sectionId, parentId, token, elapsed);
+            sink.RecordSection(sectionId, parentId, nodeId, parentNodeId, token, elapsed);
     }
 }

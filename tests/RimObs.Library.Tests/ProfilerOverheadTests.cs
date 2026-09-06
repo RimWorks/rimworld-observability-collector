@@ -18,7 +18,7 @@ public sealed class ProfilerOverheadTests {
     private sealed class CountingSink : ISampleSink {
         public long Count;
 
-        public void RecordSection(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
+        public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
             Count++;
         }
     }

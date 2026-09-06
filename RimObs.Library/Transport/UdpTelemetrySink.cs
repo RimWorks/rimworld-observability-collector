@@ -74,7 +74,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void RecordSection(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
+    public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
         _ring.TryWrite(sectionId, parentId, startTimestamp, elapsedTicks, FrameTickCounters.FrameOrdinal);
     }
 

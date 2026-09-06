@@ -9,7 +9,7 @@ public sealed class ProfilerNestingTests {
     private sealed class CapturingSink : ISampleSink {
         public readonly List<(int SectionId, int ParentId)> Records = new();
 
-        public void RecordSection(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
+        public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
             Records.Add((sectionId, parentId));
         }
     }
