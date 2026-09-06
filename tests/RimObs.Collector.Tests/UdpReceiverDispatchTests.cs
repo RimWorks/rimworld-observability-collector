@@ -9,16 +9,39 @@ using Xunit;
 namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class UdpReceiverDispatchTests {
-    [Fact]
-    public void Dispatch_drops_payload_with_wrong_schema_version_without_aggregating() {
+    [Theory]
+    [MemberData(nameof(EveryBatchTypeWithWrongSchemaVersion))]
+    public void Dispatch_drops_payload_with_wrong_schema_version_without_aggregating(BatchType batchType, int schemaVersion) {
         SessionAggregator agg = new();
         UdpReceiver receiver = NewReceiver(agg);
-        byte[] bytes = SerializeEnvelope(BatchType.SessionMeta, [], schemaVersion: SchemaVersion.Current + 1);
+        byte[] bytes = SerializeEnvelope(batchType, [], schemaVersion: schemaVersion);
 
         receiver.Dispatch(bytes);
 
         agg.TotalBatches.Should().Be(0);
-        agg.Meta.Should().BeNull();
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryBatchType))]
+    public void Dispatch_reaches_aggregator_with_current_schema_version(BatchType batchType) {
+        SessionAggregator agg = new();
+        UdpReceiver receiver = NewReceiver(agg);
+        byte[] bytes = SerializeEnvelope(batchType, [], schemaVersion: SchemaVersion.Current);
+
+        receiver.Dispatch(bytes);
+
+        agg.TotalBatches.Should().Be(1);
+    }
+
+    [Fact]
+    public void Dispatch_returns_null_for_version_mismatched_ping() {
+        SessionAggregator agg = new();
+        UdpReceiver receiver = NewReceiver(agg);
+        byte[] bytes = SerializeEnvelope(BatchType.Ping, [], schemaVersion: SchemaVersion.Current + 1);
+
+        byte[]? response = receiver.Dispatch(bytes);
+
+        response.Should().BeNull();
     }
 
     [Fact]
@@ -189,6 +212,24 @@ public sealed class UdpReceiverDispatchTests {
         byte[]? response = receiver.Dispatch(envelope);
 
         response.Should().BeNull();
+    }
+
+    public static TheoryData<BatchType, int> EveryBatchTypeWithWrongSchemaVersion() {
+        TheoryData<BatchType, int> data = new();
+        foreach (BatchType batchType in Enum.GetValues<BatchType>()) {
+            data.Add(batchType, SchemaVersion.Current + 1);
+            data.Add(batchType, SchemaVersion.Current - 1);
+        }
+
+        return data;
+    }
+
+    public static TheoryData<BatchType> EveryBatchType() {
+        TheoryData<BatchType> data = new();
+        foreach (BatchType batchType in Enum.GetValues<BatchType>())
+            data.Add(batchType);
+
+        return data;
     }
 
     private static UdpReceiver NewReceiver(SessionAggregator agg) {
