@@ -35,19 +35,19 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="MessagePack" Version="2.5.302"/>
-        <PackageReference Include="Lib.Harmony" Version="2.4.2"/>
+        <PackageReference Include="MessagePack" Version="2.5.*"/>
+        <PackageReference Include="Lib.Harmony" Version="2.4.*"/>
         <PackageReference Include="RimWorks.RimLogging" Version="2.*"/>
         <!-- TODO(concord-pin): unpin with Concord.Ref, once EndExceptionBlock placement is a
              documented contract or Concord reaches 1.0. the two must move together. -->
-        <PackageReference Include="Concord.Runtime" Version="0.14.2"/>
+        <PackageReference Include="Concord.Runtime" Version="0.16.*"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1"/>
-        <PackageReference Include="xunit" Version="2.9.2"/>
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"/>
-        <PackageReference Include="FluentAssertions" Version="6.12.2"/>
-        <PackageReference Include="coverlet.collector" Version="6.0.2"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.*"/>
+        <PackageReference Include="xunit" Version="2.9.*"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*"/>
+        <PackageReference Include="FluentAssertions" Version="6.12.*"/>
+        <PackageReference Include="coverlet.collector" Version="6.0.*"/>
     </ItemGroup>
 </Project>
