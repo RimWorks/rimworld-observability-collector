@@ -37,6 +37,20 @@ public sealed class FrameRingTests {
     }
 
     [Fact]
+    public void Sealing_a_second_frame_does_not_leak_node_ids_from_the_first() {
+        FrameRing ring = new(8);
+        ring.Add(1, 10, -1, 100, -1, 100L, 500L);
+        ring.Add(1, 20, 10, 101, 100, 150L, 200L);
+        ring.Add(2, 30, -1, 200, -1, 700L, 400L);
+        ring.Add(3, 10, -1, 300, -1, 900L, 100L);
+
+        FrameSnapshot secondFrame = ring.Latest()!;
+        secondFrame.CaptureOrdinal.Should().Be(2);
+        secondFrame.NodeIds.Should().Equal(200);
+        secondFrame.ParentNodeIds.Should().Equal(-1);
+    }
+
+    [Fact]
     public void Frame_bounds_span_the_earliest_start_to_the_latest_end() {
         FrameRing ring = new(8);
         ring.Add(1, 20, 10, 101, 100, 150L, 200L);
