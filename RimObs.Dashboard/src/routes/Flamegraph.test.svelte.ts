@@ -56,10 +56,46 @@ const SECTIONS_BODY = {
     ],
 };
 
-function mockFetch(frames: unknown = FRAMES_BODY) {
+const BUNDLE_FRAMES_BODY = {
+    schema_version: 6,
+    session_id: 'sess-imported',
+    stopwatch_frequency: 10_000_000,
+    frames: [
+        { ...FRAMES_BODY.frame, capture_ordinal: 900 },
+        { ...FRAMES_BODY.frame, capture_ordinal: 901 },
+    ],
+    stats: FRAMES_BODY.stats,
+    dropped: { pre_frame_samples: 0, late_samples: 3 },
+};
+
+const BUNDLE_HOTSPOTS_BODY = {
+    hotspots: [
+        {
+            id: 10,
+            name: 'Verse.Root_Play.Update',
+            sample_count: 4,
+            total_ns: 900,
+            subsystem: 'render',
+        },
+        { id: 30, name: 'Verse.TickList.Tick', sample_count: 2, total_ns: 400, subsystem: 'tick' },
+    ],
+};
+
+const IMPORT_BODY = {
+    token: 'tok-1',
+    manifest: { session_id: 'sess-imported' },
+    contents: ['manifest.json', 'frames.json', 'hotspots.json'],
+};
+
+function mockFetch(frames: unknown = FRAMES_BODY, importBody: unknown = IMPORT_BODY) {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        const body = url.includes('/frames/latest') ? frames : SECTIONS_BODY;
+        let body: unknown;
+        if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
+        else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
+        else if (url.includes('/api/v1/import/bundle')) body = importBody;
+        else if (url.includes('/frames/latest')) body = frames;
+        else body = SECTIONS_BODY;
         return Promise.resolve(
             new Response(JSON.stringify(body), {
                 status: 200,
@@ -330,5 +366,38 @@ describe('Flamegraph page', () => {
                 'overhead 73 ns/scope (~0.02% of frame)',
             ),
         );
+    });
+
+    it('scrubs through an imported bundle instead of polling', async () => {
+        const { getByTestId, getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+
+        const scrub = await waitFor(() => getByTestId('frame-scrub'));
+        expect((scrub as HTMLInputElement).value).toBe('1');
+        await waitFor(() => expect(screen.getByText('901')).toBeInTheDocument());
+
+        await fireEvent.input(scrub, { target: { value: '0' } });
+        await waitFor(() => expect(screen.getByText('900')).toBeInTheDocument());
+    });
+
+    it('reads drops and stats from the bundle, not the live poller', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+
+        await screen.findByTestId('frame-scrub');
+        expect(screen.getByTestId('drop-late')).toHaveTextContent('3');
+        expect(screen.getByTestId('drop-preframe')).toHaveTextContent('0');
+    });
+
+    it('refuses a bundle with no frames.json and stays live', async () => {
+        mockFetch(FRAMES_BODY, { ...IMPORT_BODY, contents: ['manifest.json', 'hotspots.json'] });
+        const { getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/no frames\.json/i);
+        expect(screen.queryByTestId('frame-scrub')).toBeNull();
     });
 });
