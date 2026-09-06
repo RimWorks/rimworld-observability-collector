@@ -37,7 +37,8 @@ public sealed class UdpReceiverDispatchTests {
     public void Dispatch_returns_null_for_version_mismatched_ping() {
         SessionAggregator agg = new();
         UdpReceiver receiver = NewReceiver(agg);
-        byte[] bytes = SerializeEnvelope(BatchType.Ping, [], schemaVersion: SchemaVersion.Current + 1);
+        PingMessage ping = new() { OwnerId = "x", SentAtUtcTicks = 1 };
+        byte[] bytes = SerializeEnvelope(BatchType.Ping, WireCodec.Serialize(ping), schemaVersion: SchemaVersion.Current + 1);
 
         byte[]? response = receiver.Dispatch(bytes);
 
