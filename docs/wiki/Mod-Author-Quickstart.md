@@ -32,7 +32,7 @@ Add a `<modDependencies>` entry to your `About/About.xml` so players are prompte
 <modDependencies>
   <li>
     <packageId>rimworks.rimobs</packageId>
-    <displayName>RimWorld Observability Collector</displayName>
+    <displayName>RimObs</displayName>
     <steamWorkshopUrl>steam://url/CommunityFilePage/3733585062</steamWorkshopUrl>
   </li>
 </modDependencies>

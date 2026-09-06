@@ -24,8 +24,8 @@
         <AssemblyName>RimObs</AssemblyName>
 
         <PackageId>RimWorks.RimObs.Library</PackageId>
-        <Description>RimWorld Observability mod-side library. Register named sections and metrics; the out-of-process collector aggregates the data and serves a dashboard. Net472 / net48, RimWorld 1.6+.</Description>
-        <PackageTags>rimworld;observability;telemetry;harmony;mod</PackageTags>
+        <Description>RimObs mod-side library: performance profiling and telemetry for RimWorld mods. Register named sections and metrics; the out-of-process collector aggregates the data and serves a dashboard. Net472 / net48, RimWorld 1.6+.</Description>
+        <PackageTags>rimworld;observability;telemetry;profiling;performance;harmony;mod</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryUrl>https://github.com/RimWorks/rimworld-observability-collector</RepositoryUrl>

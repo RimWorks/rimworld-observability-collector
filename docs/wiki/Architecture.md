@@ -1,6 +1,6 @@
 # Architecture
 
-RimWorld Observability Collector spans three separate runtimes because each piece runs in a fundamentally different host environment.
+RimObs spans three separate runtimes because each piece runs in a fundamentally different host environment.
 
 ## TL;DR
 

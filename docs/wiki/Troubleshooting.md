@@ -6,7 +6,7 @@ Common problems and how to fix them, for both players and mod authors.
 
 **`Player.log`** is the primary source of truth. On Windows it lives at `%USERPROFILE%\AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Player.log`; on Linux/macOS it is in the equivalent Unity data directory. All `[RimObs]` messages land here.
 
-**In-game mod settings widget.** Open Options > Mod settings > RimWorld Observability. The status panel shows whether the collector is running, the port it is bound to, and whether the last bootstrap attempt succeeded.
+**In-game mod settings widget.** Open Options > Mod settings > RimObs. The status panel shows whether the collector is running, the port it is bound to, and whether the last bootstrap attempt succeeded.
 
 **The collector's own log file.** The collector writes a rolling daily log to:
 

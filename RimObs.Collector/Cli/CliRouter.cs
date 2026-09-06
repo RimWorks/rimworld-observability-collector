@@ -33,7 +33,7 @@ public static class CliRouter {
     }
 
     private static void PrintHelp(TextWriter writer) {
-        writer.WriteLine("Collector — RimWorld Observability Collector");
+        writer.WriteLine("Collector - the RimObs collector daemon");
         writer.WriteLine();
         writer.WriteLine("Usage:");
         writer.WriteLine("  Collector serve                       Start the daemon and dashboard.");

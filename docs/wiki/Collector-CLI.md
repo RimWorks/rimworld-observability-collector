@@ -1,6 +1,6 @@
 # Collector CLI
 
-The `Collector` binary is the RimWorld Observability Collector daemon: it hosts the HTTP and UDP API, owns SQLite session storage, and serves the embedded dashboard.
+The `Collector` binary is the RimObs collector daemon: it hosts the HTTP and UDP API, owns SQLite session storage, and serves the embedded dashboard.
 
 ## Synopsis
 

@@ -1,4 +1,4 @@
-# RimWorld Observability Collector
+# RimObs: RimWorld performance profiler and lag diagnostics
 
 [![Steam Workshop](https://img.shields.io/badge/Steam_Workshop-RimObs-1b2838?logo=steam&logoColor=white)](https://steamcommunity.com/sharedfiles/filedetails/?id=3733585062)
 [![Discord](https://img.shields.io/badge/Discord-RimWorld-5865F2?logo=discord&logoColor=white)](https://discord.gg/rimworld)
@@ -7,9 +7,18 @@
 
 <img src="https://raw.githubusercontent.com/RimWorks/rimworld-observability-collector/main/About/ModIcon.png" alt="RimObs icon" width="96" align="right">
 
-A telemetry framework for RimWorld mods. Mod authors register named sections
-and metrics; an out-of-process collector aggregates the data, serves a
-dashboard, and can export diagnostic bundles.
+Find out which mod is eating your TPS. RimObs profiles a running RimWorld colony and
+records where every tick goes: timed sections, counters, gauges, histograms, GC events,
+allocation samples, and Harmony patch conflicts. An out-of-process collector aggregates
+the data, serves a dashboard, and exports diagnostic bundles.
+
+Unlike Dubs Performance Analyzer, which shows a live readout for the session you are in,
+RimObs stores every session in a local database. Play once with a mod and once without,
+then diff the two hotspot tables and load orders to see what actually moved. Any session
+exports as a speedscope profile, and the collector exposes a Prometheus endpoint.
+
+Mod authors register their own named sections and metrics, which land in the same
+dashboard as the game's.
 
 [**Full documentation -->**](https://github.com/RimWorks/rimworld-observability-collector/wiki)
 
@@ -78,11 +87,11 @@ RimWorld-independent.
 The non-obvious neighbors at the repo root exist because this is both a
 RimWorld mod and a multi-project .NET solution:
 
-- `About/` -- RimWorld mod metadata (About.xml, Preview.png, loadFolders.xml).
-- `Assemblies/` -- RimWorld's deploy directory. `RimObs.Library` builds straight here.
-- `RimObs.sln` -- single solution so Rider/VS resolve `RimObs.Wire` from both net48 and net10.0 consumers.
-- `Makefile` + `make.ps1` -- see `make build`, `make test`, `make publish-collector`.
-- `docs/wiki/` -- source for [the wiki](https://github.com/RimWorks/rimworld-observability-collector/wiki). Edit here, not on the wiki site; CI mirrors on push to `main`.
+- `About/`: RimWorld mod metadata (About.xml, Preview.png, loadFolders.xml).
+- `Assemblies/`: RimWorld's deploy directory. `RimObs.Library` builds straight here.
+- `RimObs.sln`: single solution so Rider/VS resolve `RimObs.Wire` from both net48 and net10.0 consumers.
+- `Makefile` + `make.ps1`: see `make build`, `make test`, `make publish-collector`.
+- `docs/wiki/`: source for [the wiki](https://github.com/RimWorks/rimworld-observability-collector/wiki). Edit here, not on the wiki site; CI mirrors on push to `main`.
 
 ### Quick start
 
@@ -103,6 +112,14 @@ make publish-collector  # self-contained binaries for win/linux/osx
   port `17654` for HTTP and UDP in standalone mode; ephemeral when launched
   from the game. See
   [Wire protocol](https://github.com/RimWorks/rimworld-observability-collector/wiki/Wire-Protocol).
+
+## More modding tools from RimWorks
+
+| Tool | What it does |
+| --- | --- |
+| [RimLogging](https://github.com/RimWorks/rimworld-logging-framework) | Structured logging, an in-game log viewer, and one-click bug report sharing |
+| [Pickle](https://github.com/RimWorks/Rimworld-Pickle) | Run Gherkin tests against a live RimWorld session, in the game |
+| [Quickstarts](https://github.com/RimWorks/Rimworld-Quickstarts) | Boot straight into a configured colony from the dev quicktest menu |
 
 ## License
 

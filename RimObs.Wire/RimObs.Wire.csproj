@@ -13,7 +13,7 @@
         <DebugType>embedded</DebugType>
 
         <PackageId>RimWorks.RimObs.Wire</PackageId>
-        <Description>Wire protocol (MessagePack-style) shared between the RimWorld Observability collector and its mod-side library. Useful for third-party tools that read collector data.</Description>
+        <Description>Wire protocol (MessagePack-style) shared between the RimObs collector and its mod-side library. Useful for third-party tools that read collector data.</Description>
         <PackageTags>rimworld;observability;telemetry;wire-protocol</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>

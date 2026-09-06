@@ -14,7 +14,7 @@ public static class SettingsWindow {
         listing.Begin(inRect);
 
         Text.Font = GameFont.Medium;
-        listing.Label("RimWorld Observability");
+        listing.Label("RimObs");
         Text.Font = GameFont.Small;
         listing.GapLine();
 

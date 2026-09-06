@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-    <name>RimWorld Observability</name>
+    <name>RimObs</name>
     <packageId>RimWorks.RimObs</packageId>
     <author>RimWorks</author>
     <url>https://github.com/RimWorks/rimworld-observability-collector</url>
@@ -25,9 +25,11 @@
         <li>brrainz.harmony</li>
         <li>concordlib.concord</li>
     </loadAfter>
-    <description>Local performance telemetry framework for RimWorld players and mod authors.
+    <description>Performance profiler and lag diagnostics for RimWorld. Find out which mod is eating your TPS.
 
-Records timed sections, counters, gauges, histograms, GC events, and allocation samples from the game and ships them to a local collector daemon. The collector exposes a dashboard, exportable diagnostic bundles, and an optional Prometheus endpoint.
+RimObs records where every tick goes: timed sections, counters, gauges, histograms, GC events, allocation samples, and Harmony patch conflicts. A local collector daemon aggregates the data and serves a dashboard in your browser.
+
+Every session goes into a local database. Play once with a mod and once without, then put the two hotspot tables and load orders side by side and see what actually moved. Any session exports as a speedscope profile for a real flamegraph, or packs into a diagnostic bundle you can hand to a mod author. The collector also exposes an optional Prometheus endpoint.
 
 Needs a patching library to instrument the game: either Harmony (https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077) or Concord (https://steamcommunity.com/sharedfiles/filedetails/?id=3758333473). Install one. With both, Concord wins. With neither, RimObs still loads and the collector still runs, it just records nothing from the game.
 

@@ -124,7 +124,7 @@ public sealed class RimObsMod : Mod {
         }
     }
 
-    public override string SettingsCategory() => "RimWorld Observability";
+    public override string SettingsCategory() => "RimObs";
 
     public override void DoSettingsWindowContents(UnityEngine.Rect inRect) {
         CollectorStatus status = CollectorStatusProvider.CaptureCurrent();

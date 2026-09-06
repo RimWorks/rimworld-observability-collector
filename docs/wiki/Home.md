@@ -1,4 +1,4 @@
-# RimWorld Observability Collector
+# RimObs: RimWorld performance profiler and lag diagnostics
 
 A telemetry framework for RimWorld mods. Mod authors register named sections
 and metrics; an out-of-process collector aggregates the data, serves a
