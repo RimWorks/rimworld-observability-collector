@@ -11,6 +11,8 @@ riderModule.iml
 
 node_modules/
 RimObs.Dashboard/dist/
+# copied from node_modules by scripts/copy-speedscope.mjs
+RimObs.Dashboard/public/speedscope/
 RimObs.Dashboard/coverage/
 coverage.xml
 TestResults/
@@ -33,3 +35,6 @@ logs/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# written at publish time; belongs in the release zip and Steam, never the repo
+About/PublishStamp.txt

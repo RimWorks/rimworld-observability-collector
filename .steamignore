@@ -12,6 +12,7 @@ RimObs.Wire/
 RimObs.Collector/
 RimObs.Dashboard/
 Source/
+scripts/
 tests/
 
 bin/

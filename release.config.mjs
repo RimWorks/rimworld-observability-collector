@@ -36,6 +36,7 @@ const plugins = [
         '@semantic-release/exec',
         {
             prepareCmd: [
+                'node scripts/write-stamp.mjs',
                 "make publish-collector",
                 "dotnet pack RimObs.Wire/RimObs.Wire.csproj -c Release -p:Version=${nextRelease.version} -p:PackageVersion=${nextRelease.version} -p:FileVersion=${nextRelease.version.replace(/-.*/, '')}.0 -p:AssemblyVersion=${nextRelease.version.replace(/-.*/, '')}.0 -p:InformationalVersion=${nextRelease.version} -o ./nupkgs",
                 "dotnet pack RimObs.Library/RimObs.Library.csproj -c Release -p:Version=${nextRelease.version} -p:PackageVersion=${nextRelease.version} -p:FileVersion=${nextRelease.version.replace(/-.*/, '')}.0 -p:AssemblyVersion=${nextRelease.version.replace(/-.*/, '')}.0 -p:InformationalVersion=${nextRelease.version} -o ./nupkgs",
