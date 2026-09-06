@@ -66,7 +66,8 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, request.SessionId, StringComparison.Ordinal))
             return Task.FromResult(new BundleExportResult { Status = BundleExportStatus.UnknownSession });
 
-        BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes);
+        FrameSnapshot[] frames = request.Includes.Contains(BundleContentKey.Frames) ? _aggregator.Frames.Snapshot() : [];
+        BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
             : BundleSizeEstimator.Estimate(estimateInput);
@@ -78,7 +79,7 @@ public sealed class BundleExportService {
             });
         }
 
-        byte[] bytes = BuildZip(meta, request.Includes);
+        byte[] bytes = BuildZip(meta, request.Includes, frames);
         return Task.FromResult(new BundleExportResult {
             Status = BundleExportStatus.Ok,
             Bytes = bytes,
@@ -93,7 +94,8 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, sessionId, StringComparison.Ordinal))
             return new BundleEstimateResult { Status = BundleExportStatus.UnknownSession };
 
-        BundleEstimateInput estimateInput = BuildEstimateInput(includes);
+        FrameSnapshot[] frames = includes.Contains(BundleContentKey.Frames) ? _aggregator.Frames.Snapshot() : [];
+        BundleEstimateInput estimateInput = BuildEstimateInput(includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
             : BundleSizeEstimator.Estimate(estimateInput);
@@ -105,7 +107,7 @@ public sealed class BundleExportService {
         };
     }
 
-    private BundleEstimateInput BuildEstimateInput(IReadOnlySet<BundleContentKey> includes) {
+    private BundleEstimateInput BuildEstimateInput(IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames) {
         return new BundleEstimateInput {
             SectionCount = _aggregator.SectionCount,
             MetricCount = _aggregator.MetricCount,
@@ -113,12 +115,20 @@ public sealed class BundleExportService {
             CallEdgeCount = _aggregator.SnapshotCallEdges().Count,
             GcEventCount = (int)_aggregator.TotalGcEvents,
             PatchConflictCount = _aggregator.PatchConflicts.Count,
+            FrameNodeCount = CountFrameNodes(frames),
             MetricsSqliteBytes = 0,
             Includes = includes,
         };
     }
 
-    private byte[] BuildZip(SessionMeta meta, IReadOnlySet<BundleContentKey> includes) {
+    private static int CountFrameNodes(FrameSnapshot[] frames) {
+        int total = 0;
+        foreach (FrameSnapshot frame in frames)
+            total += frame.NodeCount;
+        return total;
+    }
+
+    private byte[] BuildZip(SessionMeta meta, IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames) {
         using MemoryStream output = new MemoryStream();
         using (ZipArchive zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true)) {
             List<string> entryNames = new List<string>();
@@ -159,7 +169,7 @@ public sealed class BundleExportService {
             }
             if (includes.Contains(BundleContentKey.Frames)) {
                 // compact: indented puts every node array element on its own line, ~130 bytes a node not ~45.
-                WriteJson(zip, "frames.json", BuildFrames(meta), indented: false);
+                WriteJson(zip, "frames.json", BuildFrames(meta, frames), indented: false);
                 entryNames.Add("frames.json");
             }
 
@@ -302,9 +312,8 @@ public sealed class BundleExportService {
         return new { roots = roots };
     }
 
-    private object BuildFrames(SessionMeta meta) {
+    private object BuildFrames(SessionMeta meta, FrameSnapshot[] frames) {
         double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
-        FrameSnapshot[] frames = _aggregator.Frames.Snapshot();
         object[] mapped = new object[frames.Length];
         for (int i = 0; i < frames.Length; i++)
             mapped[i] = FramePayload.Map(frames[i], meta.AnchorTimestamp, usPerTick);

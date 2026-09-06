@@ -9,6 +9,7 @@ public sealed class BundleEstimateInput {
     public int CallEdgeCount { get; set; }
     public int GcEventCount { get; set; }
     public int PatchConflictCount { get; set; }
+    public int FrameNodeCount { get; set; }
     public long MetricsSqliteBytes { get; set; }
     public IReadOnlySet<BundleContentKey> Includes { get; set; } = new HashSet<BundleContentKey>();
 }
@@ -33,6 +34,8 @@ public static class BundleSizeEstimator {
     private const int CallEdgeBytesPerRow = 150;
     private const int GcEventBytesPerRow = 120;
     private const int PatchBytesPerRow = 256;
+    // 45 bytes measured per node as compact json, 56 for headroom
+    private const int FrameBytesPerNode = 56;
 
     public static BundleSizeEstimate Estimate(BundleEstimateInput input) {
         long bytes = ManifestBytes + SessionSummaryBytes + CollectorHealthBytes;
@@ -47,6 +50,8 @@ public static class BundleSizeEstimator {
             bytes += input.GcEventCount * (long)GcEventBytesPerRow;
         if (input.Includes.Contains(BundleContentKey.Patches))
             bytes += input.PatchConflictCount * (long)PatchBytesPerRow;
+        if (input.Includes.Contains(BundleContentKey.Frames))
+            bytes += input.FrameNodeCount * (long)FrameBytesPerNode;
         if (input.Includes.Contains(BundleContentKey.MetricsSqlite))
             bytes += input.MetricsSqliteBytes;
 

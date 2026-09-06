@@ -60,4 +60,30 @@ public class BundleSizeEstimatorTests {
         estimate.ExceedsSoftCap.Should().BeTrue();
         BundleSizeEstimator.SoftCapBytes.Should().Be(25 * 1024 * 1024);
     }
+
+    [Fact]
+    public void Estimate_CountsFrameNodesOnlyWhenFramesIncluded() {
+        BundleEstimateInput input = new BundleEstimateInput {
+            FrameNodeCount = 400_000,
+            Includes = new HashSet<BundleContentKey>(),
+        };
+        BundleSizeEstimate without = BundleSizeEstimator.Estimate(input);
+
+        input.Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames };
+        BundleSizeEstimate with = BundleSizeEstimator.Estimate(input);
+
+        without.TotalBytes.Should().BeLessThan(64 * 1024);
+        with.TotalBytes.Should().BeGreaterThan(20L * 1024 * 1024);
+        with.ExceedsSoftCap.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Estimate_FlagsAHeavyFrameRingOverTheCap() {
+        BundleSizeEstimate estimate = BundleSizeEstimator.Estimate(new BundleEstimateInput {
+            FrameNodeCount = 800_000,
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+        });
+
+        estimate.ExceedsSoftCap.Should().BeTrue();
+    }
 }
