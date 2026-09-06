@@ -253,6 +253,7 @@
     "bundle.export.include.callHierarchy": "Aufrufhierarchie",
     "bundle.export.include.patches": "Patches",
     "bundle.export.include.metricsSqlite": "Metriken-SQLite",
+    "bundle.export.include.frames": "Frames",
     "bundle.export.estimateLabel": "Geschätzte Größe",
     "bundle.export.estimating": "Wird berechnet…",
     "bundle.export.estimateUnavailable": "Größe nicht verfügbar",

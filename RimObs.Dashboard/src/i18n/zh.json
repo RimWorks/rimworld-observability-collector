@@ -253,6 +253,7 @@
     "bundle.export.include.callHierarchy": "调用层级",
     "bundle.export.include.patches": "补丁",
     "bundle.export.include.metricsSqlite": "指标 SQLite",
+    "bundle.export.include.frames": "帧",
     "bundle.export.estimateLabel": "预计大小",
     "bundle.export.estimating": "正在计算…",
     "bundle.export.estimateUnavailable": "无法获取大小",

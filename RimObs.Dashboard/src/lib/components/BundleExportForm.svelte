@@ -22,6 +22,7 @@
         { key: 'call-hierarchy', labelKey: 'bundle.export.include.callHierarchy' },
         { key: 'patches', labelKey: 'bundle.export.include.patches' },
         { key: 'metrics-sqlite', labelKey: 'bundle.export.include.metricsSqlite' },
+        { key: 'frames', labelKey: 'bundle.export.include.frames' },
     ];
 
     let selected = $state<Set<string>>(new Set(defaultIncludes));

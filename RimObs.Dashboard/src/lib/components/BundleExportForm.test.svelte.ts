@@ -45,6 +45,7 @@ describe('BundleExportForm', () => {
         expect(getByLabelText(/Call hierarchy/i)).toBeTruthy();
         expect(getByLabelText(/Patches/i)).toBeTruthy();
         expect(getByLabelText(/Metrics SQLite/i)).toBeTruthy();
+        expect(getByLabelText(/^Frames$/i)).toBeTruthy();
     });
 
     it('calls onExport with selected includes', async () => {

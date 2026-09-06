@@ -267,6 +267,7 @@
     "bundle.export.include.callHierarchy": "Call hierarchy",
     "bundle.export.include.patches": "Patches",
     "bundle.export.include.metricsSqlite": "Metrics SQLite",
+    "bundle.export.include.frames": "Frames",
     "bundle.export.estimateLabel": "Estimated size",
     "bundle.export.estimating": "Calculating…",
     "bundle.export.estimateUnavailable": "Size unavailable",

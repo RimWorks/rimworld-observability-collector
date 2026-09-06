@@ -253,6 +253,7 @@
     "bundle.export.include.callHierarchy": "Jerarquía de llamadas",
     "bundle.export.include.patches": "Parches",
     "bundle.export.include.metricsSqlite": "Métricas SQLite",
+    "bundle.export.include.frames": "Fotogramas",
     "bundle.export.estimateLabel": "Tamaño estimado",
     "bundle.export.estimating": "Calculando…",
     "bundle.export.estimateUnavailable": "Tamaño no disponible",
