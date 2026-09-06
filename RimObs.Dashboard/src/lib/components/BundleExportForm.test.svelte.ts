@@ -61,9 +61,23 @@ describe('BundleExportForm', () => {
 
         expect(handler).toHaveBeenCalledOnce();
         const call = handler.mock.calls[0][0];
-        expect(call.includes).toEqual(expect.arrayContaining(['allocations', 'gc-events']));
+        expect(call.includes).toEqual(['allocations', 'gc-events']);
         expect(call.sessionId).toBe('sess-1');
         expect(call.force).toBe(false);
+    });
+
+    it('sends the frames wire key when frames is checked', async () => {
+        const handler = vi.fn();
+        const { getByLabelText, getByRole } = render(BundleExportForm, {
+            sessionId: 'sess-1',
+            onExport: handler,
+        });
+
+        await fireEvent.click(getByLabelText(/^Frames$/i));
+        await fireEvent.click(getByRole('button', { name: /Download bundle/i }));
+
+        const call = handler.mock.calls[0][0];
+        expect(call.includes).toEqual(['frames']);
     });
 
     it('shows the running size estimate', async () => {

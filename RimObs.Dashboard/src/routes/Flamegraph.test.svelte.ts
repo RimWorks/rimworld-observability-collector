@@ -75,9 +75,9 @@ const BUNDLE_HOTSPOTS_BODY = {
             name: 'Verse.Root_Play.Update',
             sample_count: 4,
             total_ns: 900,
-            subsystem: 'render',
+            subsystem: 'ui',
         },
-        { id: 30, name: 'Verse.TickList.Tick', sample_count: 2, total_ns: 400, subsystem: 'tick' },
+        { id: 30, name: 'Verse.TickList.Tick', sample_count: 2, total_ns: 400, subsystem: 'ai' },
     ],
 };
 
@@ -87,18 +87,25 @@ const IMPORT_BODY = {
     contents: ['manifest.json', 'frames.json', 'hotspots.json'],
 };
 
-function mockFetch(frames: unknown = FRAMES_BODY, importBody: unknown = IMPORT_BODY) {
+function mockFetch(
+    frames: unknown = FRAMES_BODY,
+    importBody: unknown = IMPORT_BODY,
+    importStatus = 200,
+) {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         let body: unknown;
+        let status = 200;
         if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
-        else if (url.includes('/api/v1/import/bundle')) body = importBody;
-        else if (url.includes('/frames/latest')) body = frames;
+        else if (url.includes('/api/v1/import/bundle')) {
+            body = importBody;
+            status = importStatus;
+        } else if (url.includes('/frames/latest')) body = frames;
         else body = SECTIONS_BODY;
         return Promise.resolve(
             new Response(JSON.stringify(body), {
-                status: 200,
+                status,
                 headers: { 'content-type': 'application/json' },
             }),
         );
@@ -373,12 +380,16 @@ describe('Flamegraph page', () => {
         const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
         await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
 
-        const scrub = await waitFor(() => getByTestId('frame-scrub'));
-        expect((scrub as HTMLInputElement).value).toBe('1');
+        const scrub = (await waitFor(() => getByTestId('frame-scrub'))) as HTMLInputElement;
+        expect(scrub.value).toBe('1');
+        expect(scrub.getAttribute('max')).toBe('1');
         await waitFor(() => expect(screen.getByText('901')).toBeInTheDocument());
 
         await fireEvent.input(scrub, { target: { value: '0' } });
         await waitFor(() => expect(screen.getByText('900')).toBeInTheDocument());
+
+        await fireEvent.input(scrub, { target: { value: scrub.getAttribute('max')! } });
+        await waitFor(() => expect(screen.getByText('901')).toBeInTheDocument());
     });
 
     it('reads drops and stats from the bundle, not the live poller', async () => {
@@ -391,6 +402,43 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('drop-preframe')).toHaveTextContent('0');
     });
 
+    it('colors imported bars by the bundle hotspots subsystem, not the live sections', async () => {
+        const { drawTimeline } = await import('../lib/frameDraw');
+        const { getByLabelText } = render(Flamegraph);
+        await waitFor(() => expect(vi.mocked(drawTimeline)).toHaveBeenCalled());
+        const callsBeforeImport = vi.mocked(drawTimeline).mock.calls.length;
+
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+        await screen.findByTestId('frame-scrub');
+
+        await waitFor(() =>
+            expect(vi.mocked(drawTimeline).mock.calls.length).toBeGreaterThan(callsBeforeImport),
+        );
+        const opts = vi.mocked(drawTimeline).mock.lastCall![2];
+        expect(opts.subsystem({ sectionId: 10 } as never)).toBe('ui');
+        expect(opts.subsystem({ sectionId: 30 } as never)).toBe('ai');
+    });
+
+    it('switching to a bundle stops the live poller, and switching back resumes it', async () => {
+        // the clock has to be fake before render, or the poller's interval is a real one and
+        // advancing the fake clock proves nothing about whether it stopped.
+        vi.useFakeTimers();
+        const { getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+        await screen.findByTestId('frame-scrub');
+
+        const afterImport = frameCalls();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(frameCalls()).toBe(afterImport);
+
+        const sourceSelect = getByLabelText(/^Source$/i) as HTMLSelectElement;
+        await fireEvent.change(sourceSelect, { target: { value: 'live' } });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(frameCalls()).toBeGreaterThan(afterImport);
+    });
+
     it('refuses a bundle with no frames.json and stays live', async () => {
         mockFetch(FRAMES_BODY, { ...IMPORT_BODY, contents: ['manifest.json', 'hotspots.json'] });
         const { getByLabelText } = render(Flamegraph);
@@ -399,5 +447,22 @@ describe('Flamegraph page', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent(/no frames\.json/i);
         expect(screen.queryByTestId('frame-scrub')).toBeNull();
+        expect((getByLabelText(/^Source$/i) as HTMLSelectElement).value).toBe('live');
+
+        // real timers on purpose: the poller's interval was created before this line, so a
+        // fake clock installed now would never fire it.
+        const base = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(base));
+    });
+
+    it('shows the import error and stays live when the import request fails', async () => {
+        mockFetch(FRAMES_BODY, { message: 'boom' }, 500);
+        const { getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/import failed: 500/i);
+        expect(screen.queryByTestId('frame-scrub')).toBeNull();
+        expect((getByLabelText(/^Source$/i) as HTMLSelectElement).value).toBe('live');
     });
 });
