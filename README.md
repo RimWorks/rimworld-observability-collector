@@ -1,5 +1,7 @@
 # RimWorld Observability Collector
 
+[![Steam Workshop](https://img.shields.io/badge/Steam_Workshop-RimObs-1b2838?logo=steam&logoColor=white)](https://steamcommunity.com/sharedfiles/filedetails/?id=3733585062)
+[![Discord](https://img.shields.io/badge/Discord-RimWorld-5865F2?logo=discord&logoColor=white)](https://discord.gg/rimworld)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)
 
