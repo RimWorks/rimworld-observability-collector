@@ -46,4 +46,31 @@ public sealed class FrameTickCountersTests {
         FrameTickCounters.Ticks.Should().Be(perWorker * workers);
         FrameTickCounters.Frames.Should().Be(perWorker * workers);
     }
+
+    [Fact]
+    public void BeginFrame_advances_the_ordinal_from_zero() {
+        FrameTickCounters.FrameOrdinal.Should().Be(0);
+
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.BeginFrame();
+
+        FrameTickCounters.FrameOrdinal.Should().Be(2);
+    }
+
+    [Fact]
+    public void Reset_zeroes_the_frame_ordinal() {
+        FrameTickCounters.BeginFrame();
+
+        FrameTickCounters.Reset();
+
+        FrameTickCounters.FrameOrdinal.Should().Be(0);
+    }
+
+    [Fact]
+    public void BeginFrame_does_not_move_the_fps_frame_count() {
+        FrameTickCounters.BeginFrame();
+
+        FrameTickCounters.Frames.Should().Be(0);
+        FrameTickCounters.FrameOrdinal.Should().Be(1);
+    }
 }

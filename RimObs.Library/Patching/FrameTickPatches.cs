@@ -26,8 +26,9 @@ internal static class FrameTickPatches {
 
         MethodBase? frame = ResolvedSection(FrameSection);
         if (frame != null) {
+            backend.PatchPrefix(frame, Own(nameof(FrameBeginPrefix)));
             backend.PatchPostfix(frame, Own(nameof(FramePostfix)));
-            InstalledCount++;
+            InstalledCount += 2;
         }
     }
 
@@ -46,6 +47,8 @@ internal static class FrameTickPatches {
     private static void DrainControlOpsPrefix() => ControlServices.Queue.Drain();
 
     private static void TickPostfix() => FrameTickCounters.RecordTick();
+
+    private static void FrameBeginPrefix() => FrameTickCounters.BeginFrame();
 
     private static void FramePostfix() => FrameTickCounters.RecordFrame();
 }

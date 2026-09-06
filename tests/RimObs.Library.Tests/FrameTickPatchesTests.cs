@@ -38,7 +38,7 @@ public sealed class FrameTickPatchesTests : IDisposable {
 
         FrameTickPatches.InstallAll();
 
-        FrameTickPatches.InstalledCount.Should().Be(before + 3);
+        FrameTickPatches.InstalledCount.Should().Be(before + 4);
         _backend.Prefixes.Should().ContainSingle(p =>
             ReferenceEquals(p.Target, tick) && p.Injection.Name == "DrainControlOpsPrefix");
         _backend.Postfixes.Should().HaveCount(2);
