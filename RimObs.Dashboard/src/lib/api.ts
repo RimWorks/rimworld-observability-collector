@@ -1,4 +1,4 @@
-import type { FrameResponse } from './frameTree';
+import type { FrameResponse, BundleFramesResponse } from './frameTree';
 
 export interface StatusResponse {
     schema_version: number;
@@ -300,6 +300,18 @@ export interface ImportBundleResponse {
     contents: string[];
 }
 
+export interface BundleHotspot {
+    id: number;
+    name: string;
+    sample_count: number;
+    total_ns: number;
+    subsystem: string | null;
+}
+
+export interface BundleHotspotsResponse {
+    hotspots: BundleHotspot[];
+}
+
 export class ApiError extends Error {
     constructor(
         public readonly status: number,
@@ -398,6 +410,10 @@ async function get<T>(path: string): Promise<T> {
 function authHeaders(): Record<string, string> {
     const token = (globalThis as { __RIMOBS_TOKEN__?: string }).__RIMOBS_TOKEN__;
     return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+function importFileUrl(token: string, name: string): string {
+    return `/api/v1/import/bundle/${encodeURIComponent(token)}/file/${encodeURIComponent(name)}`;
 }
 
 export const api = {
@@ -505,8 +521,11 @@ export const api = {
         if (!res.ok) throw new ApiError(res.status, `import failed: ${res.status}`);
         return (await res.json()) as ImportBundleResponse;
     },
-    getImportFileUrl: (token: string, name: string): string =>
-        `/api/v1/import/bundle/${encodeURIComponent(token)}/file/${encodeURIComponent(name)}`,
+    getImportFileUrl: importFileUrl,
+    importedFrames: (token: string) =>
+        get<BundleFramesResponse>(importFileUrl(token, 'frames.json')),
+    importedHotspots: (token: string) =>
+        get<BundleHotspotsResponse>(importFileUrl(token, 'hotspots.json')),
     deleteImport: async (token: string): Promise<void> => {
         const res = await fetch(`/api/v1/import/bundle/${encodeURIComponent(token)}`, {
             method: 'DELETE',

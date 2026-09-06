@@ -34,6 +34,15 @@ export interface FrameResponse {
     dropped: { pre_frame_samples: number; late_samples: number };
 }
 
+export interface BundleFramesResponse {
+    schema_version: number;
+    session_id: string;
+    stopwatch_frequency: number;
+    frames: FrameData[];
+    stats: FrameStats;
+    dropped: { pre_frame_samples: number; late_samples: number };
+}
+
 export interface TreeNode {
     sectionId: number;
     nodeId: number;

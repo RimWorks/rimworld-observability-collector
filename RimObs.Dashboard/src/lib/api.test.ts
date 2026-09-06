@@ -81,6 +81,24 @@ describe('api endpoint URLs', () => {
         await api.patches();
         expect(f.mock.calls[0][0]).toBe('/api/v1/sessions/current/patches');
     });
+
+    it('builds the imported frames URL from the token', async () => {
+        const f = mockFetch({ frames: [] });
+        await api.importedFrames('tok-1');
+        expect(f.mock.calls[0][0]).toBe('/api/v1/import/bundle/tok-1/file/frames.json');
+    });
+
+    it('builds the imported hotspots URL from the token', async () => {
+        const f = mockFetch({ hotspots: [] });
+        await api.importedHotspots('tok-1');
+        expect(f.mock.calls[0][0]).toBe('/api/v1/import/bundle/tok-1/file/hotspots.json');
+    });
+
+    it('escapes a token with url-unsafe characters', async () => {
+        const f = mockFetch({ frames: [] });
+        await api.importedFrames('a/b');
+        expect(f.mock.calls[0][0]).toBe('/api/v1/import/bundle/a%2Fb/file/frames.json');
+    });
 });
 
 describe('error handling', () => {
