@@ -109,6 +109,81 @@ curl -s -X POST http://localhost:17654/api/v1/config \
 
 ---
 
+### GET /api/v1/frames/latest
+
+Return the most recently sealed frame, plus ring-wide duration stats. This is what the dashboard's Flamegraph page polls.
+
+**Query parameters:** none.
+
+**Response**
+
+```json
+{
+  "schema_version": 6,
+  "stopwatch_frequency": 10000000,
+  "frame": {
+    "capture_ordinal": 1841,
+    "start_us": 0.0,
+    "end_us": 4210.5,
+    "duration_us": 4210.5,
+    "node_count": 2,
+    "nodes": {
+      "section_ids": [10, 30],
+      "parent_ids": [-1, 10],
+      "node_ids": [1, 2],
+      "parent_node_ids": [-1, 1],
+      "start_us": [0.0, 100.0],
+      "dur_us": [4210.5, 400.0]
+    }
+  },
+  "stats": {
+    "frame_count": 2000,
+    "newest_ordinal": 1841,
+    "oldest_ordinal": 0,
+    "median_us": 4100.0,
+    "p99_us": 9900.0,
+    "min_us": 800.0,
+    "max_us": 40000.0
+  },
+  "dropped": { "pre_frame_samples": 0, "late_samples": 0 }
+}
+```
+
+`frame` is `null` until the first frame seals. All six `nodes` arrays are the same length as `node_count`, and `start_us` is relative to the session anchor. To keep frames after the game closes, export a [diagnostic bundle](Diagnostic-Bundle) with `frames` included. The stored `frames.json` uses this same per-frame shape.
+
+**Status codes:** `200 OK`
+
+**Example**
+
+```bash
+curl -s "http://localhost:17654/api/v1/frames/latest"
+```
+
+---
+
+### GET /api/v1/import/bundle/{token}/file/{name}
+
+Return one raw entry from an imported bundle. `token` comes from the response to `POST /api/v1/import/bundle`. `name` is an entry from that bundle's `manifest.json`, for example `frames.json` or `hotspots.json`.
+
+**Path parameters**
+
+| Name | Type | Description |
+|---|---|---|
+| `token` | string | Import token returned when the bundle was uploaded |
+| `name` | string | Entry name from the bundle's `manifest.json` |
+
+**Response** - the raw entry bytes, not a JSON envelope. Content type is `application/json` for `.json` entries, `text/html` for `report.html`, and `application/octet-stream` for a `.sqlite` entry.
+
+**Status codes:** `200 OK`, `404 Not Found` (unknown token, or the bundle has no entry by that name)
+
+**Example**
+
+```bash
+curl -s "http://localhost:17654/api/v1/import/bundle/tok-1/file/frames.json"
+```
+
+---
+
 ### GET /api/v1/instrumentation/patches
 
 List active and persisted dynamic instrumentation patches.

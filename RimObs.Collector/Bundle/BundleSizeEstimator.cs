@@ -34,7 +34,8 @@ public static class BundleSizeEstimator {
     private const int CallEdgeBytesPerRow = 150;
     private const int GcEventBytesPerRow = 120;
     private const int PatchBytesPerRow = 256;
-    // 45 bytes measured per node as compact json, 56 for headroom
+    // 45 bytes a node on real data, 56 for headroom. that is ~24%, not a lot.
+    // revisit if a real session ever measures above 50.
     private const int FrameBytesPerNode = 56;
 
     public static BundleSizeEstimate Estimate(BundleEstimateInput input) {
