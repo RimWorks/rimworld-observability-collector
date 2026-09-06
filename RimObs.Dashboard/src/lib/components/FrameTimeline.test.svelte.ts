@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import FrameTimeline from './FrameTimeline.svelte';
 import { layoutFrame, quadIndexForNode } from '../frameLayout';
 import { fitView } from '../frameView';
@@ -551,6 +551,85 @@ describe('FrameTimeline', () => {
         } finally {
             globalThis.matchMedia = original;
         }
+    });
+
+    // regression: other keydown tests target the canvas directly, bypassing real DOM focus.
+    it('moves real DOM focus to the canvas on pointerdown, so a later keydown on activeElement reaches it', async () => {
+        // real throw, matching jsdom: a reordered focus() after this would never run.
+        const originalSetPointerCapture = HTMLCanvasElement.prototype.setPointerCapture;
+        HTMLCanvasElement.prototype.setPointerCapture = vi.fn(() => {
+            throw new Error('no pointer capture');
+        });
+        // the throw above is expected; stop jsdom reporting it as an unhandled window error.
+        const swallowExpectedThrow = (e: ErrorEvent) => e.preventDefault();
+        window.addEventListener('error', swallowExpectedThrow);
+        try {
+            render(FrameTimeline, { frame: FRAME, names: NAMES });
+            const canvas = screen.getByRole('application');
+            const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+            Object.assign(event, { clientX: 0, clientY: 0, pointerId: 1 });
+            await fireEvent(canvas, event);
+            expect(document.activeElement).toBe(canvas);
+
+            await fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+            expect(screen.getByRole('status')).toHaveTextContent('Verse.TickList.Tick');
+        } finally {
+            window.removeEventListener('error', swallowExpectedThrow);
+            if (originalSetPointerCapture === undefined) {
+                delete (HTMLCanvasElement.prototype as { setPointerCapture?: unknown })
+                    .setPointerCapture;
+            } else {
+                HTMLCanvasElement.prototype.setPointerCapture = originalSetPointerCapture;
+            }
+        }
+    });
+
+    it('shows both frame and budget percentages on hover, and they differ', async () => {
+        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const canvas = screen.getByRole('application');
+        stubRect(canvas, 600);
+        // depth 1, atUs ~324us: inside node0's [100, 500) span (dur_us 400 of a 16200us frame).
+        await firePointerMove(canvas, 12, 20);
+        await waitFor(() => expect(screen.getByText('of frame')).toBeInTheDocument());
+        const ofFrame = screen.getByText('of frame').nextElementSibling?.textContent;
+        const ofBudget = screen.getByText('of budget').nextElementSibling?.textContent;
+        expect(ofFrame).toBe('2.5%');
+        expect(ofBudget).toBe('2.4%');
+        expect(ofFrame).not.toBe(ofBudget);
+    });
+
+    it('shows the same two percentages in the selected-node readout', async () => {
+        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const canvas = screen.getByRole('application');
+        await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
+        const readout = screen.getByTestId('frame-selected');
+        expect(readout).toHaveTextContent('2.5% of frame');
+        expect(readout).toHaveTextContent('2.4% of budget');
+    });
+
+    // a long frame lets budget share pass 100% while frame share stays under it.
+    it('lets a node read over 100% of budget while under 100% of frame', async () => {
+        const overBudget: FrameData = {
+            capture_ordinal: 1,
+            start_us: 0,
+            end_us: 40000,
+            duration_us: 40000,
+            node_count: 2,
+            nodes: {
+                section_ids: [10, 30],
+                parent_ids: [-1, 10],
+                node_ids: [1, 2],
+                parent_node_ids: [-1, 1],
+                start_us: [0, 0],
+                dur_us: [40000, 20000],
+            },
+        };
+        render(FrameTimeline, { frame: overBudget, names: NAMES });
+        const canvas = screen.getByRole('application');
+        await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
+        const readout = screen.getByTestId('frame-selected');
+        expect(readout).toHaveTextContent('50.0% of frame');
+        expect(readout).toHaveTextContent('120.0% of budget');
     });
 
     // nothing stops the arrow keys (or wheel-equivalent +/-) from also scrolling the page.

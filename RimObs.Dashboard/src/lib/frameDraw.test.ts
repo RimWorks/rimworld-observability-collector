@@ -321,11 +321,30 @@ describe('drawTimeline', () => {
             expect(calls.some((c) => c.op === 'strokeRect')).toBe(true);
         });
 
+        it('draws the focus ring 2px wide', () => {
+            const { ctx } = recorder();
+            drawTimeline(ctx, [quad()], opts({ focusIndex: 0 }));
+            expect(ctx.lineWidth).toBe(2);
+        });
+
+        it('lightens the fill of the focused quad', () => {
+            const plain = recorder();
+            drawTimeline(plain.ctx, [quad()], opts());
+            const plainFill = fillStyleForRect(plain.calls, 0);
+
+            const focused = recorder();
+            drawTimeline(focused.ctx, [quad()], opts({ focusIndex: 0 }));
+            const focusFill = fillStyleForRect(focused.calls, 0);
+
+            expect(focusFill).not.toBe(plainFill);
+            expect(luminanceOf(focusFill)).toBeGreaterThan(luminanceOf(plainFill));
+        });
+
         it('outlines a clipped focused quad at the clipped bounds, not the raw offscreen ones', () => {
             const { ctx, calls } = recorder();
             drawTimeline(ctx, [quad({ startUs: -100, endUs: 200 })], opts({ focusIndex: 0 }));
             const stroke = calls.find((c) => c.op === 'strokeRect');
-            expect(stroke?.args).toEqual([0.5, 0.5, 199, ROW_HEIGHT - 2]);
+            expect(stroke?.args).toEqual([1, 1, 198, ROW_HEIGHT - 3]);
         });
 
         it('draws no outline when nothing is focused', () => {
@@ -441,21 +460,29 @@ describe('ink contrast against every fill', () => {
         return (lighter + 0.05) / (darker + 0.05);
     }
 
+    type QuadState = 'plain' | 'hovered' | 'focused';
+
     function inkAndFillFor(
         quadOver: Partial<Quad>,
-        hovered: boolean,
+        state: QuadState,
         subsystem: () => string | null,
-    ): { fill: string; ink: string } {
+    ): { fill: string; ink: string; stroke: string | null } {
         const { ctx, calls } = recorder();
         drawTimeline(
             ctx,
             [quad(quadOver)],
-            opts({ heightPx: 200, subsystem, hoverIndex: hovered ? 0 : -1 }),
+            opts({
+                heightPx: 200,
+                subsystem,
+                hoverIndex: state === 'hovered' ? 0 : -1,
+                focusIndex: state === 'focused' ? 0 : -1,
+            }),
         );
         const fillStyles = calls
             .filter((c) => c.op === 'fillStyle')
             .map((c) => c.args[0] as string);
-        return { fill: fillStyles[0], ink: fillStyles[1] };
+        const stroke = calls.find((c) => c.op === 'strokeStyle')?.args[0] as string | undefined;
+        return { fill: fillStyles[0], ink: fillStyles[1], stroke: stroke ?? null };
     }
 
     const SUBSYSTEMS_UNDER_TEST: Array<[string, () => string | null]> = [
@@ -466,30 +493,44 @@ describe('ink contrast against every fill', () => {
         ['none', () => null],
     ];
 
+    const STATES: QuadState[] = ['plain', 'hovered', 'focused'];
+
     for (const [name, subsystem] of SUBSYSTEMS_UNDER_TEST) {
         for (let depth = 0; depth <= 5; depth++) {
-            for (const hovered of [false, true]) {
-                it(`clears 3:1 for ${name} at depth ${depth}${hovered ? ' hovered' : ''}`, () => {
-                    const { fill, ink } = inkAndFillFor({ depth }, hovered, subsystem);
+            for (const state of STATES) {
+                it(`clears 3:1 for ${name} at depth ${depth}${state === 'plain' ? '' : ' ' + state}`, () => {
+                    const { fill, ink, stroke } = inkAndFillFor({ depth }, state, subsystem);
                     expect(
                         contrastRatio(luminanceOf(fill), luminanceOf(ink)),
                     ).toBeGreaterThanOrEqual(3);
+                    if (state === 'focused') expect(stroke).not.toBeNull();
+                    if (stroke !== null) {
+                        expect(
+                            contrastRatio(luminanceOf(fill), luminanceOf(stroke)),
+                        ).toBeGreaterThanOrEqual(3);
+                    }
                 });
             }
         }
     }
 
     for (let depth = 0; depth <= 5; depth++) {
-        for (const hovered of [false, true]) {
-            it(`clears 3:1 for a collapsed run at depth ${depth}${hovered ? ' hovered' : ''}`, () => {
-                const { fill, ink } = inkAndFillFor(
+        for (const state of STATES) {
+            it(`clears 3:1 for a collapsed run at depth ${depth}${state === 'plain' ? '' : ' ' + state}`, () => {
+                const { fill, ink, stroke } = inkAndFillFor(
                     { depth, count: 9, sectionId: -1 },
-                    hovered,
+                    state,
                     () => null,
                 );
                 expect(contrastRatio(luminanceOf(fill), luminanceOf(ink))).toBeGreaterThanOrEqual(
                     3,
                 );
+                if (state === 'focused') expect(stroke).not.toBeNull();
+                if (stroke !== null) {
+                    expect(
+                        contrastRatio(luminanceOf(fill), luminanceOf(stroke)),
+                    ).toBeGreaterThanOrEqual(3);
+                }
             });
         }
     }

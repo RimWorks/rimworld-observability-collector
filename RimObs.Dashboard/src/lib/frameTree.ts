@@ -28,6 +28,7 @@ export interface FrameStats {
 
 export interface FrameResponse {
     schema_version: number;
+    stopwatch_frequency: number;
     frame: FrameData | null;
     stats: FrameStats;
     dropped: { pre_frame_samples: number; late_samples: number };

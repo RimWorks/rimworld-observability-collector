@@ -327,5 +327,9 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
-    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data."
+    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data.",
+    "flamegraph.overhead": "sobrecarga",
+    "flamegraph.overhead.offrame": "del fotograma",
+    "flamegraph.timerres": "resolución del temporizador",
+    "flamegraph.overhead.hint": "Una estimación, no una medición: el número de ámbitos multiplicado por un costo de referencia de 73.4 ns por ámbito, suavizado y actualizado una vez por segundo. Cronometrar el generador de perfiles consigo mismo cambiaría el número que reporta."
 }

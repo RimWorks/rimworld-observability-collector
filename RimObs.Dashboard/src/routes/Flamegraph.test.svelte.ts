@@ -78,6 +78,10 @@ function cardValue(label: string) {
     return screen.getByText(label).parentElement?.textContent ?? '';
 }
 
+function cardValueEl(label: string) {
+    return screen.getByText(label).parentElement?.querySelector('.value') ?? null;
+}
+
 beforeEach(() => {
     HTMLCanvasElement.prototype.getContext = (() => ({}) as unknown) as never;
     mockFetch();
@@ -205,5 +209,126 @@ describe('Flamegraph page', () => {
         const settled = frameCalls();
         await vi.advanceTimersByTimeAsync(2000);
         expect(frameCalls()).toBe(settled);
+    });
+
+    it('shows the benchmarked overhead estimate as a percent of the frame', async () => {
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, node_count: 9, duration_us: 4045 },
+        });
+        render(Flamegraph);
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope'),
+        );
+        expect(screen.getByTestId('frame-overhead')).toHaveTextContent('0.02% of frame');
+    });
+
+    it('renders the timer resolution when the session reports a stopwatch frequency', async () => {
+        mockFetch({ ...FRAMES_BODY, stopwatch_frequency: 10_000_000 });
+        render(Flamegraph);
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('timer res 100 ns'),
+        );
+    });
+
+    it('omits timer res when the session reports no stopwatch frequency', async () => {
+        mockFetch({ ...FRAMES_BODY, stopwatch_frequency: 0 });
+        render(Flamegraph);
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope'),
+        );
+        expect(screen.getByTestId('frame-overhead')).not.toHaveTextContent('timer res');
+    });
+
+    it('marks the Duration stat as a warning once the frame runs over the tick budget', async () => {
+        mockFetch({ ...FRAMES_BODY, frame: { ...FRAMES_BODY.frame, duration_us: 20_000 } });
+        render(Flamegraph);
+        await waitFor(() => expect(cardValueEl('Duration')).not.toBeNull());
+        expect(cardValueEl('Duration')?.className).toContain('warn');
+    });
+
+    it('leaves the Duration stat unwarned under the tick budget', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(cardValueEl('Duration')).not.toBeNull());
+        expect(cardValueEl('Duration')?.className).not.toContain('warn');
+    });
+
+    it('shows a delta once a second frame has been seen, colored by severity', async () => {
+        vi.useFakeTimers();
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 1, duration_us: 1000 },
+        });
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(screen.getByTestId('frame-overhead')).not.toHaveTextContent('Δ');
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 2, duration_us: 1600 },
+        });
+        await vi.advanceTimersByTimeAsync(250);
+
+        const line = screen.getByTestId('frame-overhead');
+        expect(line.textContent).toContain('Δ');
+        expect(line.textContent).toContain('+');
+        expect(line.querySelector('.warn')).not.toBeNull();
+    });
+
+    it('leaves a small frame-to-frame wobble uncolored', async () => {
+        vi.useFakeTimers();
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 1, duration_us: 1000 },
+        });
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(0);
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 2, duration_us: 1200 },
+        });
+        await vi.advanceTimersByTimeAsync(250);
+
+        const line = screen.getByTestId('frame-overhead');
+        expect(line.textContent).toContain('Δ');
+        expect(line.querySelector('.warn')).toBeNull();
+        expect(line.querySelector('.cool')).toBeNull();
+    });
+
+    it('colors a frame-to-frame speedup cool, not warn, with no double space next to it', async () => {
+        vi.useFakeTimers();
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 1, duration_us: 1600 },
+        });
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(0);
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 2, duration_us: 1000 },
+        });
+        await vi.advanceTimersByTimeAsync(250);
+
+        const line = screen.getByTestId('frame-overhead');
+        expect(line.textContent).toContain('Δ');
+        expect(line.textContent).toContain('-');
+        expect(line.querySelector('.cool')).not.toBeNull();
+        expect(line.querySelector('.warn')).toBeNull();
+        expect(line.textContent).not.toMatch(/ {2,}/);
+    });
+
+    it('renders the overhead line with no stray space where the delta is absent', async () => {
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, node_count: 9, duration_us: 4045 },
+        });
+        render(Flamegraph);
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-overhead').textContent).toBe(
+                'overhead 73 ns/scope (~0.02% of frame)',
+            ),
+        );
     });
 });

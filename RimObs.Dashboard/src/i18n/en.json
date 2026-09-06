@@ -327,5 +327,9 @@
     "comparison.col.head": "Head",
     "comparison.col.delta": "Delta",
     "comparison.col.metric": "Metric",
-    "comparison.col.kind": "Kind"
+    "comparison.col.kind": "Kind",
+    "flamegraph.overhead": "overhead",
+    "flamegraph.overhead.offrame": "of frame",
+    "flamegraph.timerres": "timer res",
+    "flamegraph.overhead.hint": "An estimate, not a measurement: scope count times a benchmarked 73.4ns per scope, smoothed and refreshed once a second. Timing the profiler with itself would change the number it reports."
 }

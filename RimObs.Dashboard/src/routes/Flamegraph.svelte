@@ -7,6 +7,19 @@
     import StatCard from '../lib/components/StatCard.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import { ns, count } from '../lib/format';
+    import {
+        estimateOverheadUs,
+        shareOfFrame,
+        smoothOverhead,
+        OVERHEAD_SEED,
+        PER_SAMPLE_OVERHEAD_NS,
+        nsPerScopeText,
+        percent2,
+        timerResolutionNs,
+        timerResText,
+        budgetSeverity,
+        deltaSeverity,
+    } from '../lib/frameCost';
     import { t } from '../lib/i18n';
 
     const RATES = [
@@ -45,6 +58,43 @@
     let frame = $derived(framesRes?.data?.frame ?? null);
     let stats = $derived(framesRes?.data?.stats ?? null);
     let dropped = $derived(framesRes?.data?.dropped ?? { pre_frame_samples: 0, late_samples: 0 });
+    let stopwatchFrequency = $derived(framesRes?.data?.stopwatch_frequency ?? 0);
+    let timerResNs = $derived(timerResolutionNs(stopwatchFrequency));
+
+    let overhead = $state(OVERHEAD_SEED);
+    let deltaUs = $state<number | null>(null);
+    let lastOrdinal = -1;
+    let lastDurationUs: number | null = null;
+
+    // smoothOverhead gates the actual update to once a second; this just feeds it.
+    $effect(() => {
+        if (frame === null || frame.capture_ordinal === lastOrdinal) return;
+        const sample = shareOfFrame(estimateOverheadUs(frame.node_count), frame.duration_us);
+        overhead = smoothOverhead(overhead, sample, performance.now());
+        deltaUs = lastDurationUs === null ? null : frame.duration_us - lastDurationUs;
+        lastDurationUs = frame.duration_us;
+        lastOrdinal = frame.capture_ordinal;
+    });
+
+    function deltaText(us: number): string {
+        const sign = us > 0 ? '+' : us < 0 ? '-' : '';
+        return `${sign}${ns(Math.abs(us) * 1000)}`;
+    }
+
+    let overheadLine = $derived.by(() => {
+        const parts: string[] = [];
+        if (PER_SAMPLE_OVERHEAD_NS > 0) {
+            const pctSuffix =
+                overhead.percent > 0
+                    ? ` (~${percent2(overhead.percent)} ${t('flamegraph.overhead.offrame')})`
+                    : '';
+            parts.push(`${t('flamegraph.overhead')} ${nsPerScopeText()} ns/scope${pctSuffix}`);
+        }
+        if (timerResNs > 0) {
+            parts.push(`${t('flamegraph.timerres')} ${timerResText(timerResNs)} ns`);
+        }
+        return parts.join(' · ');
+    });
 </script>
 
 <div class="page">
@@ -79,6 +129,7 @@
                 icon="metric"
                 label={t('flamegraph.duration')}
                 value={ns((frame?.duration_us ?? 0) * 1000)}
+                tone={budgetSeverity(frame?.duration_us ?? 0) === 1 ? 'warn' : undefined}
             />
             <StatCard
                 icon="tree"
@@ -121,6 +172,14 @@
             </span>
         </div>
         <p class="drops-hint">{t('flamegraph.dropped.hint')}</p>
+
+        <p class="overhead-line mono" data-testid="frame-overhead">
+            {#if deltaUs !== null}<span
+                    class:warn={deltaSeverity(deltaUs) === 1}
+                    class:cool={deltaSeverity(deltaUs) === -1}>Δ {deltaText(deltaUs)}</span
+                >{overheadLine ? ' · ' : ''}{/if}{overheadLine}
+        </p>
+        <p class="drops-hint">{t('flamegraph.overhead.hint')}</p>
     </DataState>
 </div>
 
@@ -185,6 +244,14 @@
     }
     .warn {
         color: var(--warn);
+    }
+    .cool {
+        color: var(--good);
+    }
+    .overhead-line {
+        margin: var(--s-4) 0 0;
+        font-size: 0.82rem;
+        color: var(--text-faint);
     }
     .drops-hint {
         margin: var(--s-2) 0 0;

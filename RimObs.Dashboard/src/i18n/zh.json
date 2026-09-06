@@ -327,5 +327,9 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
-    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data."
+    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data.",
+    "flamegraph.overhead": "开销",
+    "flamegraph.overhead.offrame": "占帧",
+    "flamegraph.timerres": "计时器精度",
+    "flamegraph.overhead.hint": "这是估算值，不是实测值：按每个作用域 73.4 纳秒的基准开销乘以作用域数量得出，每秒平滑刷新一次。用性能分析器测量它自身会改变它报告的数字。"
 }

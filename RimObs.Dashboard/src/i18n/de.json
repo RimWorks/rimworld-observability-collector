@@ -327,5 +327,9 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
-    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data."
+    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data.",
+    "flamegraph.overhead": "Overhead",
+    "flamegraph.overhead.offrame": "des Frames",
+    "flamegraph.timerres": "Timer-Auflösung",
+    "flamegraph.overhead.hint": "Eine Schätzung, keine Messung: Anzahl der Scopes mal einem gemessenen Referenzwert von 73,4 ns pro Scope, geglättet und einmal pro Sekunde aktualisiert. Den Profiler mit sich selbst zu timen würde die gemeldete Zahl verändern."
 }

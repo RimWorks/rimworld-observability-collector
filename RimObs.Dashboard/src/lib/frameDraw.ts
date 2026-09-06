@@ -8,6 +8,7 @@ const LABEL_GAP = LABEL_PAD * 2;
 const MIN_QUAD_PX = 1;
 const HOVER_LIFT = 0.15;
 const INK_THRESHOLD = 0.16;
+const FOCUS_RING_PX = 2;
 
 const SUBSYSTEM_TOKENS = ['--sub-tick', '--sub-ai', '--sub-render', '--sub-ui'];
 const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui'];
@@ -72,13 +73,17 @@ function luminance(rgb: string): number {
 }
 
 // same lift as LiveFlamegraph, minus its root-bar depth offset.
-function quadFill(q: Quad, opts: DrawOptions, isHovered: boolean): string {
-    const lift = Math.min(q.depth, 5) * 0.07 + 0.12 + (isHovered ? HOVER_LIFT : 0);
+function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
+    const lift = Math.min(q.depth, 5) * 0.07 + 0.12 + (lifted ? HOVER_LIFT : 0);
     const base =
         q.count > 1 && q.sectionId < 0
             ? opts.theme.collapsed
             : (opts.theme.hue[opts.subsystem(q) ?? ''] ?? opts.theme.hueNone);
     return lighten(base, lift);
+}
+
+function inkOn(fill: string, theme: DrawTheme): string {
+    return luminance(fill) > INK_THRESHOLD ? theme.inkDark : theme.inkLight;
 }
 
 export function drawTimeline(
@@ -116,14 +121,22 @@ export function drawTimeline(
         if (right < x) continue;
         const w = Math.max(right - x, MIN_QUAD_PX);
 
-        const fill = quadFill(q, opts, i === opts.hoverIndex);
+        const isFocused = i === opts.focusIndex;
+        const fill = quadFill(q, opts, i === opts.hoverIndex || isFocused);
         ctx.fillStyle = fill;
         ctx.fillRect(x, y, w, ROW_HEIGHT - 1);
 
-        if (i === opts.focusIndex) {
-            ctx.strokeStyle = theme.inkLight;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 0.5, y + 0.5, Math.max(w - 1, 0), ROW_HEIGHT - 2);
+        const ink = inkOn(fill, theme);
+
+        if (isFocused) {
+            ctx.strokeStyle = ink;
+            ctx.lineWidth = FOCUS_RING_PX;
+            ctx.strokeRect(
+                x + FOCUS_RING_PX / 2,
+                y + FOCUS_RING_PX / 2,
+                Math.max(w - FOCUS_RING_PX, 0),
+                ROW_HEIGHT - 1 - FOCUS_RING_PX,
+            );
         }
 
         const text = q.count > 1 ? `${opts.label(q)} (${q.count})` : opts.label(q);
@@ -131,7 +144,7 @@ export function drawTimeline(
         if (textWidth + LABEL_PAD * 2 > w) continue;
         if (q.depth === labelRow && x < labelEnd) continue;
 
-        ctx.fillStyle = luminance(fill) > INK_THRESHOLD ? theme.inkDark : theme.inkLight;
+        ctx.fillStyle = ink;
         ctx.fillText(text, x + LABEL_PAD, y + ROW_HEIGHT / 2);
         labelRow = q.depth;
         labelEnd = x + LABEL_PAD + textWidth + LABEL_GAP;

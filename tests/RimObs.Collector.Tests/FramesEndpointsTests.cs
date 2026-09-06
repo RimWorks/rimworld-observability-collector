@@ -165,4 +165,48 @@ public sealed class FramesEndpointsTests {
             await app.StopAsync();
         }
     }
+
+    [Fact]
+    public async Task Latest_reports_the_session_stopwatch_frequency() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-freq-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-freq",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("stopwatch_frequency").GetInt64().Should().Be(10_000_000L);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Latest_reports_zero_stopwatch_frequency_before_any_session_meta() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-freq-empty-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("stopwatch_frequency").GetInt64().Should().Be(0L);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
 }

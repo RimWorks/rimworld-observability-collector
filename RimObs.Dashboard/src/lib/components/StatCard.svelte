@@ -6,11 +6,13 @@
         value,
         icon,
         tooltip,
+        tone,
     }: {
         label: string;
         value: string;
         icon: IconName;
         tooltip?: string;
+        tone?: 'warn';
     } = $props();
 </script>
 
@@ -22,7 +24,7 @@
         {:else}
             <span class="label">{label}</span>
         {/if}
-        <span class="value mono">{value}</span>
+        <span class="value mono" class:warn={tone === 'warn'}>{value}</span>
     </div>
 </div>
 
@@ -59,5 +61,8 @@
         font-weight: 600;
         line-height: 1.2;
         color: var(--text);
+    }
+    .value.warn {
+        color: var(--warn);
     }
 </style>

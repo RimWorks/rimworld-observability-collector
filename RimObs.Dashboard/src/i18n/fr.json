@@ -327,5 +327,9 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
-    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data."
+    "flamegraph.dropped.hint": "Samples the collector could not file into a frame. Anything above zero in Late means the frame ring lost data.",
+    "flamegraph.overhead": "surcharge",
+    "flamegraph.overhead.offrame": "de la frame",
+    "flamegraph.timerres": "résolution du minuteur",
+    "flamegraph.overhead.hint": "Une estimation, pas une mesure : le nombre de portées multiplié par un coût de référence de 73,4 ns par portée, lissé et actualisé une fois par seconde. Chronométrer le profileur avec lui-même changerait le chiffre qu'il rapporte."
 }

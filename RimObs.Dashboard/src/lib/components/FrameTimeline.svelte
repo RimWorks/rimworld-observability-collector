@@ -14,6 +14,7 @@
         type FocusMove,
     } from '../frameView';
     import { readTheme, drawTimeline, ROW_HEIGHT } from '../frameDraw';
+    import { shareOfFrame, shareOfBudget, percent } from '../frameCost';
     import { ns } from '../format';
 
     let {
@@ -99,9 +100,13 @@
     function nodeName(n: TreeNode): string {
         return names.get(n.sectionId)?.name ?? `section ${n.sectionId}`;
     }
+    function nodeCost(n: TreeNode): string {
+        const frameDurationUs = frame?.duration_us ?? 0;
+        return `${percent(shareOfFrame(n.durUs, frameDurationUs))} of frame, ${percent(shareOfBudget(n.durUs))} of budget`;
+    }
     let liveText = $derived(
         focusTreeIndex >= 0
-            ? `${nodeName(tree.nodes[focusTreeIndex])}, ${ns(tree.nodes[focusTreeIndex].durUs * 1000)}`
+            ? `${nodeName(tree.nodes[focusTreeIndex])}, ${ns(tree.nodes[focusTreeIndex].durUs * 1000)}, ${nodeCost(tree.nodes[focusTreeIndex])}`
             : '',
     );
 
@@ -241,6 +246,7 @@
 
     function handlePointerDown(event: PointerEvent): void {
         if (!frame || !canvasEl) return;
+        canvasEl.focus();
         canvasEl.setPointerCapture(event.pointerId);
         dragState = {
             startClientX: event.clientX,
@@ -383,10 +389,12 @@
                     <dd>{names.get(hoverNode.sectionId)?.subsystem ?? 'untagged'}</dd>
                     <dt>duration</dt>
                     <dd class="mono">{ns(hoverNode.durUs * 1000)}</dd>
-                    <dt>share</dt>
+                    <dt>of frame</dt>
                     <dd class="mono">
-                        {((hoverNode.durUs / Math.max(frame.duration_us, 1)) * 100).toFixed(1)}%
+                        {percent(shareOfFrame(hoverNode.durUs, frame.duration_us))}
                     </dd>
+                    <dt>of budget</dt>
+                    <dd class="mono">{percent(shareOfBudget(hoverNode.durUs))}</dd>
                     {#if hoverQuad && hoverQuad.count > 1}
                         <dt>calls</dt>
                         <dd class="mono">{hoverQuad.count}</dd>
@@ -395,6 +403,12 @@
             </div>
         {/if}
     </div>
+    {#if focusTreeIndex >= 0}
+        {@const focusNode = tree.nodes[focusTreeIndex]}
+        <p class="meta mono" data-testid="frame-selected">
+            {nodeName(focusNode)}, {ns(focusNode.durUs * 1000)}, {nodeCost(focusNode)}
+        </p>
+    {/if}
     <p class="meta">
         <span data-testid="frame-range" class="mono">{rangeText}</span>
     </p>
@@ -413,7 +427,7 @@
         background: var(--bg-surface);
         outline: none;
     }
-    canvas:focus-visible {
+    canvas:focus {
         box-shadow: var(--ring-focus);
     }
     .empty {
