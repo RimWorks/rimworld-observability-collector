@@ -323,7 +323,7 @@ public sealed class BundleExportService {
             session_id = meta.SessionId,
             stopwatch_frequency = meta.StopwatchFrequency,
             frames = mapped,
-            stats = FramePayload.MapStats(_aggregator.Frames.ComputeStats(), usPerTick),
+            stats = FramePayload.MapStats(FrameRing.StatsFor(frames), usPerTick),
             dropped = new {
                 pre_frame_samples = _aggregator.Frames.PreFrameSamples,
                 late_samples = _aggregator.Frames.LateSamples,

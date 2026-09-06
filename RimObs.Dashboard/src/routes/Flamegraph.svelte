@@ -65,27 +65,38 @@
         const file = input.files?.[0];
         if (!file) return;
         importError = '';
+        // holds an import nobody owns yet. cleared once it is handed to `imported`, so the
+        // finally deletes it on every path that bails, including a throw after the upload won.
+        let orphan = '';
         try {
             const res = await api.importBundle(file);
+            orphan = res.token;
             if (!res.contents.includes('frames.json')) {
                 importError = t('flamegraph.source.noFrames');
-                await api.deleteImport(res.token);
                 return;
             }
             const [frames, hotspots] = await Promise.all([
                 api.importedFrames(res.token),
                 api.importedHotspots(res.token),
             ]);
+            if (frames.frames.length === 0) {
+                importError = t('flamegraph.source.emptyFrames');
+                return;
+            }
             importedFrames = frames;
             importedNames = new Map(
                 hotspots.hotspots.map((h) => [h.id, { name: h.name, subsystem: h.subsystem }]),
             );
+            const previous = imported?.token;
             imported = { token: res.token, label: String(res.manifest.session_id ?? file.name) };
+            orphan = '';
+            if (previous) void api.deleteImport(previous);
             frameIndex = Math.max(0, frames.frames.length - 1);
             source = res.token;
         } catch (err) {
             importError = err instanceof ApiError ? err.message : String(err);
         } finally {
+            if (orphan) void api.deleteImport(orphan);
             input.value = '';
         }
     }
@@ -182,7 +193,7 @@
         <p class="import-error" role="alert">{importError}</p>
     {/if}
 
-    {#if !live && importedFrames}
+    {#if !live && importedFrames && importedFrames.frames.length > 0}
         <label class="scrub">
             <span class="dim">
                 {t('flamegraph.frameOf')

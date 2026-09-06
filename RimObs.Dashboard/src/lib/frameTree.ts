@@ -166,6 +166,8 @@ function emitInDrawOrder(
 // parent_node_ids address nodes exactly; parent_ids hold SECTION ids and cannot, because
 // DoSingleTick emits three TickList.Tick nodes per tick with one parent id between them.
 export function buildFrameTree(frame: FrameData): FrameTree {
+    // an imported bundle is a user-supplied zip, so nodes can be missing entirely.
+    if (!frame.nodes) return { nodes: [], orphanCount: 0 };
     const { section_ids, node_ids, parent_node_ids, start_us, dur_us } = frame.nodes;
     const n = Math.min(
         section_ids.length,

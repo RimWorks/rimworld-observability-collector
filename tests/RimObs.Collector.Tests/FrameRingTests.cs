@@ -105,6 +105,34 @@ public sealed class FrameRingTests {
         stats.NewestOrdinal.Should().Be(3);
     }
 
+    // the bundle exporter snapshots the ring once and must price that snapshot, not the ring,
+    // which keeps sealing frames while the zip is being written.
+    [Fact]
+    public void StatsFor_describes_the_array_it_is_given_not_the_live_ring() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 4; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 100L);
+
+        FrameSnapshot[] snapshot = ring.Snapshot();
+        ring.Add(9, 10, -1, 900, -1, 9000L, 100L);
+        ring.Add(10, 10, -1, 1000, -1, 10000L, 100L);
+
+        FrameRingStats fromSnapshot = FrameRing.StatsFor(snapshot);
+
+        fromSnapshot.FrameCount.Should().Be(snapshot.Length);
+        fromSnapshot.NewestOrdinal.Should().Be(3);
+        ring.ComputeStats().NewestOrdinal.Should().Be(9);
+    }
+
+    [Fact]
+    public void StatsFor_reports_an_empty_array_as_an_empty_ring() {
+        FrameRingStats stats = FrameRing.StatsFor([]);
+
+        stats.FrameCount.Should().Be(0);
+        stats.NewestOrdinal.Should().Be(-1);
+        stats.OldestOrdinal.Should().Be(-1);
+    }
+
     [Fact]
     public void Clear_resets_the_counters_and_reopens_at_a_lower_ordinal() {
         FrameRing ring = new(8);

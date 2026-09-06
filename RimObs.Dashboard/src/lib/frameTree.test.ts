@@ -29,6 +29,15 @@ describe('buildFrameTree', () => {
         expect(buildFrameTree(frame([]))).toEqual({ nodes: [], orphanCount: 0 });
     });
 
+    // the frame can come out of a user-supplied bundle zip, so nodes may not be there at all.
+    it('returns nothing when the frame carries no nodes object', () => {
+        const malformed = { capture_ordinal: 1, start_us: 0, end_us: 1, duration_us: 1 };
+        expect(buildFrameTree(malformed as unknown as FrameData)).toEqual({
+            nodes: [],
+            orphanCount: 0,
+        });
+    });
+
     it('puts a lone node at depth 0 with no parent', () => {
         const { nodes } = buildFrameTree(frame([[7, -1, 0, 50]]));
         expect(nodes).toHaveLength(1);

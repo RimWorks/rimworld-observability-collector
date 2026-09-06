@@ -125,36 +125,34 @@ public sealed class FrameRing {
         }
     }
 
+    public FrameRingStats ComputeStats() => StatsFor(Snapshot());
+
     // TODO(perf): sorts the whole ring per call, 2000 longs at a few hz. incremental
     // percentiles if the endpoint ever gets hot.
-    public FrameRingStats ComputeStats() {
-        lock (_gate) {
-            if (_count == 0)
-                return new FrameRingStats(0, 0, 0, 0, 0, -1, -1);
+    public static FrameRingStats StatsFor(FrameSnapshot[] frames) {
+        if (frames.Length == 0)
+            return new FrameRingStats(0, 0, 0, 0, 0, -1, -1);
 
-            long[] durations = new long[_count];
-            int start = _count < _buffer.Length ? 0 : _next;
-            int newest = int.MinValue;
-            int oldest = int.MaxValue;
-            for (int i = 0; i < _count; i++) {
-                FrameSnapshot frame = _buffer[(start + i) % _buffer.Length];
-                durations[i] = frame.DurationTicks;
-                if (frame.CaptureOrdinal > newest)
-                    newest = frame.CaptureOrdinal;
-                if (frame.CaptureOrdinal < oldest)
-                    oldest = frame.CaptureOrdinal;
-            }
-            Array.Sort(durations);
-            int p99 = Math.Min(_count - 1, (int)(_count * 0.99));
-            return new FrameRingStats(
-                _count,
-                durations[_count / 2],
-                durations[p99],
-                durations[0],
-                durations[_count - 1],
-                newest,
-                oldest);
+        long[] durations = new long[frames.Length];
+        int newest = int.MinValue;
+        int oldest = int.MaxValue;
+        for (int i = 0; i < frames.Length; i++) {
+            durations[i] = frames[i].DurationTicks;
+            if (frames[i].CaptureOrdinal > newest)
+                newest = frames[i].CaptureOrdinal;
+            if (frames[i].CaptureOrdinal < oldest)
+                oldest = frames[i].CaptureOrdinal;
         }
+        Array.Sort(durations);
+        int p99 = Math.Min(frames.Length - 1, (int)(frames.Length * 0.99));
+        return new FrameRingStats(
+            frames.Length,
+            durations[frames.Length / 2],
+            durations[p99],
+            durations[0],
+            durations[frames.Length - 1],
+            newest,
+            oldest);
     }
 
     public void Clear() {

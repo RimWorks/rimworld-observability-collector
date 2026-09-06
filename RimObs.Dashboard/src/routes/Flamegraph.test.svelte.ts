@@ -117,6 +117,18 @@ function frameCalls() {
         .length;
 }
 
+function deletedTokens() {
+    return vi
+        .mocked(fetch)
+        .mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'DELETE')
+        .map((c) => String(c[0]).split('/').pop());
+}
+
+async function openFile(getByLabelText: (m: RegExp) => HTMLElement, name = 'session.rimobs.zip') {
+    const file = new File(['zip'], name, { type: 'application/zip' });
+    await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+}
+
 function cardValue(label: string) {
     return screen.getByText(label).parentElement?.textContent ?? '';
 }
@@ -453,6 +465,64 @@ describe('Flamegraph page', () => {
         // fake clock installed now would never fire it.
         const base = frameCalls();
         await waitFor(() => expect(frameCalls()).toBeGreaterThan(base));
+    });
+
+    // an abandoned import holds the whole decompressed frames.json on disk for 30 minutes,
+    // so every path that does not hand the token to `imported` has to delete it.
+    it('deletes the previous import when a second bundle is opened', async () => {
+        let n = 0;
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            // the per-file URLs sit under the same prefix, so match the upload by method.
+            if (init?.method === 'POST') {
+                n += 1;
+                return Promise.resolve(
+                    new Response(JSON.stringify({ ...IMPORT_BODY, token: `tok-${n}` }), {
+                        status: 200,
+                        headers: { 'content-type': 'application/json' },
+                    }),
+                );
+            }
+            return realFetch(input, init);
+        }) as unknown as typeof fetch;
+
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+        await screen.findByTestId('frame-scrub');
+        expect(deletedTokens()).toEqual([]);
+
+        await openFile(getByLabelText, 'other.rimobs.zip');
+        await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
+    });
+
+    it('deletes the import when the bundle has no frames.json', async () => {
+        mockFetch(FRAMES_BODY, { ...IMPORT_BODY, contents: ['manifest.json'] });
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+        await screen.findByRole('alert');
+        await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
+    });
+
+    it('refuses a bundle whose frame ring is empty, deletes it, and stays live', async () => {
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            if (String(input).includes('/file/frames.json'))
+                return Promise.resolve(
+                    new Response(JSON.stringify({ ...BUNDLE_FRAMES_BODY, frames: [] }), {
+                        status: 200,
+                        headers: { 'content-type': 'application/json' },
+                    }),
+                );
+            return realFetch(input, init);
+        }) as unknown as typeof fetch;
+
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/empty frame ring/i);
+        expect(screen.queryByTestId('frame-scrub')).toBeNull();
+        expect((getByLabelText(/^Source$/i) as HTMLSelectElement).value).toBe('live');
+        await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
     });
 
     it('shows the import error and stays live when the import request fails', async () => {
