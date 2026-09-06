@@ -72,10 +72,13 @@ function resolveParents(
     relStart: number[],
     relEnd: number[],
 ): { parentWire: number[]; orphanCount: number } {
+    // order holds exactly the n valid wire indices; node_ids can run longer when a shorter
+    // sibling array (e.g. dur_us) truncated the frame, and an id past n must stay unresolved.
+    const n = order.length;
     const idToWire = new Map<number, number>();
-    for (let i = 0; i < node_ids.length; i++) idToWire.set(node_ids[i], i);
+    for (let i = 0; i < n; i++) idToWire.set(node_ids[i], i);
 
-    const parentWire = new Array<number>(node_ids.length).fill(NO_PARENT);
+    const parentWire = new Array<number>(n).fill(NO_PARENT);
     const openStack: number[] = [];
     let orphanCount = 0;
 

@@ -218,6 +218,34 @@ describe('buildFrameTree', () => {
         });
     });
 
+    // regression: dur_us shorter than node_ids truncated the frame to n, but the id map was
+    // still built from the full node_ids array, so a parent id past n silently resolved.
+    it('treats a parent id past the truncated node count as unresolved, not a match', () => {
+        const raggedFrame: FrameData = {
+            capture_ordinal: 1,
+            start_us: 0,
+            end_us: 100,
+            duration_us: 100,
+            node_count: 3,
+            nodes: {
+                section_ids: [10, 20, 30],
+                parent_ids: [10, 20, 30],
+                node_ids: [1, 2, 9],
+                parent_node_ids: [-1, 9, -1],
+                start_us: [0, 5, 6],
+                dur_us: [50, 10],
+            },
+        };
+        const { nodes, orphanCount } = buildFrameTree(raggedFrame);
+        expect(nodes).toHaveLength(2);
+        expect(orphanCount).toBe(1);
+        for (const node of nodes) {
+            expect(node.startUs).not.toBeUndefined();
+            expect(node.durUs).not.toBeUndefined();
+            expect(node.endUs).not.toBeUndefined();
+        }
+    });
+
     // regression: an inconsistent sort comparator could emit a child before its parent and throw
     describe('a same-interval ancestry chain sorts consistently under any input order', () => {
         // A<-B<-C<-D<-E, one shared interval. ids are stable identities so permuting
