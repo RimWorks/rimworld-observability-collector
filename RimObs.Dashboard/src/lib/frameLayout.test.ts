@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { foldFrame, layoutFrame, type LayoutOptions } from './frameLayout';
+import { foldFrame, layoutFrame, quadIndexForNode, type LayoutOptions } from './frameLayout';
 import type { TreeNode } from './frameTree';
 
 function node(depth: number, startUs: number, durUs: number, sectionId = 1): TreeNode {
@@ -175,5 +175,69 @@ describe('layoutFrame', () => {
         const quads = layoutFrame(tree, OPTS);
         expect(quads[0].totalUs).toBe(2);
         expect(quads[0].endUs - quads[0].startUs).toBe(3);
+    });
+});
+
+describe('quadIndexForNode', () => {
+    it('resolves a plain uncollapsed node to its own quad', () => {
+        const tree = [node(0, 100, 400)];
+        const quads = layoutFrame(tree, OPTS);
+        const result = quadIndexForNode(quads, tree[0]);
+        expect(result).toBe(0);
+        expect(quads[result].firstIndex).toBe(0);
+        expect(quads[result].count).toBe(1);
+    });
+
+    it('resolves both the first and a later member of a collapsed run to the run quad, not a neighbour', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1), node(1, 500, 1), node(1, 501, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(2);
+        expect(quads[0].count).toBeGreaterThan(1);
+        expect(quads[1].count).toBeGreaterThan(1);
+
+        expect(quadIndexForNode(quads, tree[0])).toBe(0);
+        expect(quadIndexForNode(quads, tree[1])).toBe(0);
+        expect(quadIndexForNode(quads, tree[2])).toBe(1);
+        expect(quadIndexForNode(quads, tree[3])).toBe(1);
+    });
+
+    it('resolves a folded node to -1', () => {
+        const tree = [node(1, 10, 5)];
+        const quads = layoutFrame(tree, { ...OPTS, minVisibleDurationUs: 10 });
+        expect(quads).toHaveLength(0);
+        expect(quadIndexForNode(quads, tree[0])).toBe(-1);
+    });
+
+    it('resolves a node deeper than maxDepth to -1', () => {
+        const tree = [node(0, 0, 500), node(1, 0, 400), node(2, 0, 300)];
+        const quads = layoutFrame(tree, { ...OPTS, maxDepth: 2 });
+        expect(quadIndexForNode(quads, tree[2])).toBe(-1);
+    });
+
+    it('resolves a node entirely outside the view to -1', () => {
+        const tree = [node(0, 0, 50), node(0, 200, 100), node(0, 2000, 100)];
+        const quads = layoutFrame(tree, { ...OPTS, viewStartUs: 100, viewEndUs: 1000 });
+        expect(quadIndexForNode(quads, tree[0])).toBe(-1);
+        expect(quadIndexForNode(quads, tree[2])).toBe(-1);
+    });
+
+    it('does not let a node at the same start time but a different depth resolve to the wrong row', () => {
+        const tree = [node(1, 10, 1), node(2, 10, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        const depth1 = quadIndexForNode(quads, tree[0]);
+        const depth2 = quadIndexForNode(quads, tree[1]);
+        expect(quads[depth1].depth).toBe(1);
+        expect(quads[depth2].depth).toBe(2);
+        expect(depth1).not.toBe(depth2);
+    });
+
+    it('resolves a node starting exactly at a run boundary to -1, not the previous run', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(1);
+        expect(quads[0]).toMatchObject({ startUs: 10, endUs: 12 });
+
+        const boundaryNode = node(1, 12, 5);
+        expect(quadIndexForNode(quads, boundaryNode)).toBe(-1);
     });
 });

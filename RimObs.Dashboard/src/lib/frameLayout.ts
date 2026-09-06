@@ -93,3 +93,15 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
     out.sort((a, b) => a.depth - b.depth || a.startUs - b.startUs);
     return out;
 }
+
+// depth plus time containment, not a lookup: a run's tree indices are not contiguous.
+// the LAST candidate, not the first, stops a node on a run boundary hitting the prior run.
+export function quadIndexForNode(quads: Quad[], node: TreeNode): number {
+    let candidate = -1;
+    for (let i = 0; i < quads.length; i++) {
+        const q = quads[i];
+        if (q.depth === node.depth && q.startUs <= node.startUs) candidate = i;
+    }
+    if (candidate === -1) return -1;
+    return node.startUs < quads[candidate].endUs ? candidate : -1;
+}
