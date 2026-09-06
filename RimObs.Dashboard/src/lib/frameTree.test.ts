@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildFrameTree, type FrameData } from './frameTree';
+import { buildFrameTree, NO_PARENT, type FrameData } from './frameTree';
 
-// each tuple is [sectionId, parentNodeId, startUs, durUs]. node ids are auto-assigned as
-// index + 1, so parentNodeId refers to those. -1 means root. samples arrive in Stop order,
-// so a child is listed before its parent, exactly as the wire delivers them.
+// tuple: [sectionId, parentNodeId, startUs, durUs]. node ids auto-assign as index + 1;
+// -1 is root. samples arrive in Stop order, so a child is listed before its parent.
 function frame(
     nodes: Array<[section: number, parentNodeId: number, start: number, dur: number]>,
     startUs = 0,
@@ -140,7 +139,7 @@ describe('buildFrameTree', () => {
         expect(nodes.map((n) => n.depth)).toEqual([0, 1]);
     });
 
-    it('starts a new root when a node begins after everything open has ended', () => {
+    it('treats two roots that do not overlap in time as independent', () => {
         const { nodes } = buildFrameTree(
             frame([
                 [10, -1, 0, 5],
@@ -191,6 +190,74 @@ describe('buildFrameTree', () => {
                 ]),
             );
             expect(orphanCount).toBe(0);
+        });
+
+        // kills a stack[0] mutant: with two open containers, the orphan must land on the inner one.
+        it('re-parents an orphan to the inner of two open containers, not the outer one', () => {
+            const { nodes, orphanCount } = buildFrameTree(
+                frame([
+                    [10, -1, 0, 50],
+                    [20, 1, 2, 40],
+                    [30, 99, 6, 1],
+                ]),
+            );
+            expect(orphanCount).toBe(1);
+            expect(nodes[2]).toMatchObject({ depth: 2, parentIndex: 1 });
+        });
+
+        // kills a mutant that skips popping closed containers off the stack.
+        it('does not attach an orphan to a container that already closed', () => {
+            const { nodes, orphanCount } = buildFrameTree(
+                frame([
+                    [10, -1, 0, 5],
+                    [30, 99, 10, 1],
+                ]),
+            );
+            expect(orphanCount).toBe(1);
+            expect(nodes[1]).toMatchObject({ depth: 0, parentIndex: -1 });
+        });
+    });
+
+    // regression: an inconsistent sort comparator could emit a child before its parent and throw
+    describe('a same-interval ancestry chain sorts consistently under any input order', () => {
+        // A<-B<-C<-D<-E, one shared interval. ids are stable identities so permuting
+        // array position never changes which node names which parent.
+        function chainFrame(positions: number[]): FrameData {
+            const ids = [201, 202, 203, 204, 205];
+            const parents = [NO_PARENT, 201, 202, 203, 204];
+            return {
+                capture_ordinal: 1,
+                start_us: 0,
+                end_us: 100,
+                duration_us: 100,
+                node_count: positions.length,
+                nodes: {
+                    section_ids: positions.map((p) => p + 1),
+                    parent_ids: positions.map((p) => p + 1),
+                    node_ids: positions.map((p) => ids[p]),
+                    parent_node_ids: positions.map((p) => parents[p]),
+                    start_us: positions.map(() => 10),
+                    dur_us: positions.map(() => 5),
+                },
+            };
+        }
+
+        function permutations(items: number[]): number[][] {
+            if (items.length <= 1) return [items];
+            const result: number[][] = [];
+            for (let i = 0; i < items.length; i++) {
+                const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+                for (const p of permutations(rest)) result.push([items[i], ...p]);
+            }
+            return result;
+        }
+
+        it('never throws and always resolves the same depths', () => {
+            for (const positions of permutations([0, 1, 2, 3, 4])) {
+                const { nodes } = buildFrameTree(chainFrame(positions));
+                expect(nodes.map((n) => n.depth)).toEqual([0, 1, 2, 3, 4]);
+                expect(nodes.map((n) => n.sectionId)).toEqual([1, 2, 3, 4, 5]);
+            }
         });
     });
 });

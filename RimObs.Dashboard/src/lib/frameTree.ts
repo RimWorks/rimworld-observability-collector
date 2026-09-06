@@ -50,6 +50,106 @@ export interface FrameTree {
     orphanCount: number;
 }
 
+// total order: start ascending, then duration descending, then wire index ascending.
+// transitive, so an exact-interval ancestry chain sorts the same way every time.
+function sortByInterval(n: number, relStart: number[], dur_us: number[]): number[] {
+    const order: number[] = [];
+    for (let i = 0; i < n; i++) order.push(i);
+    order.sort((a, b) => {
+        if (relStart[a] !== relStart[b]) return relStart[a] - relStart[b];
+        if (dur_us[a] !== dur_us[b]) return dur_us[b] - dur_us[a];
+        return a - b;
+    });
+    return order;
+}
+
+// an unresolved parent id falls back to the innermost still-open container, walked in
+// sorted order so an orphan's fallback reflects real containment, not wire arrival order.
+function resolveParents(
+    order: number[],
+    parent_node_ids: number[],
+    node_ids: number[],
+    relStart: number[],
+    relEnd: number[],
+): { parentWire: number[]; orphanCount: number } {
+    const idToWire = new Map<number, number>();
+    for (let i = 0; i < node_ids.length; i++) idToWire.set(node_ids[i], i);
+
+    const parentWire = new Array<number>(node_ids.length).fill(NO_PARENT);
+    const openStack: number[] = [];
+    let orphanCount = 0;
+
+    for (const i of order) {
+        while (openStack.length > 0 && relEnd[openStack[openStack.length - 1]] <= relStart[i]) {
+            openStack.pop();
+        }
+        const parentNodeId = parent_node_ids[i];
+        if (parentNodeId !== NO_PARENT) {
+            const wire = idToWire.get(parentNodeId);
+            if (wire === undefined) {
+                orphanCount++;
+                parentWire[i] = openStack.length > 0 ? openStack[openStack.length - 1] : NO_PARENT;
+            } else {
+                parentWire[i] = wire;
+            }
+        }
+        openStack.push(i);
+    }
+
+    return { parentWire, orphanCount };
+}
+
+// depth walks the parent chain directly; it must not assume the parent was emitted yet.
+function computeDepths(parentWire: number[]): number[] {
+    const depth = new Array<number>(parentWire.length).fill(-1);
+    const depthOf = (i: number): number => {
+        if (depth[i] === -1) {
+            const p = parentWire[i];
+            depth[i] = p === NO_PARENT ? 0 : depthOf(p) + 1;
+        }
+        return depth[i];
+    };
+    for (let i = 0; i < parentWire.length; i++) depthOf(i);
+    return depth;
+}
+
+// emit in sorted order, pulling an unemitted parent forward first. only an exact
+// interval tie needs this; real containment already sorts a parent before its child.
+function emitInDrawOrder(
+    order: number[],
+    parentWire: number[],
+    depth: number[],
+    section_ids: number[],
+    node_ids: number[],
+    relStart: number[],
+    relEnd: number[],
+    dur_us: number[],
+): TreeNode[] {
+    const nodes: TreeNode[] = [];
+    const wireToOutput = new Array<number>(parentWire.length).fill(-1);
+
+    const emit = (i: number): number => {
+        if (wireToOutput[i] === -1) {
+            const p = parentWire[i];
+            const parentIndex = p === NO_PARENT ? NO_PARENT : emit(p);
+            wireToOutput[i] = nodes.length;
+            nodes.push({
+                sectionId: section_ids[i],
+                nodeId: node_ids[i],
+                parentIndex,
+                depth: depth[i],
+                startUs: relStart[i],
+                durUs: dur_us[i],
+                endUs: relEnd[i],
+            });
+        }
+        return wireToOutput[i];
+    };
+
+    for (const i of order) emit(i);
+    return nodes;
+}
+
 // parent_node_ids address nodes exactly; parent_ids hold SECTION ids and cannot, because
 // DoSingleTick emits three TickList.Tick nodes per tick with one parent id between them.
 export function buildFrameTree(frame: FrameData): FrameTree {
@@ -63,63 +163,33 @@ export function buildFrameTree(frame: FrameData): FrameTree {
     );
     if (n === 0) return { nodes: [], orphanCount: 0 };
 
-    const origin = frame.start_us; // node starts are session absolute, the view is frame relative
-    const order = new Array<number>(n);
-    for (let i = 0; i < n; i++) order[i] = i;
-
-    order.sort((a, b) => {
-        if (start_us[a] !== start_us[b]) return start_us[a] - start_us[b];
-        if (dur_us[a] !== dur_us[b]) return dur_us[b] - dur_us[a];
-        // identical interval: the parent must be drawn, and pushed, before its child
-        if (parent_node_ids[a] === node_ids[b]) return 1;
-        if (parent_node_ids[b] === node_ids[a]) return -1;
-        return a - b;
-    });
-
-    const outOf = new Int32Array(n);
-    for (let k = 0; k < n; k++) outOf[order[k]] = k;
-
-    const idToWire = new Map<number, number>();
-    for (let i = 0; i < n; i++) idToWire.set(node_ids[i], i);
-
-    const nodes: TreeNode[] = [];
-    const stack: number[] = [];
-    let orphanCount = 0;
-
-    for (let k = 0; k < n; k++) {
-        const i = order[k];
-        const startUs = start_us[i] - origin;
-        const endUs = startUs + dur_us[i];
-
-        while (stack.length > 0 && nodes[stack[stack.length - 1]].endUs <= startUs) {
-            stack.pop();
-        }
-
-        let parentIndex = NO_PARENT;
-        const parentNodeId = parent_node_ids[i];
-        if (parentNodeId !== NO_PARENT) {
-            const wire = idToWire.get(parentNodeId);
-            if (wire === undefined) {
-                // the parent's datagram never arrived. re-parent by containment so the frame
-                // still draws, and count it so the page can admit the loss.
-                orphanCount++;
-                parentIndex = stack.length > 0 ? stack[stack.length - 1] : NO_PARENT;
-            } else {
-                parentIndex = outOf[wire];
-            }
-        }
-
-        nodes.push({
-            sectionId: section_ids[i],
-            nodeId: node_ids[i],
-            parentIndex,
-            depth: parentIndex >= 0 ? nodes[parentIndex].depth + 1 : 0,
-            startUs,
-            durUs: dur_us[i],
-            endUs,
-        });
-        stack.push(nodes.length - 1);
+    const origin = frame.start_us;
+    const relStart = new Array<number>(n);
+    const relEnd = new Array<number>(n);
+    for (let i = 0; i < n; i++) {
+        relStart[i] = start_us[i] - origin;
+        relEnd[i] = relStart[i] + dur_us[i];
     }
+
+    const order = sortByInterval(n, relStart, dur_us);
+    const { parentWire, orphanCount } = resolveParents(
+        order,
+        parent_node_ids,
+        node_ids,
+        relStart,
+        relEnd,
+    );
+    const depth = computeDepths(parentWire);
+    const nodes = emitInDrawOrder(
+        order,
+        parentWire,
+        depth,
+        section_ids,
+        node_ids,
+        relStart,
+        relEnd,
+        dur_us,
+    );
 
     return { nodes, orphanCount };
 }
