@@ -20,7 +20,7 @@ Eight entries are always written, and five more are opt-in, requested by name in
 | Entry | Always | `include` value | What it holds |
 |---|---|---|---|
 | `manifest.json` | yes | | Schema version, session id, collector version, entry list |
-| `session_summary.json` | yes | | Session id, versions, batch and sample totals |
+| `session_summary.json` | yes | | Session id, versions, batch, and sample totals |
 | `metric_descriptors.json` | yes | | Every registered metric: id, name, kind, unit |
 | `hotspots.json` | yes | | Every section by total time: id, name, sample count, total ns, subsystem |
 | `custom_metrics.json` | yes | | Metric values per label set |
@@ -37,7 +37,7 @@ Both spellings work for the two-word `include` values: `gc_events` and `gc-event
 
 ## Frames
 
-`frames.json` carries every sealed frame the collector still holds, in the same shape `GET /api/v1/frames/latest` serves one frame in. It is written compact rather than indented because the node arrays dominate the file.
+`frames.json` carries every sealed frame the collector still holds, in the same shape `GET /api/v1/frames/latest` serves one frame in. The exporter writes it compact rather than indented, because the node arrays dominate the file.
 
 ```json
 {
@@ -69,7 +69,7 @@ Both spellings work for the two-word `include` values: `gc_events` and `gc-event
 
 **Size.** Roughly 45 bytes a node. A typical session runs about 200 nodes a frame, so 2000 frames is around 18 MB before compression and about 3 MB inside the zip. The export estimate prices it at 56 bytes a node. Past roughly 280 nodes a frame the estimate crosses the 25 MB soft cap and the export form asks you to confirm.
 
-**Reading it back.** Import the bundle on the Flamegraph page under "Open bundle". The page stops polling, reads `frames.json` and `hotspots.json` out of the import, and gives you a scrubber over every stored frame. Section names and subsystem colours come from `hotspots.json`, so a bundle exported without frames cannot be scrubbed.
+**Reading it back.** Import the bundle on the Flamegraph page under "Open bundle." The page stops polling, reads `frames.json` and `hotspots.json` out of the import, and gives you a scrubber over every stored frame. Section names and subsystem colours come from `hotspots.json`, so a bundle exported without frames cannot be scrubbed.
 
 ## Related
 

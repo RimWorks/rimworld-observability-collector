@@ -172,7 +172,7 @@ Return one raw entry from an imported bundle. `token` comes from the response to
 | `token` | string | Import token returned when the bundle was uploaded |
 | `name` | string | Entry name from the bundle's `manifest.json` |
 
-**Response** - the raw entry bytes, not a JSON envelope. Content type is `application/json` for `.json` entries, `text/html` for `report.html`, and `application/octet-stream` for a `.sqlite` entry.
+**Response** - the raw entry bytes, not a JSON envelope. The media type is `application/json` for `.json` entries, `text/html` for `report.html`, and `application/octet-stream` for a `.sqlite` entry.
 
 **Status codes:** `200 OK`, `404 Not Found` (unknown token, or the bundle has no entry by that name)
 
