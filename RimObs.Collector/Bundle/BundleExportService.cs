@@ -157,6 +157,11 @@ public sealed class BundleExportService {
                 WriteJson(zip, "call_hierarchy.json", BuildCallHierarchy(meta));
                 entryNames.Add("call_hierarchy.json");
             }
+            if (includes.Contains(BundleContentKey.Frames)) {
+                // compact: indented puts every node array element on its own line, ~130 bytes a node not ~45.
+                WriteJson(zip, "frames.json", BuildFrames(meta), indented: false);
+                entryNames.Add("frames.json");
+            }
 
             string reportHtml = BuildReportHtml(meta, entryNames);
             WriteText(zip, "report.html", reportHtml);
@@ -174,10 +179,10 @@ public sealed class BundleExportService {
         return output.ToArray();
     }
 
-    private static void WriteJson(ZipArchive zip, string name, object payload) {
+    private static void WriteJson(ZipArchive zip, string name, object payload, bool indented = true) {
         ZipArchiveEntry entry = zip.CreateEntry(name, CompressionLevel.Optimal);
         using Stream stream = entry.Open();
-        using Utf8JsonWriter writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+        using Utf8JsonWriter writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = indented });
         JsonSerializer.Serialize(writer, payload, BundleManifest.JsonOptions);
     }
 
@@ -295,6 +300,25 @@ public sealed class BundleExportService {
         Dictionary<int, string> names = _aggregator.SnapshotSections().ToDictionary(s => s.SectionId, s => s.Name);
         IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(_aggregator.SnapshotCallEdges(), names, nsPerTick, CallTreeBuilder.DefaultDepthCap, CallTreeBuilder.DefaultTopN);
         return new { roots = roots };
+    }
+
+    private object BuildFrames(SessionMeta meta) {
+        double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+        FrameSnapshot[] frames = _aggregator.Frames.Snapshot();
+        object[] mapped = new object[frames.Length];
+        for (int i = 0; i < frames.Length; i++)
+            mapped[i] = FramePayload.Map(frames[i], meta.AnchorTimestamp, usPerTick);
+        return new {
+            schema_version = SchemaVersion.Current,
+            session_id = meta.SessionId,
+            stopwatch_frequency = meta.StopwatchFrequency,
+            frames = mapped,
+            stats = FramePayload.MapStats(_aggregator.Frames.ComputeStats(), usPerTick),
+            dropped = new {
+                pre_frame_samples = _aggregator.Frames.PreFrameSamples,
+                late_samples = _aggregator.Frames.LateSamples,
+            },
+        };
     }
 
     private string BuildReportHtml(SessionMeta meta, IReadOnlyList<string> entryNames) {

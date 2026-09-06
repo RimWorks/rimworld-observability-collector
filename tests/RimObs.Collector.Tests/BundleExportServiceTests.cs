@@ -30,6 +30,7 @@ public class BundleExportServiceTests {
         "gc_events.json",
         "patches.json",
         "call_hierarchy.json",
+        "frames.json",
     ];
     private static SessionAggregator BuildAggregator() {
         SessionAggregator aggregator = new SessionAggregator();
@@ -73,6 +74,7 @@ public class BundleExportServiceTests {
                 BundleContentKey.GcEvents,
                 BundleContentKey.Patches,
                 BundleContentKey.CallHierarchy,
+                BundleContentKey.Frames,
             },
             Force = false,
         }, CancellationToken.None);
@@ -171,5 +173,76 @@ public class BundleExportServiceTests {
         manifest.SchemaVersion.Should().Be(1);
         manifest.CollectorVersion.Should().Be("0.1.0");
         manifest.Entries.Should().Contain("report.html");
+    }
+
+    [Fact]
+    public async Task Export_FramesEntryCarriesTheWholeRing() {
+        SessionAggregator aggregator = BuildAggregator();
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            aggregator.Frames.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+
+        result.Status.Should().Be(BundleExportStatus.Ok);
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = zip.GetEntry("frames.json")!.Open();
+        using JsonDocument doc = JsonDocument.Parse(entry);
+
+        JsonElement frames = doc.RootElement.GetProperty("frames");
+        frames.GetArrayLength().Should().Be(2);
+        frames[0].GetProperty("capture_ordinal").GetInt32().Should().Be(1);
+        frames[0].GetProperty("node_count").GetInt32().Should().Be(1);
+        frames[0].GetProperty("nodes").GetProperty("section_ids")[0].GetInt32().Should().Be(10);
+        doc.RootElement.GetProperty("session_id").GetString().Should().Be("sess-test");
+        doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Export_FramesEntryCarriesTheStopwatchFrequency() {
+        SessionAggregator aggregator = BuildAggregator();
+        aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
+        aggregator.Frames.Add(2, 10, -1, 200, -1, 2000L, 500L);
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = zip.GetEntry("frames.json")!.Open();
+        using JsonDocument doc = JsonDocument.Parse(entry);
+
+        doc.RootElement.GetProperty("stopwatch_frequency").GetInt64().Should().Be(10_000_000L);
+    }
+
+    [Fact]
+    public async Task Export_FramesEntryIsWrittenCompact() {
+        SessionAggregator aggregator = BuildAggregator();
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            aggregator.Frames.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using StreamReader frames = new StreamReader(zip.GetEntry("frames.json")!.Open());
+        using StreamReader summary = new StreamReader(zip.GetEntry("session_summary.json")!.Open());
+
+        frames.ReadToEnd().Should().NotContain("\n");
+        summary.ReadToEnd().Should().Contain("\n");
     }
 }

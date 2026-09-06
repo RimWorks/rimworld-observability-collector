@@ -6,4 +6,5 @@ public enum BundleContentKey {
     GcEvents,
     Allocations,
     Patches,
+    Frames,
 }

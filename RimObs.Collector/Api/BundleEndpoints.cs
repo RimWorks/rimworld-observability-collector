@@ -126,6 +126,7 @@ public static class BundleEndpoints {
                 "gc-events" or "gc_events" => BundleContentKey.GcEvents,
                 "allocations" => BundleContentKey.Allocations,
                 "patches" => BundleContentKey.Patches,
+                "frames" => BundleContentKey.Frames,
                 _ => null,
             };
             if (key is not null) set.Add(key.Value);

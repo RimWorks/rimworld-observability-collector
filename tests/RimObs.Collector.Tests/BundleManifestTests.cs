@@ -53,6 +53,7 @@ public class BundleManifestTests {
             BundleContentKey.GcEvents,
             BundleContentKey.Allocations,
             BundleContentKey.Patches,
+            BundleContentKey.Frames,
         });
     }
 }
