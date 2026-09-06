@@ -113,6 +113,18 @@ public sealed class FrameRing {
         }
     }
 
+    public FrameSnapshot[] Snapshot() {
+        lock (_gate) {
+            if (_count == 0)
+                return [];
+            FrameSnapshot[] frames = new FrameSnapshot[_count];
+            int start = _count < _buffer.Length ? 0 : _next;
+            for (int i = 0; i < _count; i++)
+                frames[i] = _buffer[(start + i) % _buffer.Length];
+            return frames;
+        }
+    }
+
     // TODO(perf): sorts the whole ring per call, 2000 longs at a few hz. incremental
     // percentiles if the endpoint ever gets hot.
     public FrameRingStats ComputeStats() {

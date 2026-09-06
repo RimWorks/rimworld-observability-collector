@@ -160,4 +160,38 @@ public sealed class FrameRingTests {
         stats.NewestOrdinal.Should().Be(-1);
         stats.OldestOrdinal.Should().Be(-1);
     }
+
+    [Fact]
+    public void Snapshot_returns_every_sealed_frame_oldest_first() {
+        FrameRing ring = new(4);
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        FrameSnapshot[] frames = ring.Snapshot();
+
+        frames.Should().HaveCount(2);
+        frames[0].CaptureOrdinal.Should().Be(1);
+        frames[1].CaptureOrdinal.Should().Be(2);
+    }
+
+    [Fact]
+    public void Snapshot_drops_the_frames_the_ring_overwrote() {
+        FrameRing ring = new(2);
+        for (int ordinal = 1; ordinal <= 5; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        FrameSnapshot[] frames = ring.Snapshot();
+
+        frames.Should().HaveCount(2);
+        frames[0].CaptureOrdinal.Should().Be(3);
+        frames[1].CaptureOrdinal.Should().Be(4);
+    }
+
+    [Fact]
+    public void Snapshot_is_empty_before_the_first_frame_seals() {
+        FrameRing ring = new(4);
+        ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
+
+        ring.Snapshot().Should().BeEmpty();
+    }
 }
