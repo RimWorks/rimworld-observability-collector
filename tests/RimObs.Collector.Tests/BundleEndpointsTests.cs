@@ -96,7 +96,7 @@ public sealed class BundleEndpointsTests {
             resp.StatusCode.Should().Be(HttpStatusCode.OK);
             resp.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
             resp.Content.Headers.ContentDisposition!.FileName.Should().EndWith(".rimobs.zip");
-            resp.Content.Headers.ContentDisposition!.FileName.Should().Contain("bundle-session");
+            resp.Content.Headers.ContentDisposition.FileName.Should().Contain("bundle-session");
 
             byte[] zipBytes = await resp.Content.ReadAsByteArrayAsync();
             zipBytes.Length.Should().BeGreaterThan(0);

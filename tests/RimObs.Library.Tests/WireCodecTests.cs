@@ -393,7 +393,7 @@ public sealed class WireCodecTests {
         ControlSearchResponse back = WireCodec.Deserialize<ControlSearchResponse>(bytes);
         back.Results.Should().HaveCount(1);
         back.Results[0].Signature.Should().Be("FindPath(IntVec3, IntVec3, TraverseParms)");
-        back.Results[0].ParamTypeFullNames.Should().BeEquivalentTo(["Verse.IntVec3", "Verse.IntVec3", "Verse.TraverseParms"]);
+        back.Results[0].ParamTypeFullNames.Should().BeEquivalentTo("Verse.IntVec3", "Verse.IntVec3", "Verse.TraverseParms");
     }
 
     [Fact]

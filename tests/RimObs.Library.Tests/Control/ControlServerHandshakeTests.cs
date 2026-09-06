@@ -51,7 +51,7 @@ public sealed class ControlServerHandshakeTests : IDisposable {
         meta.Should().NotBeNull("UdpTelemetrySink should emit a SessionMeta frame within 3s");
         meta!.ControlPort.Should().Be(ControlServices.Server!.Port);
         meta.ControlPort.Should().NotBe(0);
-        meta.ControlSecret.Should().Be(ControlServices.Server!.Secret);
+        meta.ControlSecret.Should().Be(ControlServices.Server.Secret);
         meta.ControlSecret.Should().NotBeNullOrEmpty();
     }
 

@@ -51,7 +51,7 @@ public sealed class MetricsExporterEndpointTests {
 
             res.StatusCode.Should().Be(HttpStatusCode.OK);
             res.Content.Headers.ContentType!.ToString().Should().StartWith("text/plain");
-            res.Content.Headers.ContentType!.ToString().Should().Contain("version=0.0.4");
+            res.Content.Headers.ContentType.ToString().Should().Contain("version=0.0.4");
 
             string body = await res.Content.ReadAsStringAsync();
             body.Should().Contain("# TYPE rimobs_collector_connected gauge");

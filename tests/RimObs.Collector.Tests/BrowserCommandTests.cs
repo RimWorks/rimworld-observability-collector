@@ -35,7 +35,7 @@ public sealed class BrowserCommandTests {
 
     [Fact]
     public void Resolve_linux_ignores_blank_browser_env() {
-        (string fileName, IReadOnlyList<string> prefixArgs) = BrowserCommand.Resolve(BrowserPlatform.Linux, "   ");
+        (string fileName, _) = BrowserCommand.Resolve(BrowserPlatform.Linux, "   ");
         fileName.Should().Be("xdg-open");
     }
 }

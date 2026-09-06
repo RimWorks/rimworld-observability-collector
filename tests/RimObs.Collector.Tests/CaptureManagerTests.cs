@@ -41,7 +41,7 @@ public sealed class CaptureManagerTests {
 
     [Fact]
     public void Start_then_stop_finalizes_with_user_reason() {
-        (SessionAggregator aggregator, CaptureManager manager, _) = NewFixture();
+        (_, CaptureManager manager, _) = NewFixture();
 
         CaptureSession started = manager.Start(CaptureTrigger.Manual);
         started.IsRunning.Should().BeTrue();
