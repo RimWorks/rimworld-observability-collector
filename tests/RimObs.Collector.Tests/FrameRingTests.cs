@@ -1,3 +1,4 @@
+using System.Linq;
 using RimWorks.RimObs.Collector.Aggregation;
 using FluentAssertions;
 using Xunit;
@@ -185,6 +186,17 @@ public sealed class FrameRingTests {
         frames.Should().HaveCount(2);
         frames[0].CaptureOrdinal.Should().Be(3);
         frames[1].CaptureOrdinal.Should().Be(4);
+    }
+
+    [Fact]
+    public void Snapshot_keeps_ring_order_when_the_write_head_is_mid_buffer() {
+        FrameRing ring = new(3);
+        for (int ordinal = 1; ordinal <= 5; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        FrameSnapshot[] frames = ring.Snapshot();
+
+        frames.Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4);
     }
 
     [Fact]
