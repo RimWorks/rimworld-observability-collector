@@ -159,6 +159,7 @@ public static class Program {
         app.MapSessionsEndpoints();
         app.MapCapturesEndpoints();
         app.MapComparisonEndpoints();
+        app.MapFramesEndpoints();
         app.MapVersionEndpoints();
         app.MapConfigEndpoints();
         app.MapPanelsEndpoints();
