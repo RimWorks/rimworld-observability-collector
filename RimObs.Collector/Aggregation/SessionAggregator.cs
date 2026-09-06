@@ -12,6 +12,7 @@ public sealed class SessionAggregator {
     private readonly ConcurrentDictionary<int, MetricStats> _metrics = new();
     private readonly ConcurrentDictionary<long, CallEdgeStats> _callEdges = new();
     private readonly BoundedRecordRing<GcEventRecord> _gcEvents = new(GcEventRingCapacity);
+    private readonly FrameRing _frames = new();
     private readonly ISessionPersister? _persister;
     private SessionMeta? _meta;
     private PatchConflictRecord[] _patchConflicts = [];
@@ -47,6 +48,7 @@ public sealed class SessionAggregator {
     public long TotalAllocations => Interlocked.Read(ref _totalAllocations);
     public long TotalMetricObservations => Interlocked.Read(ref _totalMetricObservations);
     public int MetricCount => _metrics.Count;
+    public FrameRing Frames => _frames;
 
     public bool HasTpsFps => Interlocked.Read(ref _hasTpsFps) != 0;
     public double LatestTps => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _latestTpsBits));
@@ -197,6 +199,7 @@ public sealed class SessionAggregator {
     public void OnSectionBatch(SectionBatch batch) {
         int n = Math.Min(batch.SectionIds.Length, Math.Min(batch.ElapsedTicks.Length, batch.StartTimestamps.Length));
         int parentLen = batch.ParentIds.Length;
+        int ordinalLen = batch.FrameOrdinals.Length;
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
@@ -215,6 +218,7 @@ public sealed class SessionAggregator {
             CallEdgeStats edge = _callEdges.GetOrAdd(edgeKey, _ => new CallEdgeStats { ParentId = parentId, SectionId = id });
             Interlocked.Increment(ref edge.CallCount);
             Interlocked.Add(ref edge.TotalElapsedTicks, elapsed);
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, start, elapsed);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);

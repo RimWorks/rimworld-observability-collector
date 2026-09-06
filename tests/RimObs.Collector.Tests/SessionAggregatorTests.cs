@@ -160,6 +160,38 @@ public sealed class SessionAggregatorTests {
     }
 
     [Fact]
+    public void OnSectionBatch_files_samples_into_the_frame_ring_by_ordinal() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20, 10],
+            ParentIds = [-1, 10, -1],
+            StartTimestamps = [100L, 150L, 700L],
+            ElapsedTicks = [500L, 200L, 400L],
+            FrameOrdinals = [1, 1, 2],
+        });
+
+        FrameSnapshot? frame = aggregator.Frames.Latest();
+
+        frame.Should().NotBeNull();
+        frame!.CaptureOrdinal.Should().Be(1);
+        frame.NodeCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void OnSectionBatch_from_a_v4_producer_files_nothing_into_the_frame_ring() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+        });
+
+        aggregator.Frames.Latest().Should().BeNull();
+        aggregator.Frames.PreFrameSamples.Should().Be(2);
+    }
+
+    [Fact]
     public void OnSectionBatch_updates_min_and_max_across_multiple_batches() {
         SessionAggregator agg = new();
         agg.OnSectionBatch(new() {
