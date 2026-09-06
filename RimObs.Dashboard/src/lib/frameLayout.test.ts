@@ -1,0 +1,179 @@
+import { describe, it, expect } from 'vitest';
+import { foldFrame, layoutFrame, type LayoutOptions } from './frameLayout';
+import type { TreeNode } from './frameTree';
+
+function node(depth: number, startUs: number, durUs: number, sectionId = 1): TreeNode {
+    return {
+        sectionId,
+        nodeId: 0,
+        parentIndex: -1,
+        depth,
+        startUs,
+        durUs,
+        endUs: startUs + durUs,
+    };
+}
+
+// 1000 us across 1000 px: one microsecond is one pixel, so the numbers read directly
+const OPTS: LayoutOptions = {
+    viewStartUs: 0,
+    viewEndUs: 1000,
+    widthPx: 1000,
+    maxDepth: 32,
+    minWidthPx: 2,
+    minVisibleDurationUs: 0,
+};
+
+describe('foldFrame', () => {
+    it('keeps a node at or above the threshold', () => {
+        const folded = foldFrame([node(0, 0, 10)], 10);
+        expect(folded[0]).toBe(0);
+    });
+
+    it('folds a node below the threshold', () => {
+        const folded = foldFrame([node(0, 0, 9)], 10);
+        expect(folded[0]).toBe(1);
+    });
+
+    it('folds the whole subtree under a folded node', () => {
+        // a child cannot outlast its parent, but clock skew can make it look that way.
+        // the subtree must go regardless, or a folded parent leaves a floating child.
+        const tree = [node(0, 0, 5), { ...node(1, 0, 100), parentIndex: 0 }];
+        const folded = foldFrame(tree, 10);
+        expect(Array.from(folded)).toEqual([1, 1]);
+    });
+
+    it('keeps a deep node whose ancestors all survive', () => {
+        const tree = [node(0, 0, 100), { ...node(1, 0, 50), parentIndex: 0 }];
+        expect(Array.from(foldFrame(tree, 10))).toEqual([0, 0]);
+    });
+
+    it('folds nothing at a zero threshold', () => {
+        const tree = [node(0, 0, 100), node(1, 0, 0)];
+        expect(Array.from(foldFrame(tree, 0))).toEqual([0, 0]);
+    });
+});
+
+describe('layoutFrame', () => {
+    it('returns nothing for an empty tree', () => {
+        expect(layoutFrame([], OPTS)).toEqual([]);
+    });
+
+    it('leaves a wide node alone', () => {
+        const quads = layoutFrame([node(0, 100, 400)], OPTS);
+        expect(quads).toHaveLength(1);
+        expect(quads[0]).toMatchObject({ depth: 0, startUs: 100, endUs: 500, count: 1 });
+    });
+
+    it('merges a run of adjacent narrow siblings into one quad', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1), node(1, 12, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(1);
+        expect(quads[0]).toMatchObject({ depth: 1, startUs: 10, endUs: 13, count: 3 });
+    });
+
+    it('breaks a run where the gap is wider than the threshold', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1), node(1, 500, 1), node(1, 501, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(2);
+        expect(quads[0]).toMatchObject({ startUs: 10, endUs: 12, count: 2 });
+        expect(quads[1]).toMatchObject({ startUs: 500, endUs: 502, count: 2 });
+        expect(quads[0].firstIndex).toBe(0);
+        expect(quads[1].firstIndex).toBe(2);
+    });
+
+    it('never merges across depths', () => {
+        const tree = [node(1, 10, 1), node(2, 10, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(2);
+        expect(quads.map((q) => q.depth)).toEqual([1, 2]);
+    });
+
+    it('keeps the section id when a run is all one section, and drops it when mixed', () => {
+        const same = layoutFrame([node(1, 10, 1, 5), node(1, 11, 1, 5)], OPTS);
+        expect(same[0]).toMatchObject({ sectionId: 5, count: 2 });
+        const mixed = layoutFrame([node(1, 10, 1, 5), node(1, 11, 1, 6)], OPTS);
+        expect(mixed[0]).toMatchObject({ sectionId: -1, count: 2 });
+    });
+
+    it('drops nodes that end before the view starts or begin after it ends', () => {
+        const tree = [node(0, 0, 50), node(0, 200, 100), node(0, 2000, 100)];
+        const quads = layoutFrame(tree, { ...OPTS, viewStartUs: 100, viewEndUs: 1000 });
+        expect(quads).toHaveLength(1);
+        expect(quads[0]).toMatchObject({ startUs: 200 });
+    });
+
+    it('drops nodes deeper than maxDepth', () => {
+        const tree = [node(0, 0, 500), node(1, 0, 400), node(2, 0, 300)];
+        const quads = layoutFrame(tree, { ...OPTS, maxDepth: 2 });
+        expect(quads.map((q) => q.depth)).toEqual([0, 1]);
+    });
+
+    it('reveals nodes that were collapsed once the view zooms in', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1), node(1, 12, 1)];
+        const zoomed = layoutFrame(tree, { ...OPTS, viewStartUs: 9, viewEndUs: 14 });
+        expect(zoomed).toHaveLength(3);
+        expect(zoomed.every((q) => q.count === 1)).toBe(true);
+    });
+
+    it('drops a stretch where every node folds', () => {
+        const tree = [node(1, 10, 1), node(1, 11, 1), node(1, 12, 1)];
+        const quads = layoutFrame(tree, { ...OPTS, minVisibleDurationUs: 2 });
+        expect(quads).toHaveLength(0);
+    });
+
+    // minWidthPx 4 makes both 3us survivors narrow, so they are collapse candidates.
+    // collapse-first would give count 3 and totalUs 7; fold-first gives 2 and 6.
+    it('collapses only the survivors when fold takes some of a run', () => {
+        const tree = [node(1, 10, 3), node(1, 14, 1), node(1, 16, 3)];
+        const quads = layoutFrame(tree, { ...OPTS, minWidthPx: 4, minVisibleDurationUs: 2 });
+        expect(quads).toHaveLength(1);
+        expect(quads[0].count).toBe(2);
+        expect(quads[0].totalUs).toBe(6);
+    });
+
+    // the folded node sits in the gap. drop it first and the 7us gap breaks the run,
+    // merge first and it bridges.
+    it('does not let a folded node bridge two runs', () => {
+        const tree = [node(1, 0, 3), node(1, 6, 1), node(1, 10, 3)];
+        const quads = layoutFrame(tree, { ...OPTS, minWidthPx: 4, minVisibleDurationUs: 2 });
+        expect(quads).toHaveLength(2);
+    });
+
+    it('treats a node exactly at the width threshold as wide', () => {
+        const tree = [node(1, 10, 2), node(1, 12, 2)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(2);
+        expect(quads.every((q) => q.count === 1)).toBe(true);
+    });
+
+    it('merges across a gap exactly at the threshold', () => {
+        const tree = [node(1, 10, 1), node(1, 13, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads).toHaveLength(1);
+        expect(quads[0].count).toBe(2);
+    });
+
+    it('returns nothing for a degenerate view or canvas', () => {
+        const tree = [node(0, 0, 10)];
+        expect(layoutFrame(tree, { ...OPTS, viewEndUs: 0 })).toEqual([]);
+        expect(layoutFrame(tree, { ...OPTS, widthPx: 0 })).toEqual([]);
+    });
+
+    it('returns quads in depth then start order regardless of push order', () => {
+        const tree = [node(1, 10, 1), node(2, 10, 1), node(2, 500, 400)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads.map((q) => [q.depth, q.startUs])).toEqual([
+            [1, 10],
+            [2, 10],
+            [2, 500],
+        ]);
+    });
+
+    it('sums the wall time inside a collapsed run', () => {
+        const tree = [node(1, 10, 1), node(1, 12, 1)];
+        const quads = layoutFrame(tree, OPTS);
+        expect(quads[0].totalUs).toBe(2);
+        expect(quads[0].endUs - quads[0].startUs).toBe(3);
+    });
+});
