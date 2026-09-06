@@ -11,5 +11,7 @@ public static class SchemaVersion {
     //     and keep the default of true, which is what every v3 producer meant.
     // v5: SectionBatch gains FrameOrdinals. The codec's 4-field tolerance never reaches
     //     live UDP: UdpReceiver drops any envelope whose version is not exactly Current.
-    public const int Current = 5;
+    // v6: SectionBatch gains NodeIds + ParentNodeIds so a frame's tree can be rebuilt exactly.
+    //     ParentIds holds section ids, which can't address repeated siblings (DoSingleTick emits 3 Tick nodes/tick).
+    public const int Current = 6;
 }

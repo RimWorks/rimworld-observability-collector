@@ -23,6 +23,8 @@ public sealed class WireCodecTests {
         StartTimestamps = [10L, 20L, 30L],
         ParentIds = [-1, 1, 1],
         FrameOrdinals = [4, 4, 5],
+        NodeIds = [10, 11, 12],
+        ParentNodeIds = [-1, 10, 10],
     };
 
     private static MetricsBatch SampleMetrics() => new() {
@@ -174,6 +176,37 @@ public sealed class WireCodecTests {
     }
 
     [Fact]
+    public void SectionBatch_back_compat_v5_payload_has_empty_node_ids() {
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(5);
+        writer.WriteArrayHeader(2);
+        writer.Write(1);
+        writer.Write(2);
+        writer.WriteArrayHeader(2);
+        writer.Write(100L);
+        writer.Write(200L);
+        writer.WriteArrayHeader(2);
+        writer.Write(10L);
+        writer.Write(20L);
+        writer.WriteArrayHeader(2);
+        writer.Write(-1);
+        writer.Write(1);
+        writer.WriteArrayHeader(2);
+        writer.Write(4);
+        writer.Write(4);
+        writer.Flush();
+        byte[] v5Bytes = buffer.WrittenSpan.ToArray();
+
+        SectionBatch decoded = WireCodec.Deserialize<SectionBatch>(v5Bytes);
+
+        decoded.SectionIds.Should().Equal(1, 2);
+        decoded.FrameOrdinals.Should().Equal(4, 4);
+        decoded.NodeIds.Should().BeEmpty();
+        decoded.ParentNodeIds.Should().BeEmpty();
+    }
+
+    [Fact]
     public void MetricRegistrationsBatch_round_trips() {
         MetricRegistrationsBatch original = new() {
             MetricIds = [1, 2],
@@ -316,6 +349,15 @@ public sealed class WireCodecTests {
         heapBeforeCount.Should().Be(original.HeapBefore.Length);
         for (int i = 0; i < heapBeforeCount; i++)
             reader.ReadInt64().Should().Be(original.HeapBefore[i]);
+    }
+
+    [Fact]
+    public void WireCodec_output_is_standard_messagepack_for_sections() {
+        SectionBatch original = SampleSections();
+        byte[] wireBytes = WireCodec.Serialize(original);
+
+        MessagePackReader reader = new MessagePackReader(wireBytes);
+        reader.ReadArrayHeader().Should().Be(7);
     }
 
     [Fact]

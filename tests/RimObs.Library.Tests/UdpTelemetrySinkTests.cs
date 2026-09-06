@@ -62,22 +62,26 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         for (int i = 0; i < 8; i++)
             sink.RecordSection(handle.Id, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: i, elapsedTicks: 100);
 
-        bool sawSection = false;
+        SectionBatch? sections = null;
         DateTime deadline = DateTime.UtcNow.AddSeconds(3);
         IPEndPoint any = new(IPAddress.Any, 0);
-        while (DateTime.UtcNow < deadline && !sawSection) {
+        while (DateTime.UtcNow < deadline && sections == null) {
             try {
                 byte[] bytes = receiver.Receive(ref any);
                 TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
                 if (envelope.BatchType == BatchType.Sections)
-                    sawSection = true;
+                    sections = WireCodec.Deserialize<SectionBatch>(envelope.Payload);
             }
             catch (SocketException) {
                 break;
             }
         }
 
-        sawSection.Should().BeTrue("UdpTelemetrySink should flush SectionBatch frames to the loopback receiver within 3s");
+        sections.Should().NotBeNull("UdpTelemetrySink should flush SectionBatch frames to the loopback receiver within 3s");
+
+        // regression: catches a Slice() swap, node ids are 0..7 and parent node ids are all -1.
+        sections!.NodeIds.Should().HaveCount(sections.SectionIds.Length).And.NotContain(-1);
+        sections.ParentNodeIds.Should().AllBeEquivalentTo(-1);
 
         // regression: SamplesSent increments after Send returns, so a loopback receiver can see the
         // datagram first. poll instead of reading once. flaked on Linux CI.

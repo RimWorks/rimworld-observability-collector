@@ -10,4 +10,8 @@ public sealed class SectionBatch {
     public int[] ParentIds { get; set; } = [];
 
     public int[] FrameOrdinals { get; set; } = [];
+
+    public int[] NodeIds { get; set; } = [];
+
+    public int[] ParentNodeIds { get; set; } = [];
 }
