@@ -53,6 +53,8 @@ public static class FramesEndpoints {
             nodes = new {
                 section_ids = frame.SectionIds,
                 parent_ids = frame.ParentIds,
+                node_ids = frame.NodeIds,
+                parent_node_ids = frame.ParentNodeIds,
                 start_us = startUs,
                 dur_us = durUs,
             },
