@@ -148,21 +148,39 @@ public sealed class ProfilerOverheadTests {
 
     [Fact]
     public void Ring_write_with_a_frame_ordinal_is_zero_alloc() {
+        const int iterations = 100_000;
         SampleRingBuffer ring = new(1024);
+        int[] ids = new int[1024];
+        int[] parents = new int[1024];
+        long[] starts = new long[1024];
+        long[] elapsed = new long[1024];
+        int[] ordinals = new int[1024];
 
-        for (int warm = 0; warm < 50_000; warm++)
+        for (int warm = 0; warm < 50_000; warm++) {
             ring.TryWrite(1, -1, 0L, 0L, warm);
+            if ((warm & 511) == 511)
+                ring.Drain(ids, parents, starts, elapsed, ordinals, 1024);
+        }
+        ring.Drain(ids, parents, starts, elapsed, ordinals, 1024);
+        long droppedBefore = ring.Dropped;
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 100_000; i++)
-            ring.TryWrite(1, -1, 0L, 0L, i);
+        int written = 0;
+        for (int i = 0; i < iterations; i++) {
+            if (ring.TryWrite(1, -1, 0L, 0L, i))
+                written++;
+            if ((i & 511) == 511)
+                ring.Drain(ids, parents, starts, elapsed, ordinals, 1024);
+        }
         long after = GC.GetAllocatedBytesForCurrentThread();
 
         long delta = after - before;
-        _out.WriteLine($"100k ring writes alloc delta = {delta} bytes");
+        _out.WriteLine($"{iterations} ring writes alloc delta = {delta} bytes, {written} took the store path");
         delta.Should().Be(0);
+        written.Should().Be(iterations);
+        ring.Dropped.Should().Be(droppedBefore);
     }
 }

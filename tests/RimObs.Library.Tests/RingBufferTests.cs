@@ -84,8 +84,17 @@ public sealed class RingBufferTests {
         for (int i = 0; i < 5; i++)
             ring.TryWrite(i, -1, 0L, 0L, 1).Should().BeTrue();
 
-        int n = ring.Drain(new int[16], new int[16], new long[16], new long[16], new int[2], 16);
+        int[] ids = new int[16];
+        int[] parents = new int[16];
+        long[] starts = new long[16];
+        long[] elapsed = new long[16];
+
+        int n = ring.Drain(ids, parents, starts, elapsed, new int[2], 16);
 
         n.Should().Be(2);
+        ids[0].Should().Be(0);
+        ids[1].Should().Be(1);
+        ring.Drain(ids, parents, starts, elapsed, new int[16], 16).Should().Be(3);
+        ids[0].Should().Be(2);
     }
 }
