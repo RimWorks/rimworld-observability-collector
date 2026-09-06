@@ -10,6 +10,7 @@ internal sealed class SampleRingBuffer {
         public int ParentId;
         public long StartTimestamp;
         public long ElapsedTicks;
+        public int FrameOrdinal;
         public long Sequence;
     }
 
@@ -30,7 +31,7 @@ internal sealed class SampleRingBuffer {
     public long Dropped => Interlocked.Read(ref _dropped);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryWrite(int sectionId, int parentId, long startTimestamp, long elapsedTicks) {
+    public bool TryWrite(int sectionId, int parentId, long startTimestamp, long elapsedTicks, int frameOrdinal) {
         long seq = Interlocked.Increment(ref _claim);
         long read = Volatile.Read(ref _read);
         if (seq - read > _slots.Length) {
@@ -42,14 +43,15 @@ internal sealed class SampleRingBuffer {
         _slots[idx].ParentId = parentId;
         _slots[idx].StartTimestamp = startTimestamp;
         _slots[idx].ElapsedTicks = elapsedTicks;
+        _slots[idx].FrameOrdinal = frameOrdinal;
         Volatile.Write(ref _slots[idx].Sequence, seq);
         return true;
     }
 
-    public int Drain(int[] sectionIds, int[] parentIds, long[] startTimestamps, long[] elapsedTicks, int maxCount) {
+    public int Drain(int[] sectionIds, int[] parentIds, long[] startTimestamps, long[] elapsedTicks, int[] frameOrdinals, int maxCount) {
         int n = 0;
         long expected = _read + 1;
-        int cap = Math.Min(maxCount, Math.Min(sectionIds.Length, Math.Min(parentIds.Length, Math.Min(startTimestamps.Length, elapsedTicks.Length))));
+        int cap = Math.Min(maxCount, Math.Min(sectionIds.Length, Math.Min(parentIds.Length, Math.Min(startTimestamps.Length, Math.Min(elapsedTicks.Length, frameOrdinals.Length)))));
         while (n < cap) {
             int idx = (int)((expected - 1) & _mask);
             if (Volatile.Read(ref _slots[idx].Sequence) != expected)
@@ -58,6 +60,7 @@ internal sealed class SampleRingBuffer {
             parentIds[n] = _slots[idx].ParentId;
             startTimestamps[n] = _slots[idx].StartTimestamp;
             elapsedTicks[n] = _slots[idx].ElapsedTicks;
+            frameOrdinals[n] = _slots[idx].FrameOrdinal;
             n++;
             expected++;
         }

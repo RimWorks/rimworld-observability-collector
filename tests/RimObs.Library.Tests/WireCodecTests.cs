@@ -22,6 +22,7 @@ public sealed class WireCodecTests {
         ElapsedTicks = [100L, 200L, 300L],
         StartTimestamps = [10L, 20L, 30L],
         ParentIds = [-1, 1, 1],
+        FrameOrdinals = [4, 4, 5],
     };
 
     private static MetricsBatch SampleMetrics() => new() {
@@ -143,6 +144,33 @@ public sealed class WireCodecTests {
         SectionBatch original = SampleSections();
         SectionBatch decoded = WireCodec.Deserialize<SectionBatch>(WireCodec.Serialize(original));
         decoded.Should().BeEquivalentTo(original);
+    }
+
+    [Fact]
+    public void SectionBatch_back_compat_v4_payload_has_empty_frame_ordinals() {
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(4);
+        writer.WriteArrayHeader(2);
+        writer.Write(1);
+        writer.Write(2);
+        writer.WriteArrayHeader(2);
+        writer.Write(100L);
+        writer.Write(200L);
+        writer.WriteArrayHeader(2);
+        writer.Write(10L);
+        writer.Write(20L);
+        writer.WriteArrayHeader(2);
+        writer.Write(-1);
+        writer.Write(1);
+        writer.Flush();
+        byte[] v4Bytes = buffer.WrittenSpan.ToArray();
+
+        SectionBatch decoded = WireCodec.Deserialize<SectionBatch>(v4Bytes);
+
+        decoded.SectionIds.Should().Equal(1, 2);
+        decoded.ParentIds.Should().Equal(-1, 1);
+        decoded.FrameOrdinals.Should().BeEmpty();
     }
 
     [Fact]

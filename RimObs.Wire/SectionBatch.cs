@@ -8,4 +8,6 @@ public sealed class SectionBatch {
     public long[] StartTimestamps { get; set; } = [];
 
     public int[] ParentIds { get; set; } = [];
+
+    public int[] FrameOrdinals { get; set; } = [];
 }

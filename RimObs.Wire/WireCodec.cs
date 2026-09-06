@@ -104,11 +104,12 @@ public static class WireCodec {
 
     public static byte[] Serialize(SectionBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(4);
+        writer.WriteArrayHeader(5);
         WriteInt32Array(writer, value.SectionIds);
         WriteInt64Array(writer, value.ElapsedTicks);
         WriteInt64Array(writer, value.StartTimestamps);
         WriteInt32Array(writer, value.ParentIds);
+        WriteInt32Array(writer, value.FrameOrdinals);
         return writer.ToArray();
     }
 
@@ -329,13 +330,16 @@ public static class WireCodec {
 
     private static SectionBatch ReadSectionBatch(byte[] data) {
         WireBufferReader reader = new WireBufferReader(data);
-        reader.ReadArrayHeader();
-        return new SectionBatch {
+        int fieldCount = reader.ReadArrayHeader();
+        SectionBatch batch = new() {
             SectionIds = ReadInt32Array(reader),
             ElapsedTicks = ReadInt64Array(reader),
             StartTimestamps = ReadInt64Array(reader),
             ParentIds = ReadInt32Array(reader),
         };
+        if (fieldCount >= 5)
+            batch.FrameOrdinals = ReadInt32Array(reader);
+        return batch;
     }
 
     private static MetricRegistrationsBatch ReadMetricRegistrationsBatch(byte[] data) {

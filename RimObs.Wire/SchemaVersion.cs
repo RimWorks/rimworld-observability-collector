@@ -9,5 +9,7 @@ public static class SchemaVersion {
     //     only 2 fields and return an empty Subsystems array.
     // v4: PatchConflictsBatch gains ConflictsKnown. Readers built for v3 see only 6 fields
     //     and keep the default of true, which is what every v3 producer meant.
-    public const int Current = 4;
+    // v5: SectionBatch gains FrameOrdinals. Readers built for v4 see only 4 fields and keep
+    //     the empty default, which drops those samples out of the frame ring.
+    public const int Current = 5;
 }

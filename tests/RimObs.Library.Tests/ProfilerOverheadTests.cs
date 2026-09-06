@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using RimWorks.RimObs.Profile;
+using RimWorks.RimObs.Transport;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
@@ -143,5 +144,25 @@ public sealed class ProfilerOverheadTests {
         nsPerOp.Should().BeLessThan(500.0);
 
         Profiler.SetSink(null);
+    }
+
+    [Fact]
+    public void Ring_write_with_a_frame_ordinal_is_zero_alloc() {
+        SampleRingBuffer ring = new(1024);
+
+        for (int warm = 0; warm < 50_000; warm++)
+            ring.TryWrite(1, -1, 0L, 0L, warm);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100_000; i++)
+            ring.TryWrite(1, -1, 0L, 0L, i);
+        long after = GC.GetAllocatedBytesForCurrentThread();
+
+        long delta = after - before;
+        _out.WriteLine($"100k ring writes alloc delta = {delta} bytes");
+        delta.Should().Be(0);
     }
 }
