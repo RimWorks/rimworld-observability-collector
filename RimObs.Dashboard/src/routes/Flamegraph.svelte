@@ -2,10 +2,12 @@
     import { onMount, onDestroy } from 'svelte';
     import { api, ApiError } from '../lib/api';
     import { Resource } from '../lib/poll.svelte';
-    import type { FrameResponse, BundleFramesResponse } from '../lib/frameTree';
+    import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
     import StatCard from '../lib/components/StatCard.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
+    import FrameStrip from '../lib/components/FrameStrip.svelte';
+    import { buildBars, stepOrdinal } from '../lib/frameStrip';
     import { ns, count } from '../lib/format';
     import {
         estimateOverheadUs,
@@ -40,8 +42,14 @@
     let importedNames = $state(new Map<number, { name: string; subsystem: string | null }>());
     let frameIndex = $state(0);
     let importError = $state('');
+    let paused = $state(false);
+    // set while paused or stepping. null means follow the newest frame.
+    let pinnedOrdinal = $state<number | null>(null);
+    let pinnedRes = $state<FrameResponse | null>(null);
+    const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [] };
 
     let live = $derived(source === LIVE);
+    let pinned = $derived(live && pinnedOrdinal !== null);
 
     // Resource takes its interval at construction, so a rate change means a fresh
     // instance; the cleanup return stops the old poller's timer.
@@ -55,6 +63,63 @@
         res.start();
         return () => res.stop();
     });
+
+    // rides along on /frames/latest, so the strip costs no second request. it keeps filling
+    // while paused, which is how you find the spike you paused to go looking at.
+    let strip = $derived(framesRes?.data?.strip ?? NO_STRIP);
+    let stripBars = $derived(buildBars(strip.ordinals, strip.durations_us));
+
+    async function showOrdinal(ordinal: number | null): Promise<void> {
+        pinnedOrdinal = ordinal;
+        if (ordinal === null) {
+            pinnedRes = null;
+            return;
+        }
+        try {
+            pinnedRes = await api.frameAt(ordinal);
+        } catch {
+            // the ring evicted it between the click and the fetch. fall back to live.
+            pinnedOrdinal = null;
+            pinnedRes = null;
+        }
+    }
+
+    function step(delta: number): void {
+        const next = stepOrdinal(stripBars, pinnedOrdinal ?? liveOrdinal, delta);
+        if (next === null) return;
+        paused = true;
+        void showOrdinal(next);
+    }
+
+    function jumpToNewest(): void {
+        paused = false;
+        void showOrdinal(null);
+    }
+
+    function togglePause(): void {
+        paused = !paused;
+        if (!paused) void showOrdinal(null);
+        else if (pinnedOrdinal === null && liveOrdinal !== null) void showOrdinal(liveOrdinal);
+    }
+
+    function handleTransportKey(e: KeyboardEvent): void {
+        const el = e.target as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'))
+            return;
+        if (e.key === ' ') {
+            e.preventDefault();
+            togglePause();
+        } else if (e.key === 'PageDown') {
+            e.preventDefault();
+            step(-1);
+        } else if (e.key === 'PageUp') {
+            e.preventDefault();
+            step(1);
+        } else if (e.key === 'Home' && e.shiftKey) {
+            e.preventDefault();
+            jumpToNewest();
+        }
+    }
 
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     onMount(() => sectionsRes.start());
@@ -102,13 +167,16 @@
     }
 
     let orphanCount = $state(0);
+    // while pinned the page reads a specific ordinal instead of whatever the poller last saw.
+    let liveRes = $derived(pinned ? pinnedRes : (framesRes?.data ?? null));
+    let liveOrdinal = $derived(framesRes?.data?.frame?.capture_ordinal ?? null);
     let frame = $derived(
-        live ? (framesRes?.data?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
+        live ? (liveRes?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
     );
-    let stats = $derived(live ? (framesRes?.data?.stats ?? null) : (importedFrames?.stats ?? null));
-    let dropped = $derived((live ? framesRes?.data?.dropped : importedFrames?.dropped) ?? NO_DROPS);
+    let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
+    let dropped = $derived((live ? liveRes?.dropped : importedFrames?.dropped) ?? NO_DROPS);
     let stopwatchFrequency = $derived(
-        (live ? framesRes?.data?.stopwatch_frequency : importedFrames?.stopwatch_frequency) ?? 0,
+        (live ? liveRes?.stopwatch_frequency : importedFrames?.stopwatch_frequency) ?? 0,
     );
     let names = $derived(
         live
@@ -167,6 +235,8 @@
     });
 </script>
 
+<svelte:window onkeydown={handleTransportKey} />
+
 <div class="page">
     <p class="hint">{t('flamegraph.hint')}</p>
 
@@ -187,6 +257,30 @@
         </label>
 
         {#if live}
+            <div class="transport">
+                <button type="button" onclick={togglePause} data-testid="pause">
+                    {paused ? t('flamegraph.resume') : t('flamegraph.pause')}
+                </button>
+                <button
+                    type="button"
+                    onclick={() => step(-1)}
+                    aria-label={t('flamegraph.older')}
+                    data-testid="step-older">&lsaquo;</button
+                >
+                <button
+                    type="button"
+                    onclick={() => step(1)}
+                    aria-label={t('flamegraph.newer')}
+                    data-testid="step-newer">&rsaquo;</button
+                >
+                <button type="button" onclick={jumpToNewest} data-testid="jump-newest">
+                    {t('flamegraph.newest')}
+                </button>
+                {#if paused}<span class="paused" data-testid="paused-badge"
+                        >{t('flamegraph.paused')}</span
+                    >{/if}
+            </div>
+
             <label class="picker">
                 <span class="dim">{t('flamegraph.rate')}</span>
                 <select bind:value={rateMs}>
@@ -200,6 +294,18 @@
 
     {#if importError}
         <p class="import-error" role="alert">{importError}</p>
+    {/if}
+
+    {#if live && stripBars.length > 0}
+        <FrameStrip
+            ordinals={strip.ordinals}
+            durationsUs={strip.durations_us}
+            selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
+            onSelect={(o) => {
+                paused = true;
+                void showOrdinal(o);
+            }}
+        />
     {/if}
 
     {#if !live && importedFrames && importedFrames.frames.length > 0}
@@ -258,6 +364,7 @@
 
         <FrameTimeline {frame} {names} bind:orphanCount />
         <p class="hint">{t('flamegraph.keys')}</p>
+        {#if live}<p class="hint">{t('flamegraph.keys.transport')}</p>{/if}
 
         <div class="drops" data-testid="frame-drops">
             <span class="drop">
@@ -375,6 +482,25 @@
     .scrub input[type='range'] {
         flex: 1;
         accent-color: var(--cyan);
+    }
+    .transport {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .transport button {
+        font: inherit;
+        color: var(--text);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 0.15rem 0.5rem;
+        cursor: pointer;
+    }
+    .paused {
+        color: var(--warn);
+        font-size: 0.75rem;
+        margin-left: 0.25rem;
     }
     .import-error {
         margin: 0;

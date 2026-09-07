@@ -26,10 +26,16 @@ export interface FrameStats {
     max_us: number;
 }
 
+export interface FrameStripData {
+    ordinals: number[];
+    durations_us: number[];
+}
+
 export interface FrameResponse {
     schema_version: number;
     stopwatch_frequency: number;
     frame: FrameData | null;
+    strip?: FrameStripData;
     stats: FrameStats;
     dropped: { pre_frame_samples: number; late_samples: number };
 }

@@ -3,6 +3,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import Flamegraph from './Flamegraph.svelte';
 
 // under fake timers the rAF draw loop actually fires, and jsdom has no 2d context to give it.
+vi.mock('../lib/stripDraw', () => ({ drawStrip: vi.fn() }));
+
 vi.mock('../lib/frameDraw', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../lib/frameDraw')>();
     return { ...actual, drawTimeline: vi.fn() };
@@ -52,6 +54,7 @@ const FRAMES_BODY = {
         max_us: 40000,
     },
     dropped: { pre_frame_samples: 12, late_samples: 0 },
+    strip: { ordinals: [4319, 4320, 4321], durations_us: [5000, 40000, 16200] },
 };
 
 const SECTIONS_BODY = {
@@ -87,6 +90,14 @@ const BUNDLE_HOTSPOTS_BODY = {
     ],
 };
 
+function frameAtBody(url: string) {
+    const ordinal = Number(url.split('/').pop());
+    return {
+        ...FRAMES_BODY,
+        frame: { ...FRAMES_BODY.frame, capture_ordinal: ordinal },
+    };
+}
+
 const IMPORT_BODY = {
     token: 'tok-1',
     manifest: { session_id: 'sess-imported' },
@@ -109,7 +120,8 @@ function mockFetch(
         const url = requestUrl(input);
         let body: unknown;
         let status = 200;
-        if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
+        if (/\/api\/v1\/frames\/\d+$/.test(url)) body = frameAtBody(url);
+        else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
         else if (url.includes('/api/v1/import/bundle')) {
             body = importBody;
@@ -555,6 +567,83 @@ describe('Flamegraph page', () => {
         await openFile(getByLabelText);
         await screen.findByTestId('frame-scrub');
         expect(screen.getByTestId('frame-overhead').textContent).not.toContain('\u0394');
+    });
+
+    it('draws the frame strip from the strip endpoint', async () => {
+        render(Flamegraph);
+        expect(await screen.findByTestId('frame-strip')).toBeInTheDocument();
+    });
+
+    // pause pins the view, it does not stop the poller. the strip has to keep filling or you
+    // cannot see the spike you paused to go and look at. Neo's IsPaused works the same way.
+    it('pins the displayed frame while paused, then follows the newest again', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
+        });
+        const before = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(before));
+        expect(screen.queryByText('9999')).toBeNull();
+        expect(screen.getByText('4321')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+    });
+
+    // stepping reads a specific ordinal, so the card must follow the step, not the poller.
+    it('steps to an older frame and shows that ordinal', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+    });
+
+    it('jumping to newest clears the pause and returns to the live frame', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('jump-newest'));
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+    });
+
+    it('Space pauses from the window, PageDown steps older', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.keyDown(window, { key: ' ' });
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        await fireEvent.keyDown(window, { key: 'PageDown' });
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+    });
+
+    // the rate picker is a <select>; Space in it must pick an option, not pause the page.
+    it('ignores Space typed into a form control', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const rate = screen.getByLabelText(/rate/i);
+        await fireEvent.keyDown(rate, { key: ' ' });
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+    });
+
+    it('hides the strip and transport for an imported bundle', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+        await screen.findByTestId('frame-scrub');
+        expect(screen.queryByTestId('frame-strip')).toBeNull();
+        expect(screen.queryByTestId('pause')).toBeNull();
     });
 
     it('shows the import error and stays live when the import request fails', async () => {

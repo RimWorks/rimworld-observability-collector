@@ -134,6 +134,59 @@ public sealed class FrameRingTests {
     }
 
     [Fact]
+    public void FindByOrdinal_returns_the_frame_with_that_ordinal() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 5; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 100L);
+
+        ring.FindByOrdinal(3)!.CaptureOrdinal.Should().Be(3);
+        ring.FindByOrdinal(1)!.CaptureOrdinal.Should().Be(1);
+    }
+
+    // ordinals skip whenever a frame carried no samples, so the search cannot assume
+    // ordinal minus oldest is an offset.
+    [Fact]
+    public void FindByOrdinal_handles_gaps_and_misses() {
+        FrameRing ring = new(8);
+        foreach (int ordinal in new[] { 2, 7, 9, 40 })
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 100L);
+        ring.Add(99, 10, -1, 900, -1, 99000L, 100L);
+
+        ring.FindByOrdinal(9)!.CaptureOrdinal.Should().Be(9);
+        ring.FindByOrdinal(40)!.CaptureOrdinal.Should().Be(40);
+        ring.FindByOrdinal(8).Should().BeNull();
+        ring.FindByOrdinal(1000).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindByOrdinal_on_an_empty_ring_returns_null() {
+        new FrameRing(8).FindByOrdinal(1).Should().BeNull();
+    }
+
+    [Fact]
+    public void SnapshotStrip_returns_the_newest_frames_oldest_first() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 6; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, ordinal * 10L);
+
+        (int Ordinal, long DurationTicks)[] strip = ring.SnapshotStrip(3);
+
+        strip.Select(e => e.Ordinal).Should().Equal(3, 4, 5);
+        strip[0].DurationTicks.Should().Be(30);
+    }
+
+    [Fact]
+    public void SnapshotStrip_caps_at_what_the_ring_holds() {
+        FrameRing ring = new(8);
+        ring.Add(1, 10, -1, 100, -1, 1000L, 50L);
+        ring.Add(2, 10, -1, 200, -1, 2000L, 50L);
+
+        ring.SnapshotStrip(100).Should().HaveCount(1);
+        ring.SnapshotStrip(0).Should().HaveCount(1);
+        new FrameRing(8).SnapshotStrip(10).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Clear_resets_the_counters_and_reopens_at_a_lower_ordinal() {
         FrameRing ring = new(8);
         ring.Add(0, 10, -1, 100, -1, 1L, 5L);

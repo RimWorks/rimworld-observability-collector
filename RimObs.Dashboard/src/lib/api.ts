@@ -424,6 +424,7 @@ export const api = {
     sections: () => get<SectionsResponse>('/api/v1/sessions/current/sections'),
     allSections: () => get<RegistrySectionsResponse>('/api/v1/sections'),
     frames: () => get<FrameResponse>('/api/v1/frames/latest'),
+    frameAt: (ordinal: number) => get<FrameResponse>(`/api/v1/frames/${ordinal}`),
     sectionTimeseries: (id: number) =>
         get<SectionTimeseriesResponse>(`/api/v1/sessions/current/sections/${id}/timeseries`),
     metrics: () => get<MetricsResponse>('/api/v1/sessions/current/metrics'),

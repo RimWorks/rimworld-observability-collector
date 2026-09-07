@@ -125,6 +125,46 @@ public sealed class FrameRing {
         }
     }
 
+    /// <summary>One (ordinal, duration) pair per frame, newest last, for the frame strip.</summary>
+    public (int Ordinal, long DurationTicks)[] SnapshotStrip(int count) {
+        lock (_gate) {
+            int take = Math.Min(count <= 0 ? _count : count, _count);
+            if (take == 0)
+                return [];
+            (int, long)[] strip = new (int, long)[take];
+            int start = _count < _buffer.Length ? 0 : _next;
+            // walk the newest `take`, so a strip narrower than the ring shows the recent end.
+            for (int i = 0; i < take; i++) {
+                FrameSnapshot frame = _buffer[(start + _count - take + i) % _buffer.Length];
+                strip[i] = (frame.CaptureOrdinal, frame.DurationTicks);
+            }
+            return strip;
+        }
+    }
+
+    /// <summary>
+    /// Ordinals ascend but skip any frame that carried no samples, so this binary searches
+    /// rather than doing Neo's offset arithmetic.
+    /// </summary>
+    public FrameSnapshot? FindByOrdinal(int ordinal) {
+        lock (_gate) {
+            int start = _count < _buffer.Length ? 0 : _next;
+            int lo = 0;
+            int hi = _count - 1;
+            while (lo <= hi) {
+                int mid = lo + ((hi - lo) / 2);
+                FrameSnapshot frame = _buffer[(start + mid) % _buffer.Length];
+                if (frame.CaptureOrdinal == ordinal)
+                    return frame;
+                if (frame.CaptureOrdinal < ordinal)
+                    lo = mid + 1;
+                else
+                    hi = mid - 1;
+            }
+            return null;
+        }
+    }
+
     public FrameRingStats ComputeStats() => StatsFor(Snapshot());
 
     // TODO(perf): sorts the whole ring per call, 2000 longs at a few hz. incremental
