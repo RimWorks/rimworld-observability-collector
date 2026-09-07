@@ -21,10 +21,12 @@
         frame,
         names,
         orphanCount = $bindable(0),
+        selectedNode = $bindable(-1),
     }: {
         frame: FrameData | null;
         names: Map<number, { name: string; subsystem: string | null }>;
         orphanCount?: number;
+        selectedNode?: number;
     } = $props();
 
     const ANIM_MS = 180;
@@ -40,6 +42,17 @@
     $effect(() => {
         orphanCount = tree.orphanCount;
     });
+
+    $effect(() => {
+        selectedNode = focusTreeIndex;
+    });
+
+    // the inbound direction is a call, not a second effect: binding both ways would make
+    // focus and selectedNode write each other on every flush.
+    export function focusNode(index: number): void {
+        const node = tree.nodes[index];
+        if (node) focus = { depth: node.depth, atUs: node.startUs };
+    }
 
     let view = $state<ViewRange | null>(null);
     // clamped on read, not just on write: the frame changes under us on every poll and on

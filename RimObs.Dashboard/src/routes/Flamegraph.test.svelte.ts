@@ -646,6 +646,50 @@ describe('Flamegraph page', () => {
         expect(screen.queryByTestId('pause')).toBeNull();
     });
 
+    it('renders the call tree panel with a row for each section in the frame', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('call-tree-panel');
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        expect(screen.getByText('Verse.Root_Play.Update')).toBeInTheDocument();
+    });
+
+    it('filters the tree by the search box', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        await fireEvent.input(screen.getByTestId('tree-search'), { target: { value: 'ticklist' } });
+        await waitFor(() => expect(screen.getAllByTestId('tree-row')).toHaveLength(1));
+    });
+
+    it('expand all reveals the nested section, collapse all hides it again', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        expect(screen.queryByText('Verse.TickList.Tick')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('expand-all'));
+        await waitFor(() => expect(screen.getByText('Verse.TickList.Tick')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('collapse-all'));
+        await waitFor(() => expect(screen.queryByText('Verse.TickList.Tick')).toBeNull());
+    });
+
+    it('sorting by self flips direction on a second click', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        const self = screen.getByTestId('sort-self');
+        await fireEvent.click(self);
+        expect(self.textContent).toContain('\u2193');
+        await fireEvent.click(self);
+        expect(self.textContent).toContain('\u2191');
+    });
+
+    // the half of Neo's link it calls ExpandCallTreeToNode.
+    it('clicking a tree row selects it and drives the flame view', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        await fireEvent.click(screen.getByText('Verse.Root_Play.Update'));
+        await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
+    });
+
     it('shows the import error and stays live when the import request fails', async () => {
         mockFetch(FRAMES_BODY, { message: 'boom' }, 500);
         const { getByLabelText } = render(Flamegraph);

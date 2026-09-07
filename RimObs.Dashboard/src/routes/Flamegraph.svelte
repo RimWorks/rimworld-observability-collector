@@ -7,6 +7,8 @@
     import StatCard from '../lib/components/StatCard.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
+    import CallTreePanel from '../lib/components/CallTreePanel.svelte';
+    import { buildFrameTree } from '../lib/frameTree';
     import { buildBars, stepOrdinal } from '../lib/frameStrip';
     import { ns, count } from '../lib/format';
     import {
@@ -167,6 +169,8 @@
     }
 
     let orphanCount = $state(0);
+    let selectedNode = $state(-1);
+    let timeline = $state<{ focusNode: (i: number) => void } | null>(null);
     // while pinned the page reads a specific ordinal instead of whatever the poller last saw.
     let liveRes = $derived(pinned ? pinnedRes : (framesRes?.data ?? null));
     let liveOrdinal = $derived(framesRes?.data?.frame?.capture_ordinal ?? null);
@@ -189,6 +193,9 @@
             : importedNames,
     );
     let timerResNs = $derived(timerResolutionNs(stopwatchFrequency));
+    // the timeline builds this too, but a shared derived keeps the row indices and the bar
+    // indices talking about the same array.
+    let treeNodes = $derived(frame ? buildFrameTree(frame).nodes : []);
 
     let overhead = $state(OVERHEAD_SEED);
     let deltaUs = $state<number | null>(null);
@@ -362,7 +369,16 @@
             />
         </div>
 
-        <FrameTimeline {frame} {names} bind:orphanCount />
+        <FrameTimeline bind:this={timeline} {frame} {names} bind:orphanCount bind:selectedNode />
+        <CallTreePanel
+            nodes={treeNodes}
+            {names}
+            {selectedNode}
+            onSelect={(i) => {
+                selectedNode = i;
+                timeline?.focusNode(i);
+            }}
+        />
         <p class="hint">{t('flamegraph.keys')}</p>
         {#if live}<p class="hint">{t('flamegraph.keys.transport')}</p>{/if}
 
