@@ -4,7 +4,6 @@
     import { Resource } from '../lib/poll.svelte';
     import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
-    import StatCard from '../lib/components/StatCard.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
     import CallTreePanel from '../lib/components/CallTreePanel.svelte';
@@ -23,6 +22,7 @@
         timerResText,
         budgetSeverity,
         deltaSeverity,
+        TICK_BUDGET_US,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
 
@@ -244,64 +244,71 @@
 
 <svelte:window onkeydown={handleTransportKey} />
 
-<div class="page">
-    <p class="hint">{t('flamegraph.hint')}</p>
+<div class="profiler">
+    <div class="bar">
+        {#if live}
+            <button type="button" onclick={togglePause} data-testid="pause">
+                {paused ? t('flamegraph.resume') : t('flamegraph.pause')}
+            </button>
+            <button
+                type="button"
+                class="icon"
+                onclick={() => step(-1)}
+                aria-label={t('flamegraph.older')}
+                data-testid="step-older">&#9664;</button
+            >
+        {/if}
+        <span class="ord mono"
+            >{t('flamegraph.ordinal')} <b>{frame?.capture_ordinal ?? '--'}</b></span
+        >
+        {#if live}
+            <button
+                type="button"
+                class="icon"
+                onclick={() => step(1)}
+                aria-label={t('flamegraph.newer')}
+                data-testid="step-newer">&#9654;</button
+            >
+            <button
+                type="button"
+                class="icon"
+                onclick={jumpToNewest}
+                aria-label={t('flamegraph.newest')}
+                data-testid="jump-newest">&#9654;&#9654;</button
+            >
+            {#if paused}<span class="paused" data-testid="paused-badge"
+                    >{t('flamegraph.paused')}</span
+                >{/if}
+        {/if}
 
-    <div class="controls">
         <label class="picker">
             <span class="dim">{t('flamegraph.source')}</span>
             <select bind:value={source}>
                 <option value={LIVE}>{t('flamegraph.source.live')}</option>
-                {#if imported}
-                    <option value={imported.token}>{imported.label}</option>
-                {/if}
+                {#if imported}<option value={imported.token}>{imported.label}</option>{/if}
             </select>
         </label>
-
         <label class="picker">
             <span class="dim">{t('flamegraph.source.import')}</span>
             <input type="file" accept=".zip" onchange={openBundle} />
         </label>
-
         {#if live}
-            <div class="transport">
-                <button type="button" onclick={togglePause} data-testid="pause">
-                    {paused ? t('flamegraph.resume') : t('flamegraph.pause')}
-                </button>
-                <button
-                    type="button"
-                    onclick={() => step(-1)}
-                    aria-label={t('flamegraph.older')}
-                    data-testid="step-older">&lsaquo;</button
-                >
-                <button
-                    type="button"
-                    onclick={() => step(1)}
-                    aria-label={t('flamegraph.newer')}
-                    data-testid="step-newer">&rsaquo;</button
-                >
-                <button type="button" onclick={jumpToNewest} data-testid="jump-newest">
-                    {t('flamegraph.newest')}
-                </button>
-                {#if paused}<span class="paused" data-testid="paused-badge"
-                        >{t('flamegraph.paused')}</span
-                    >{/if}
-            </div>
-
             <label class="picker">
                 <span class="dim">{t('flamegraph.rate')}</span>
                 <select bind:value={rateMs}>
-                    {#each RATES as r (r.ms)}
-                        <option value={r.ms}>{r.label}</option>
-                    {/each}
+                    {#each RATES as r (r.ms)}<option value={r.ms}>{r.label}</option>{/each}
                 </select>
             </label>
         {/if}
+
+        <span class="readout mono">
+            {t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b>
+            &middot; {t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b>
+            &middot; {t('flamegraph.budget')} <b>{ns(TICK_BUDGET_US * 1000)}</b>
+        </span>
     </div>
 
-    {#if importError}
-        <p class="import-error" role="alert">{importError}</p>
-    {/if}
+    {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
 
     {#if live && stripBars.length > 0}
         <FrameStrip
@@ -338,140 +345,95 @@
         empty={frame === null}
         emptyTitle={t('flamegraph.empty')}
         emptyHint={t('flamegraph.empty.hint')}
-        onretry={() => framesRes?.refresh()}
     >
-        <div class="stats">
-            <StatCard
-                icon="gauge"
-                label={t('flamegraph.ordinal')}
-                value={String(frame?.capture_ordinal ?? 0)}
-            />
-            <StatCard
-                icon="metric"
-                label={t('flamegraph.duration')}
-                value={ns((frame?.duration_us ?? 0) * 1000)}
-                tone={budgetSeverity(frame?.duration_us ?? 0) === 1 ? 'warn' : undefined}
-            />
-            <StatCard
-                icon="tree"
-                label={t('flamegraph.nodes')}
-                value={count(frame?.node_count ?? 0)}
-            />
-            <StatCard
-                icon="stack"
-                label={t('flamegraph.median')}
-                value={ns((stats?.median_us ?? 0) * 1000)}
-            />
-            <StatCard
-                icon="stack"
-                label={t('flamegraph.p99')}
-                value={ns((stats?.p99_us ?? 0) * 1000)}
-            />
+        <p class="avg mono" data-testid="frame-drops">
+            <span class="cell">{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span><span
+                class="cell"
+                >{t('flamegraph.duration')}
+                <b
+                    class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
+                    data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
+                ></span
+            ><span class="cell"
+                >{t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b></span
+            ><span class="cell">{t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b></span
+            ><span class="cell"
+                >{t('flamegraph.dropped.late')}
+                <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
+                    >{count(dropped.late_samples)}</b
+                ></span
+            ><span class="cell"
+                >{t('flamegraph.dropped.preframe')}
+                <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
+            ><span class="cell"
+                >{t('flamegraph.dropped.orphans')}
+                <b class:warn={orphanCount > 0} data-testid="drop-orphans">{count(orphanCount)}</b
+                ></span
+            >
+        </p>
+
+        <div class="stage">
+            <div class="gutter">
+                <div class="lane">GC &mdash;</div>
+                <div class="lane main">
+                    MainThread
+                    <small class="mono">{ns((frame?.duration_us ?? 0) * 1000)}</small>
+                </div>
+            </div>
+            <div class="canvas">
+                <FrameTimeline
+                    bind:this={timeline}
+                    {frame}
+                    {names}
+                    bind:orphanCount
+                    bind:selectedNode
+                />
+            </div>
         </div>
 
-        <FrameTimeline bind:this={timeline} {frame} {names} bind:orphanCount bind:selectedNode />
         <CallTreePanel
             nodes={treeNodes}
             {names}
             {selectedNode}
+            frameDurationUs={frame?.duration_us ?? 0}
             onSelect={(i) => {
                 selectedNode = i;
                 timeline?.focusNode(i);
             }}
         />
-        <p class="hint">{t('flamegraph.keys')}</p>
-        {#if live}<p class="hint">{t('flamegraph.keys.transport')}</p>{/if}
-
-        <div class="drops" data-testid="frame-drops">
-            <span class="drop">
-                <span class="drop-label">{t('flamegraph.dropped.late')}</span>
-                <span data-testid="drop-late" class="mono" class:warn={dropped.late_samples > 0}
-                    >{count(dropped.late_samples)}</span
-                >
-            </span>
-            <span class="drop">
-                <span class="drop-label">{t('flamegraph.dropped.preframe')}</span>
-                <span data-testid="drop-preframe" class="mono"
-                    >{count(dropped.pre_frame_samples)}</span
-                >
-            </span>
-            <span class="drop">
-                <span class="drop-label">{t('flamegraph.dropped.orphans')}</span>
-                <span data-testid="drop-orphans" class="mono" class:warn={orphanCount > 0}
-                    >{count(orphanCount)}</span
-                >
-            </span>
-        </div>
-        <p class="drops-hint">{t('flamegraph.dropped.hint')}</p>
-
-        <p class="overhead-line mono" data-testid="frame-overhead">
-            {#if deltaUs !== null}<span
-                    class:warn={deltaSeverity(deltaUs) === 1}
-                    class:cool={deltaSeverity(deltaUs) === -1}>Δ {deltaText(deltaUs)}</span
-                >{overheadLine ? ' · ' : ''}{/if}{overheadLine}
-        </p>
-        <p class="drops-hint">{t('flamegraph.overhead.hint')}</p>
     </DataState>
+
+    <p class="foot mono">
+        {t('flamegraph.ringsize')}
+        {count(stats?.frame_count ?? 0)} &middot; {t('flamegraph.keys')} &middot; {t(
+            'flamegraph.keys.transport',
+        )}
+    </p>
+    <p class="foot mono" data-testid="frame-overhead">
+        {#if deltaUs !== null}<span
+                class:warn={deltaSeverity(deltaUs) === 1}
+                class:cool={deltaSeverity(deltaUs) === -1}>&Delta; {deltaText(deltaUs)}</span
+            >{overheadLine ? ' · ' : ''}{/if}{overheadLine}
+    </p>
 </div>
 
 <style>
-    .page {
+    .profiler {
+        --f: 1.08;
+        --f-body: calc(13.5px * var(--f));
+        --f-ui: calc(12.5px * var(--f));
+        --f-small: calc(11.5px * var(--f));
+        --gut: calc(112px * var(--f));
         display: flex;
         flex-direction: column;
-        gap: var(--s-3);
+        min-height: 0;
+        font-size: var(--f-body);
     }
-    .hint {
-        margin: 0;
-        font-size: 0.78rem;
-        color: var(--text-faint);
-    }
-    .controls {
-        display: flex;
-        align-items: center;
-        gap: var(--s-4);
-    }
-    .picker {
-        display: flex;
-        align-items: center;
-        gap: var(--s-2);
-        font-size: 0.8rem;
+    .mono {
+        font-family: var(--font-mono);
     }
     .dim {
-        color: var(--text-faint);
-    }
-    select {
-        background: var(--bg-surface);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        padding: var(--s-1) var(--s-2);
-        font-family: var(--font-ui);
-        font-size: 0.8rem;
-    }
-    .stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: var(--s-4);
-        margin-bottom: var(--s-4);
-    }
-    .drops {
-        display: flex;
-        gap: var(--s-6);
-        flex-wrap: wrap;
-        margin-top: var(--s-4);
-        padding: var(--s-3) var(--s-4);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        background: var(--bg-surface);
-    }
-    .drop {
-        display: flex;
-        align-items: center;
-        gap: var(--s-2);
-        font-size: 0.82rem;
-    }
-    .drop-label {
-        color: var(--text-faint);
+        color: var(--text-dim);
     }
     .warn {
         color: var(--warn);
@@ -479,48 +441,132 @@
     .cool {
         color: var(--good);
     }
-    .overhead-line {
-        margin: var(--s-4) 0 0;
-        font-size: 0.82rem;
-        color: var(--text-faint);
+
+    .bar {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        flex-wrap: wrap;
+        padding: var(--s-2) 0;
+        border-bottom: 1px solid var(--border-soft);
     }
-    .drops-hint {
-        margin: var(--s-2) 0 0;
-        font-size: 0.74rem;
-        color: var(--text-faint);
+    .bar button {
+        font: inherit;
+        font-size: var(--f-ui);
+        color: var(--text);
+        background: var(--bg-surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 3px 9px;
+        cursor: pointer;
+    }
+    .bar button.icon {
+        font-family: var(--font-mono);
+        padding: 3px 7px;
+    }
+    .bar button:hover {
+        border-color: var(--border-strong);
+    }
+    .ord {
+        font-size: var(--f-ui);
+        color: var(--text-dim);
+    }
+    .paused {
+        color: var(--warn);
+        font-size: var(--f-small);
+    }
+    .picker {
+        display: flex;
+        align-items: center;
+        gap: var(--s-1);
+        font-size: var(--f-ui);
+    }
+    .picker select,
+    .picker input[type='file'] {
+        font: inherit;
+        font-size: var(--f-ui);
+        color: var(--text);
+        background: var(--bg-surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 2px 6px;
+        max-width: 190px;
+    }
+    .readout {
+        margin-left: auto;
+        font-size: var(--f-small);
+        color: var(--text-dim);
+    }
+    .readout b {
+        color: var(--text);
+        font-weight: 500;
+    }
+
+    .import-error {
+        color: var(--bad);
+        font-size: var(--f-ui);
+        padding: var(--s-2) 0;
     }
     .scrub {
         display: flex;
         align-items: center;
-        gap: var(--s-3);
-        font-size: 0.8rem;
+        gap: var(--s-2);
+        padding: var(--s-2) 0;
+        font-size: var(--f-ui);
     }
-    .scrub input[type='range'] {
+    .scrub input {
         flex: 1;
-        accent-color: var(--cyan);
     }
-    .transport {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
+
+    .avg {
+        padding: var(--s-2) 0;
+        font-size: var(--f-small);
+        color: var(--text-dim);
+        border-bottom: 1px solid var(--border-soft);
     }
-    .transport button {
-        font: inherit;
+    .avg b {
         color: var(--text);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        padding: 0.15rem 0.5rem;
-        cursor: pointer;
+        font-weight: 500;
     }
-    .paused {
-        color: var(--warn);
-        font-size: 0.75rem;
-        margin-left: 0.25rem;
+    .cell + .cell::before {
+        content: ' · ';
+        color: var(--border-strong);
     }
-    .import-error {
-        margin: 0;
-        font-size: 0.78rem;
-        color: var(--warn);
+
+    .stage {
+        display: grid;
+        grid-template-columns: var(--gut) 1fr;
+        border-bottom: 1px solid var(--border);
+    }
+    .gutter {
+        border-right: 1px solid var(--border);
+        padding: var(--s-2) var(--s-2) 0 0;
+        font-size: var(--f-ui);
+    }
+    .lane {
+        color: var(--text-dim);
+        padding: 2px 0;
+    }
+    .lane.main {
+        color: var(--text);
+        font-weight: 500;
+    }
+    .lane small {
+        display: block;
+        color: var(--text-faint);
+        font-size: var(--f-small);
+    }
+    .canvas {
+        min-width: 0;
+    }
+
+    .foot {
+        font-size: var(--f-small);
+        color: var(--text-faint);
+        padding: var(--s-1) 0;
+    }
+    .foot:first-of-type {
+        border-top: 1px solid var(--border);
+        padding-top: var(--s-2);
     }
 </style>

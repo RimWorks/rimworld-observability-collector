@@ -114,6 +114,16 @@
     const ariaLabel = 'current frame';
     let rangeText = $derived(ns((effectiveView.endUs - effectiveView.startUs) * 1000));
 
+    // five evenly spaced marks; the view is already clamped so these always sit in frame.
+    let ticks = $derived(
+        [0, 0.2, 0.4, 0.6, 0.8].map((f) => ({
+            at: f,
+            label: ns(
+                (effectiveView.startUs + (effectiveView.endUs - effectiveView.startUs) * f) * 1000,
+            ),
+        })),
+    );
+
     function nodeName(n: TreeNode): string {
         return names.get(n.sectionId)?.name ?? `section ${n.sectionId}`;
     }
@@ -379,6 +389,11 @@
     <div class="empty" data-testid="frame-empty">no frame captured yet</div>
 {:else}
     <div class="wrap" bind:this={hostEl}>
+        <div class="ruler" aria-hidden="true" data-testid="frame-ruler">
+            {#each ticks as tick (tick.at)}
+                <span style="left:{tick.at * 100}%">{tick.label}</span>
+            {/each}
+        </div>
         <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
         <canvas
             bind:this={canvasEl}
@@ -443,6 +458,19 @@
         border-radius: var(--r-sm);
         background: var(--bg-surface);
         outline: none;
+    }
+    .ruler {
+        position: relative;
+        height: 18px;
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .ruler span {
+        position: absolute;
+        top: 3px;
+        font: 400 10.5px/1 var(--font-mono);
+        color: var(--text-faint);
+        padding-left: 4px;
+        border-left: 1px solid var(--border);
     }
     canvas:focus {
         box-shadow: var(--ring-focus);

@@ -7,6 +7,7 @@ import {
     barWidthPx,
     stepOrdinal,
     STRIP_FULL_SCALE_US,
+    gridLines,
 } from './frameStrip';
 
 const bars = (ordinals: number[]) =>
@@ -107,5 +108,20 @@ describe('stepOrdinal', () => {
 
     it('returns null for an empty strip', () => {
         expect(stepOrdinal([], 5, -1)).toBeNull();
+    });
+});
+
+describe('gridLines', () => {
+    it('places every FPS line inside the strip', () => {
+        const lines = gridLines();
+        expect(lines.map((l) => l.fps)).toEqual([15, 20, 30, 60, 120]);
+        expect(lines.every((l) => l.at > 0 && l.at <= 1)).toBe(true);
+    });
+
+    // 15 FPS is 66.7ms, which is exactly full scale, so it must sit at the very top.
+    it('puts 15 FPS at the ceiling and 60 FPS at a quarter', () => {
+        const by = new Map(gridLines().map((l) => [l.fps, l.at]));
+        expect(by.get(15)).toBeCloseTo(1, 2);
+        expect(by.get(60)).toBeCloseTo(0.25, 2);
     });
 });

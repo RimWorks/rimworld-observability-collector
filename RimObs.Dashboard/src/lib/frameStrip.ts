@@ -74,3 +74,23 @@ export function stepOrdinal(
     const next = Math.min(bars.length - 1, Math.max(0, index + delta));
     return bars[next].ordinal;
 }
+
+/** Neo labels the history axis in FPS, which is what a reader actually thinks in. */
+export const FPS_GRID = [15, 20, 30, 60, 120] as const;
+
+export interface GridLine {
+    fps: number;
+    ms: number;
+    /** 0..1 from the bottom */
+    at: number;
+}
+
+export function gridLines(): GridLine[] {
+    const out: GridLine[] = [];
+    for (const fps of FPS_GRID) {
+        const ms = 1000 / fps;
+        // 1000/15 lands a hair over full scale, so pin it to the ceiling rather than drop it.
+        out.push({ fps, ms, at: Math.min(1, (ms * 1000) / STRIP_FULL_SCALE_US) });
+    }
+    return out;
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { buildBars, barIndexAt, type StripBar } from '../frameStrip';
+    import { buildBars, barIndexAt, gridLines, type StripBar } from '../frameStrip';
     import { drawStrip } from '../stripDraw';
     import { ns } from '../format';
     import { t } from '../i18n';
@@ -97,7 +97,7 @@
     let hovered = $derived<StripBar | null>(bars[hoverIndex] ?? null);
 </script>
 
-<div class="strip" bind:this={hostEl} data-testid="frame-strip">
+<div class="strip" data-testid="frame-strip">
     <div class="head">
         <span class="dim">{t('strip.title')}</span>
         {#if hovered}
@@ -108,16 +108,27 @@
             <span class="read dim">{t('strip.budget')}</span>
         {/if}
     </div>
-    <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
-    <canvas
-        bind:this={canvasEl}
-        style="width:100%;height:{HEIGHT_PX}px"
-        onclick={handleClick}
-        onmousemove={handleMove}
-        onmouseleave={() => (hoverIndex = -1)}
-        role="img"
-        aria-label={t('strip.title')}
-    ></canvas>
+    <div class="plot">
+        <div class="axis" aria-hidden="true">
+            {#each gridLines() as line (line.fps)}
+                <span style="bottom:{line.at * 100}%">
+                    <b>{line.fps} FPS</b><em>{line.ms.toFixed(1)} ms</em>
+                </span>
+            {/each}
+        </div>
+        <div class="canvaswrap" bind:this={hostEl}>
+            <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+            <canvas
+                bind:this={canvasEl}
+                style="width:100%;height:{HEIGHT_PX}px"
+                onclick={handleClick}
+                onmousemove={handleMove}
+                onmouseleave={() => (hoverIndex = -1)}
+                role="img"
+                aria-label={t('strip.title')}
+            ></canvas>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -135,6 +146,37 @@
     }
     .read {
         font-family: var(--font-mono);
+    }
+    .plot {
+        position: relative;
+        display: grid;
+        grid-template-columns: var(--gut, 112px) 1fr;
+    }
+    .axis {
+        position: relative;
+        height: 100%;
+    }
+    .axis span {
+        position: absolute;
+        left: 0;
+        right: -100vw;
+        border-top: 1px dashed var(--border);
+        pointer-events: none;
+    }
+    .axis b,
+    .axis em {
+        position: absolute;
+        bottom: 1px;
+        font: 400 var(--f-tiny, 10.5px) / 1 var(--font-mono);
+        color: var(--text-faint);
+        font-style: normal;
+    }
+    .axis em {
+        left: 56px;
+        color: var(--border-strong);
+    }
+    .canvaswrap {
+        min-width: 0;
     }
     canvas {
         display: block;

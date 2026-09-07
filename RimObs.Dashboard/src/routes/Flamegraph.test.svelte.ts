@@ -155,11 +155,10 @@ async function openFile(getByLabelText: (m: RegExp) => HTMLElement, name = 'sess
 }
 
 function cardValue(label: string) {
-    return screen.getByText(label).parentElement?.textContent ?? '';
-}
-
-function cardValueEl(label: string) {
-    return screen.getByText(label).parentElement?.querySelector('.value') ?? null;
+    const cell = [...document.querySelectorAll('.cell')].find((e) =>
+        e.textContent?.trim().toLowerCase().startsWith(label.toLowerCase()),
+    );
+    return cell?.textContent ?? '';
 }
 
 beforeEach(() => {
@@ -173,10 +172,9 @@ afterEach(() => {
 });
 
 describe('Flamegraph page', () => {
-    it('fills every stat card from the frame it drew', async () => {
+    it('reads every headline number off the frame it drew', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
-        expect(cardValue('Frame')).toContain('4321');
         expect(cardValue('Duration')).toContain('16.20 ms');
         expect(cardValue('Nodes')).toContain('2');
         expect(cardValue('Median')).toContain('5.00 ms');
@@ -297,10 +295,11 @@ describe('Flamegraph page', () => {
             frame: { ...FRAMES_BODY.frame, node_count: 9, duration_us: 4045 },
         });
         render(Flamegraph);
+        // the footer renders before the first poll, so wait for the share, not the constant.
         await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope'),
+            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('0.02% of frame'),
         );
-        expect(screen.getByTestId('frame-overhead')).toHaveTextContent('0.02% of frame');
+        expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope');
     });
 
     it('renders the timer resolution when the session reports a stopwatch frequency', async () => {
@@ -323,14 +322,14 @@ describe('Flamegraph page', () => {
     it('marks the Duration stat as a warning once the frame runs over the tick budget', async () => {
         mockFetch({ ...FRAMES_BODY, frame: { ...FRAMES_BODY.frame, duration_us: 20_000 } });
         render(Flamegraph);
-        await waitFor(() => expect(cardValueEl('Duration')).not.toBeNull());
-        expect(cardValueEl('Duration')?.className).toContain('warn');
+        await waitFor(() => expect(screen.getByTestId('frame-duration')).toBeInTheDocument());
+        expect(screen.getByTestId('frame-duration').className).toContain('warn');
     });
 
     it('leaves the Duration stat unwarned under the tick budget', async () => {
         render(Flamegraph);
-        await waitFor(() => expect(cardValueEl('Duration')).not.toBeNull());
-        expect(cardValueEl('Duration')?.className).not.toContain('warn');
+        await waitFor(() => expect(screen.getByTestId('frame-duration')).toBeInTheDocument());
+        expect(screen.getByTestId('frame-duration').className).not.toContain('warn');
     });
 
     it('shows a delta once a second frame has been seen, colored by severity', async () => {
@@ -688,6 +687,26 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         await fireEvent.click(screen.getByText('Verse.Root_Play.Update'));
         await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
+    });
+
+    it('offers all four profiler tabs and honestly labels the ones with no collector', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('call-tree-panel');
+        for (const id of ['tree', 'pie', 'alloc', 'vram']) {
+            expect(screen.getByTestId(`tab-${id}`)).toBeInTheDocument();
+        }
+        await fireEvent.click(screen.getByTestId('tab-vram'));
+        expect(screen.getByTestId('tab-soon')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('tree-row')).toHaveLength(0);
+
+        await fireEvent.click(screen.getByTestId('tab-tree'));
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+    });
+
+    it('rules the flame canvas with microsecond marks', async () => {
+        render(Flamegraph);
+        const ruler = await screen.findByTestId('frame-ruler');
+        expect(ruler.children.length).toBe(5);
     });
 
     it('shows the import error and stays live when the import request fails', async () => {
