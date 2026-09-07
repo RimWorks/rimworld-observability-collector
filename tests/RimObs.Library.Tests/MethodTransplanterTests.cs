@@ -28,6 +28,7 @@ public sealed class MethodTransplanterTests : IDisposable {
                 _harmony.Unpatch(m, HarmonyPatchType.All, _harmony.Id);
             }
             catch {
+                // cleanup is best effort, the assert already ran
             }
         }
         Profiler.SetSink(null);

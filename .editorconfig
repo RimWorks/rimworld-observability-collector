@@ -46,3 +46,15 @@ dotnet_naming_style.pascal_case.capitalization = pascal_case
 
 [Makefile]
 indent_style = tab
+
+[tests/**.cs]
+# Harmony patch targets and scanner fixtures exist so something can find them by reflection.
+# An empty body is the fixture, not an unfinished method.
+dotnet_diagnostic.S1186.severity = none
+
+# The GC observer and overhead tests force a collection so there is something to observe.
+dotnet_diagnostic.S1215.severity = none
+
+# ResolverTargets is resolved and Harmony-patched as an instance method. Making it static
+# changes the signature under test, so the instance-ness is the point.
+dotnet_diagnostic.S2325.severity = none

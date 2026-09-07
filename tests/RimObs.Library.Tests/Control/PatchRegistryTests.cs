@@ -10,7 +10,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Library.Tests.Control;
 
-public class PatchRegistryTests : IDisposable {
+public sealed class PatchRegistryTests : IDisposable {
     public PatchRegistryTests() {
         TestBackend.Activate();
         PatchInstaller.ResetForTests();

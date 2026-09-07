@@ -22,7 +22,7 @@ public sealed class PatchConflictRecorderTests : IDisposable {
     }
 
     public void Dispose() {
-        try { _foreignHarmony.UnpatchAll(_foreignHarmony.Id); } catch { }
+        try { _foreignHarmony.UnpatchAll(_foreignHarmony.Id); } catch { /* unpatching a patch that never applied is fine */ }
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         PatchConflictRecorder.Clear();

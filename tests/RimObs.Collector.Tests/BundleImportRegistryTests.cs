@@ -6,7 +6,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Collector.Tests;
 
-public class BundleImportRegistryTests : IDisposable {
+public sealed class BundleImportRegistryTests : IDisposable {
     private static readonly string[] ManifestOnly = ["manifest.json"];
     private readonly string _baseDir;
 

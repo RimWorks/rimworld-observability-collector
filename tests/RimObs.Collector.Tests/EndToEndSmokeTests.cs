@@ -718,7 +718,7 @@ public sealed class EndToEndSmokeTests {
             using UdpClient client = new(AddressFamily.InterNetwork);
             client.Client.ReceiveTimeout = 2000;
             client.Connect("127.0.0.1", port);
-            client.Send(datagram, datagram.Length);
+            await client.SendAsync(datagram, datagram.Length);
 
             IPEndPoint remote = new(IPAddress.Any, 0);
             byte[] response = client.Receive(ref remote);
@@ -1106,7 +1106,7 @@ public sealed class EndToEndSmokeTests {
         finally {
             await app.StopAsync();
             await app.DisposeAsync();
-            try { Directory.Delete(sessionsDir, recursive: true); } catch { }
+            try { Directory.Delete(sessionsDir, recursive: true); } catch { /* a leaked handle must not fail the test */ }
         }
     }
 

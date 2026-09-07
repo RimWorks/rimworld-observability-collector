@@ -9,7 +9,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Collector.Tests;
 
-public class BundleImportServiceTests : IDisposable {
+public sealed class BundleImportServiceTests : IDisposable {
     private static readonly string[] ExpectedContents = ["manifest.json", "session_summary.json"];
     private readonly string _baseDir;
     private readonly BundleImportRegistry _registry;
@@ -64,8 +64,8 @@ public class BundleImportServiceTests : IDisposable {
         MemoryStream stream = new MemoryStream();
         using (ZipArchive zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             ZipArchiveEntry entry = zip.CreateEntry("session_summary.json");
-            using Stream s = entry.Open();
-            s.Write(Encoding.UTF8.GetBytes("{}"));
+            using Stream s = await entry.OpenAsync();
+            await s.WriteAsync(Encoding.UTF8.GetBytes("{}"));
         }
         stream.Position = 0;
 
@@ -81,8 +81,8 @@ public class BundleImportServiceTests : IDisposable {
         MemoryStream stream = new MemoryStream();
         using (ZipArchive zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             ZipArchiveEntry entry = zip.CreateEntry("../escape.json");
-            using Stream s = entry.Open();
-            s.Write(Encoding.UTF8.GetBytes("{}"));
+            using Stream s = await entry.OpenAsync();
+            await s.WriteAsync(Encoding.UTF8.GetBytes("{}"));
         }
         stream.Position = 0;
 

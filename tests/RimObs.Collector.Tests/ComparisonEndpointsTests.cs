@@ -18,7 +18,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Collector.Tests;
 
-public class ComparisonEndpointsTests : IDisposable {
+public sealed class ComparisonEndpointsTests : IDisposable {
     private readonly string _sessionsDir;
 
     public ComparisonEndpointsTests() {
@@ -31,6 +31,7 @@ public class ComparisonEndpointsTests : IDisposable {
             Directory.Delete(_sessionsDir, recursive: true);
         }
         catch (IOException) {
+            // a leaked handle must not fail the test
         }
         GC.SuppressFinalize(this);
     }

@@ -39,15 +39,13 @@ public static class OwnerRegistry {
             resolver = s_LateResolver;
         }
 
-        if (resolver != null) {
-            string? resolved = resolver(assembly);
-            if (!string.IsNullOrEmpty(resolved)) {
-                lock (s_Lock) {
-                    s_AssemblyToPackageId[assembly] = resolved!;
-                }
-                packageId = resolved!;
-                return true;
+        // the pattern narrows where IsNullOrEmpty does not: net472 ships no [NotNullWhen]
+        if (resolver != null && resolver(assembly) is { Length: > 0 } resolved) {
+            lock (s_Lock) {
+                s_AssemblyToPackageId[assembly] = resolved;
             }
+            packageId = resolved;
+            return true;
         }
 
         packageId = null;

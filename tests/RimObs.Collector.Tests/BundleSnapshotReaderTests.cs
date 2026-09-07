@@ -12,7 +12,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Collector.Tests;
 
-public class BundleSnapshotReaderTests : IDisposable {
+public sealed class BundleSnapshotReaderTests : IDisposable {
     private readonly string _importsDir;
 
     public BundleSnapshotReaderTests() {
@@ -25,6 +25,7 @@ public class BundleSnapshotReaderTests : IDisposable {
             Directory.Delete(_importsDir, recursive: true);
         }
         catch (IOException) {
+            // a leaked handle must not fail the test
         }
         GC.SuppressFinalize(this);
     }

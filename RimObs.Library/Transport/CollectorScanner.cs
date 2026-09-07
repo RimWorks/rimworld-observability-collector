@@ -49,7 +49,8 @@ public static class CollectorScanner {
 
         string manifestPath = Path.Combine(collectorDir, ManifestFileName);
         CollectorManifest? manifest = CollectorManifest.TryReadFile(manifestPath);
-        if (manifest is null || string.IsNullOrEmpty(manifest.Version))
+        // the pattern narrows where IsNullOrEmpty does not: net472 ships no [NotNullWhen]
+        if (manifest?.Version is not { Length: > 0 } version)
             return null;
 
         string? executable = FindExecutable(collectorDir);
@@ -57,7 +58,7 @@ public static class CollectorScanner {
             return null;
 
         try {
-            return CollectorCandidate.Parse(executable, manifest.Version!);
+            return CollectorCandidate.Parse(executable, version);
         }
         // boot-time discovery, not the steady-state send path the hot-path rule guards, and
         // RimLogging does not render the template unless a sink wants the level.
@@ -65,7 +66,7 @@ public static class CollectorScanner {
             Log.WarnTo(
                 LogChannels.Collector,
                 "ignoring collector at {Path}, version {Version} did not parse: {Reason}",
-                new object?[] { executable, manifest.Version, ex.Message }
+                new object?[] { executable, version, ex.Message }
             );
             return null;
         }

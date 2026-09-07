@@ -22,6 +22,7 @@ public sealed class ProfilingXmlLoaderTests : IDisposable {
                     Directory.Delete(dir, recursive: true);
             }
             catch {
+                // cleanup is best effort, the assert already ran
             }
         }
     }

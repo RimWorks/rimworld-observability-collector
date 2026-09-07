@@ -134,6 +134,7 @@ public sealed class CliTests {
                     Directory.Delete(Path, recursive: true);
             }
             catch (IOException) {
+                // a leaked handle must not fail the test
             }
         }
     }

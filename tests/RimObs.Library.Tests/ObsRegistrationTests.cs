@@ -155,6 +155,7 @@ public sealed class ObsRegistrationTests : IDisposable {
             SectionRegistry.SetActive(handle.Id, true);
 
             using (Obs.Profile.Measure(handle)) {
+                // an empty section is the thing being measured
             }
 
             sink.Count.Should().Be(1);

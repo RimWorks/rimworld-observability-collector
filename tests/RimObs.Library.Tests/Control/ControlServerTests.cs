@@ -15,7 +15,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Library.Tests.Control;
 
-public class ControlServerTests : IDisposable {
+public sealed class ControlServerTests : IDisposable {
     private readonly ControlServer _server;
     private readonly HttpClient _client;
     private readonly CancellationTokenSource _drainCts;
@@ -42,12 +42,12 @@ public class ControlServerTests : IDisposable {
                 ControlServices.Queue.Drain();
                 Thread.Sleep(5);
             }
-        });
+        }, _drainCts.Token);
     }
 
     public void Dispose() {
         _drainCts.Cancel();
-        try { _drainTask.Wait(TimeSpan.FromSeconds(1)); }
+        try { _drainTask.Wait(TimeSpan.FromSeconds(1), CancellationToken.None); }
         catch { /* swallow cancellation */ }
         _drainCts.Dispose();
 
@@ -66,7 +66,7 @@ public class ControlServerTests : IDisposable {
     [Fact]
     public async Task Rejects_request_without_secret_header() {
         HttpResponseMessage res = await _client.PostAsync("/search",
-            new ByteArrayContent([0]));
+            new ByteArrayContent([0]), _drainCts.Token);
         res.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -76,7 +76,7 @@ public class ControlServerTests : IDisposable {
             Content = new ByteArrayContent([0]),
         };
         req.Headers.Add("X-RimObs-Control", "wrong");
-        HttpResponseMessage res = await _client.SendAsync(req);
+        HttpResponseMessage res = await _client.SendAsync(req, _drainCts.Token);
         res.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -84,7 +84,7 @@ public class ControlServerTests : IDisposable {
     public async Task Returns_404_for_unknown_path_with_valid_secret() {
         HttpRequestMessage req = new(HttpMethod.Get, "/nope");
         req.Headers.Add("X-RimObs-Control", "topsecret");
-        HttpResponseMessage res = await _client.SendAsync(req);
+        HttpResponseMessage res = await _client.SendAsync(req, _drainCts.Token);
         res.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -94,7 +94,7 @@ public class ControlServerTests : IDisposable {
         HttpResponseMessage res = await PostMsg("/search", WireCodec.Serialize(req));
         res.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        byte[] body = await res.Content.ReadAsByteArrayAsync();
+        byte[] body = await res.Content.ReadAsByteArrayAsync(_drainCts.Token);
         ControlSearchResponse decoded = WireCodec.Deserialize<ControlSearchResponse>(body);
         decoded.Results.Should().NotBeEmpty();
         decoded.Results.Should().Contain(r => r.MethodName == "Add");
@@ -118,10 +118,10 @@ public class ControlServerTests : IDisposable {
         while (DateTime.UtcNow < deadline) {
             HttpResponseMessage list = await GetMsg("/patches");
             decoded = WireCodec.Deserialize<ControlPatchListResponse>(
-                await list.Content.ReadAsByteArrayAsync());
+                await list.Content.ReadAsByteArrayAsync(_drainCts.Token));
             if (decoded.Patches.Length > 0)
                 break;
-            await Task.Delay(10);
+            await Task.Delay(10, _drainCts.Token);
         }
 
         decoded.Patches.Should().NotBeEmpty();
@@ -130,12 +130,12 @@ public class ControlServerTests : IDisposable {
     private async Task<HttpResponseMessage> PostMsg(string path, byte[] body) {
         HttpRequestMessage req = new(HttpMethod.Post, path) { Content = new ByteArrayContent(body) };
         req.Headers.Add("X-RimObs-Control", "topsecret");
-        return await _client.SendAsync(req);
+        return await _client.SendAsync(req, _drainCts.Token);
     }
 
     private async Task<HttpResponseMessage> GetMsg(string path) {
         HttpRequestMessage req = new(HttpMethod.Get, path);
         req.Headers.Add("X-RimObs-Control", "topsecret");
-        return await _client.SendAsync(req);
+        return await _client.SendAsync(req, _drainCts.Token);
     }
 }

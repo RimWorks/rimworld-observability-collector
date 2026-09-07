@@ -9,7 +9,7 @@ using Xunit;
 
 namespace RimWorks.RimObs.Tests;
 
-public class ObservedSectionScannerTests : System.IDisposable {
+public sealed class ObservedSectionScannerTests : System.IDisposable {
     public ObservedSectionScannerTests() {
         TestBackend.Activate();
         PatchInstaller.ResetForTests();

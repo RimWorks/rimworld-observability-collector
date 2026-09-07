@@ -146,8 +146,8 @@ public class BundleExportServiceTests {
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
         ZipArchiveEntry healthEntry = zip.GetEntry("collector_health.json")!;
-        using StreamReader reader = new StreamReader(healthEntry.Open());
-        using JsonDocument doc = JsonDocument.Parse(reader.ReadToEnd());
+        using StreamReader reader = new StreamReader(await healthEntry.OpenAsync());
+        using JsonDocument doc = JsonDocument.Parse(await reader.ReadToEndAsync());
 
         double uptime = doc.RootElement.GetProperty("uptime_seconds").GetDouble();
         uptime.Should().BeGreaterThanOrEqualTo(120, "uptime is now - collector start, not the always-zero a - a regression (S1764)");
@@ -166,8 +166,8 @@ public class BundleExportServiceTests {
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
         ZipArchiveEntry manifestEntry = zip.GetEntry("manifest.json")!;
-        using StreamReader reader = new StreamReader(manifestEntry.Open());
-        BundleManifest? manifest = JsonSerializer.Deserialize<BundleManifest>(reader.ReadToEnd(), BundleManifest.JsonOptions);
+        using StreamReader reader = new StreamReader(await manifestEntry.OpenAsync());
+        BundleManifest? manifest = JsonSerializer.Deserialize<BundleManifest>(await reader.ReadToEndAsync(), BundleManifest.JsonOptions);
 
         manifest.Should().NotBeNull();
         manifest!.SessionId.Should().Be("sess-test");
@@ -200,8 +200,8 @@ public class BundleExportServiceTests {
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
         ZipArchiveEntry manifestEntry = zip.GetEntry("manifest.json")!;
-        using StreamReader reader = new StreamReader(manifestEntry.Open());
-        BundleManifest? manifest = JsonSerializer.Deserialize<BundleManifest>(reader.ReadToEnd(), BundleManifest.JsonOptions);
+        using StreamReader reader = new StreamReader(await manifestEntry.OpenAsync());
+        BundleManifest? manifest = JsonSerializer.Deserialize<BundleManifest>(await reader.ReadToEndAsync(), BundleManifest.JsonOptions);
 
         // manifest.json is the index, not an indexed entry, so it's excluded here.
         manifest!.Entries.Should().BeEquivalentTo(
@@ -224,8 +224,8 @@ public class BundleExportServiceTests {
         result.Status.Should().Be(BundleExportStatus.Ok);
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using Stream entry = zip.GetEntry("frames.json")!.Open();
-        using JsonDocument doc = JsonDocument.Parse(entry);
+        using Stream entry = await zip.GetEntry("frames.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
 
         JsonElement frames = doc.RootElement.GetProperty("frames");
         frames.GetArrayLength().Should().Be(2);
@@ -251,8 +251,8 @@ public class BundleExportServiceTests {
 
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using Stream entry = zip.GetEntry("frames.json")!.Open();
-        using JsonDocument doc = JsonDocument.Parse(entry);
+        using Stream entry = await zip.GetEntry("frames.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
 
         doc.RootElement.GetProperty("stopwatch_frequency").GetInt64().Should().Be(10_000_000L);
     }
@@ -273,8 +273,8 @@ public class BundleExportServiceTests {
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
         foreach (ZipArchiveEntry jsonEntry in zip.Entries.Where(e => e.FullName.EndsWith(".json"))) {
-            using StreamReader reader = new StreamReader(jsonEntry.Open());
-            string text = reader.ReadToEnd();
+            using StreamReader reader = new StreamReader(await jsonEntry.OpenAsync());
+            string text = await reader.ReadToEndAsync();
             if (jsonEntry.FullName == "frames.json")
                 text.Should().NotContain("\n");
             else
@@ -300,8 +300,8 @@ public class BundleExportServiceTests {
 
         using MemoryStream ms = new MemoryStream(result.Bytes!);
         using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using Stream entry = zip.GetEntry("hotspots.json")!.Open();
-        using JsonDocument doc = JsonDocument.Parse(entry);
+        using Stream entry = await zip.GetEntry("hotspots.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
 
         doc.RootElement.GetProperty("hotspots")[0]
             .GetProperty("subsystem").GetString().Should().Be("tick");
