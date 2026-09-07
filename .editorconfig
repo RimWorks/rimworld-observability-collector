@@ -58,3 +58,7 @@ dotnet_diagnostic.S1215.severity = none
 # ResolverTargets is resolved and Harmony-patched as an instance method. Making it static
 # changes the signature under test, so the instance-ness is the point.
 dotnet_diagnostic.S2325.severity = none
+
+# Test teardown deletes temp dirs and unpatches Harmony on a best-effort basis. A failed
+# cleanup must not fail an assert that already passed, so the empty catch is deliberate.
+dotnet_diagnostic.S108.severity = none
