@@ -72,7 +72,7 @@ function luminance(rgb: string): number {
     return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
-// same lift as LiveFlamegraph, minus its root-bar depth offset.
+// deeper bars sit lighter, so nesting reads without a border on every quad.
 function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
     const lift = Math.min(q.depth, 5) * 0.07 + 0.12 + (lifted ? HOVER_LIFT : 0);
     const base =
