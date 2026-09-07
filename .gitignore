@@ -38,3 +38,4 @@ Thumbs.db
 
 # written at publish time; belongs in the release zip and Steam, never the repo
 About/PublishStamp.txt
+Styles/Google/

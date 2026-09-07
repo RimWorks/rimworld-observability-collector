@@ -5,7 +5,7 @@ This page takes you from zero to a visible section in the dashboard in about fiv
 ## Prerequisites
 
 - RimWorld 1.6 or later
-- .NET SDK 4.8 (the library targets `net48` to run inside RimWorld's Unity Mono -- see [Architecture](Architecture))
+- .NET SDK 4.8 (the library targets `net48` to run inside RimWorld's Unity Mono, see [Architecture](Architecture))
 - The RimObs mod installed by the player at runtime (distributed via Steam Workshop)
 
 ## Add the package
@@ -84,14 +84,14 @@ Gauges (`RegisterGauge` / `Set`) and histograms (`RegisterHistogram` / `Observe`
 
 1. Build your mod: `dotnet build` or your usual workflow.
 2. Launch RimWorld with your mod and RimObs both active.
-3. Open the dashboard: it auto-opens in your default browser when RimWorld starts. To re-open later, click the RimObs button in the mod settings widget (the in-game widget shows the current session's port, which is ephemeral). Your mod's sections will appear in the sidebar under its `packageId` prefix.
+3. Open the dashboard: it auto-opens in your default browser when RimWorld starts. To re-open it later, click the RimObs button in the mod settings widget. That widget shows the current session's port, which is ephemeral. Your mod's sections will appear in the sidebar under its `packageId` prefix.
 
 See [Using the collector](Using-The-Collector) for collector startup options and how to reach the dashboard from a remote machine.
 
 ## Next steps
 
-- [Profile API](Profile-API) -- full API for timed sections, including `Start`/`Stop` and nested scopes.
-- [Metrics API](Metrics-API) -- counters, gauges, histograms, and labeled variants.
-- [[ObservedSection] attribute](Observed-Section-Attribute) -- annotate methods directly instead of calling `RegisterSection`.
-- [profiling.xml](Profiling-XML) -- instrument third-party code without writing C#.
-- [Hot-path discipline](Hot-Path-Discipline) -- what you must not do inside a `Measure` block.
+- [Profile API](Profile-API): full API for timed sections, including `Start`/`Stop` and nested scopes.
+- [Metrics API](Metrics-API): counters, gauges, histograms, and labeled variants.
+- [[ObservedSection] attribute](Observed-Section-Attribute): annotate methods directly instead of calling `RegisterSection`.
+- [profiling.xml](Profiling-XML): instrument third-party code without writing C#.
+- [Hot-path discipline](Hot-Path-Discipline): what you must not do inside a `Measure` block.

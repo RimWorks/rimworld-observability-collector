@@ -1,6 +1,6 @@
 # Local HTTP API
 
-The collector exposes a local HTTP API so third-party tools, scripts, and the dashboard can read sessions, metrics, and logs without touching internal data structures.
+The collector exposes a local HTTP API. Third-party tools, scripts, and the dashboard use it to read sessions, metrics, and logs without touching internal data structures.
 
 ## Purpose
 
@@ -12,13 +12,13 @@ Every piece of data shown in the dashboard comes from this API. Third-party tool
 http://localhost:<port>
 ```
 
-In standalone mode the port is always `17654`. When launched from the game the library picks an ephemeral port, writes it to a discovery file, and passes it to the collector via `--port`. The discovery files are written to:
+In standalone mode the port is always `17654`. When launched from the game the library picks an ephemeral port, writes it to a discovery file, and passes it to the collector via `--port`. The library writes the discovery files to:
 
 - Windows: `%LOCALAPPDATA%\RimWorks.RimObs\`
 - Linux/macOS: `~/.local/share/RimWorks.RimObs/` (or `$XDG_DATA_HOME`)
 - Override: set `RIMOBS_CONFIG_DIR` to any path
 
-Two files are written at startup and deleted when the collector exits:
+The collector writes two files at startup and deletes them on exit:
 
 | File | Contents |
 |---|---|
@@ -33,9 +33,9 @@ See [Using the collector](Using-The-Collector) for launch modes and [Wire protoc
 
 **State-changing requests (POST, PUT, PATCH, DELETE)** require two things:
 
-1. An `Origin` header whose value is exactly `http://localhost:<port>` or `http://127.0.0.1:<port>`. Requests from any other origin are rejected with `403 Forbidden`. The check can be disabled via the `security.csrf_origin_check_enabled` config key.
+1. An `Origin` header whose value is exactly `http://localhost:<port>` or `http://127.0.0.1:<port>`. The collector rejects requests from any other origin with `403 Forbidden`. The `security.csrf_origin_check_enabled` config key turns the check off.
 
-2. An `Authorization: Bearer <token>` header. The token is read from the `RIMOBS_TOKEN` environment variable at startup; if the variable is unset the collector generates a random 32-byte base64 token and writes it to `collector.token`. Requests that pass the Origin check but omit or present a wrong token receive `401 Unauthorized`.
+2. An `Authorization: Bearer <token>` header. The collector reads the token from the `RIMOBS_TOKEN` environment variable at startup. If that variable is unset, it generates a random 32-byte base64 token and writes it to `collector.token`. Requests that pass the Origin check but omit or present a wrong token receive `401 Unauthorized`.
 
 For curl or scripted clients read the token file and pass it explicitly:
 
@@ -202,7 +202,7 @@ List active and persisted dynamic instrumentation patches.
 }
 ```
 
-When no session is active only `patches` (the persisted list) is returned.
+When no session is active, the collector returns only `patches`, the persisted list.
 
 **Status codes:** `200 OK`
 
@@ -259,7 +259,7 @@ Remove a dynamic patch by its integer ID.
 
 | Name | Type | Description |
 |---|---|---|
-| `id` | long | Patch ID returned when the patch was created |
+| `id` | long | Patch ID the collector returned when it created the patch |
 
 **Response** - empty body, `204 No Content`
 
@@ -455,7 +455,7 @@ curl -s http://localhost:17654/api/v1/panels/refresh_requested
 
 Signal the dashboard to refresh its panel data.
 
-**Response** - same shape as the GET above, with `refresh_requested: true`.
+**Response** - same shape as the preceding GET, with `refresh_requested: true`.
 
 **Status codes:** `200 OK`
 

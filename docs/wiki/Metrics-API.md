@@ -6,7 +6,7 @@
 
 | Type | Use when | Example |
 |---|---|---|
-| Counter | Values only go up -- events that accumulate | things spawned, queries served, items crafted |
+| Counter | Values only go up, events that accumulate | things spawned, queries served, items crafted |
 | Gauge | Point-in-time values that can rise or fall | queued messages, current colonist count, active jobs |
 | Histogram | Distributions across many observations | request latency, pawn count per map tick |
 
@@ -28,7 +28,7 @@ Register once at startup (or in a `[StaticConstructorOnStartup]` type) and hold 
 ### Add overloads
 
 ```csharp
-// No labels -- increments the aggregate total
+// No labels: increments the aggregate total
 Obs.Metrics.Add(handle, delta);
 
 // Single label key/value
@@ -38,7 +38,7 @@ Obs.Metrics.Add(handle, delta, "faction", "player");
 Obs.Metrics.Add(handle, delta, ("faction", "player"), ("map", "cave"));
 ```
 
-`delta` is `long`. The implementation calls `Interlocked.Add` directly on the stored total with no sign check, so negative deltas pass through. Counters are semantically monotonic increasing -- passing a negative delta produces undefined downstream behavior. Do not do it.
+`delta` is `long`. The implementation calls `Interlocked.Add` directly on the stored total with no sign check, so negative deltas pass through. Counters are semantically monotonic increasing, passing a negative delta produces undefined downstream behavior. Do not do it.
 
 ### Example
 
@@ -114,7 +114,7 @@ Obs.Metrics.Observe(handle, value, "severity", "major");
 Obs.Metrics.Observe(handle, value, ("severity", "major"), ("map", "cave_01"));
 ```
 
-Each call increments an observation count and accumulates a sum. The library does not define explicit buckets in the instrumentation layer -- the serialized shape is documented in [Wire protocol](Wire-Protocol).
+Each call increments an observation count and accumulates a sum. The library does not define explicit buckets in the instrumentation layer, the serialized shape is documented in [Wire protocol](Wire-Protocol).
 
 ### Example
 
@@ -134,25 +134,25 @@ Obs.Metrics.Observe(TickDuration, elapsed);
 
 Three styles are available for all three metric types:
 
-**No labels** -- records to the metric's aggregate bucket:
+**No labels**, records to the metric's aggregate bucket:
 
 ```csharp
 Obs.Metrics.Add(handle, 1);
 ```
 
-**Single key/value** -- one string pair, resolved without array allocation on the fast path:
+**Single key/value**, one string pair, resolved without array allocation on the fast path:
 
 ```csharp
 Obs.Metrics.Add(handle, 1, "faction", "mechanoids");
 ```
 
-**Tuple array** -- arbitrary label set; allocates the tuple array at the call site:
+**Tuple array**, arbitrary label set; allocates the tuple array at the call site:
 
 ```csharp
 Obs.Metrics.Add(handle, 1, ("faction", "mechanoids"), ("severity", "raid"));
 ```
 
-Label key rules match the metric name validator: pattern `[a-z][a-z0-9_]*` (see Naming below). Label values are free-form strings. Keep label values low-cardinality -- a different value per pawn or per tick will exhaust the cardinality limit immediately and collapse all further observations into the overflow bucket.
+Label key rules match the metric name validator: pattern `[a-z][a-z0-9_]*` (see Naming below). Label values are free-form strings. Keep label values low-cardinality. A different value per pawn or per tick will exhaust the cardinality limit immediately and collapse all further observations into the overflow bucket.
 
 ## Cardinality limits
 
@@ -163,7 +163,7 @@ When a labeled `Add`, `Set`, or `Observe` call arrives and the number of distinc
 1. Increments an internal incident counter on the descriptor.
 2. Routes the observation into a special `"__overflow"` bucket instead of creating a new entry.
 
-The overflow bucket accumulates normally -- its data is not dropped. The incident counter is visible in the collector for diagnosing runaway cardinality. To avoid overflow, keep label values to a bounded set (faction def names, map IDs, severity strings) rather than unbounded identifiers.
+The overflow bucket accumulates normally, its data is not dropped. The incident counter is visible in the collector for diagnosing runaway cardinality. To avoid overflow, keep label values to a bounded set (faction def names, map IDs, severity strings) rather than unbounded identifiers.
 
 ## Naming
 
@@ -173,6 +173,6 @@ See [Profile API](Profile-API) for the full name rules and the `packageId` regis
 
 ## Related
 
-- [Profile API](Profile-API) -- timing sections, `RegisterSection`, name rules
-- [Wire protocol](Wire-Protocol) -- serialized metric shape, histogram bucket encoding
-- [Hot-Path-Discipline](Hot-Path-Discipline) -- allocation and lock constraints for instrumentation code
+- [Profile API](Profile-API): timing sections, `RegisterSection`, name rules
+- [Wire protocol](Wire-Protocol): serialized metric shape, histogram bucket encoding
+- [Hot-Path-Discipline](Hot-Path-Discipline): allocation and lock constraints for instrumentation code

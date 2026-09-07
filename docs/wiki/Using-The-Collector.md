@@ -4,11 +4,11 @@ The collector is the out-of-process daemon that receives telemetry from RimWorld
 
 ## Opening the Dashboard
 
-When RimWorld starts, the RimObs library picks an ephemeral port, launches the collector with that port, and the collector opens the dashboard in your default browser. HTTP and UDP both share the chosen port. The port changes each session, so bookmark the "open dashboard" link in the mod settings widget rather than a fixed URL.
+When RimWorld starts, the RimObs library picks an ephemeral port and launches the collector with it. The collector then opens the dashboard in your default browser. HTTP and UDP both share the chosen port. The port changes each session, so bookmark the "open dashboard" link in the mod settings widget rather than a fixed URL.
 
 ## The Mod Settings Widget
 
-In-game, go to Options -- Mod Settings -- RimObs. The widget shows:
+In-game, go to Options, Mod Settings, RimObs. The widget shows:
 
 - Whether the collector is running or stopped.
 - The port for the current session.
@@ -28,7 +28,7 @@ In standalone mode the collector binds to fixed port `17654` and runs until you 
 
 ## Per-Session Storage
 
-Each play session is stored as a separate row in a SQLite database in your platform's local appdata folder. Sessions persist until you delete them. The [Dashboard tour](Dashboard-Tour) explains how to view and compare sessions.
+The collector stores each play session as a separate row in a SQLite database, under your platform's local appdata folder. Sessions persist until you delete them. The [Dashboard tour](Dashboard-Tour) explains how to view and compare sessions.
 
 ## Closing
 

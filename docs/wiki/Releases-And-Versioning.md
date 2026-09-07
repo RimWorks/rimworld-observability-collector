@@ -47,7 +47,7 @@ Each release produces the following artifacts:
 
 **Build metadata commit**: `semantic-release` writes the resolved version and build timestamp back into `RimObs.Wire/BuildInfo.cs` and commits it with `[skip ci]`.
 
-The `.nupkg` files are also attached to the GitHub release alongside the collector zips. We do not publish GitHub Release UI notes as a separate step; the tag and its generated release notes serve that purpose.
+The `.nupkg` files are also attached to the GitHub release alongside the collector zips. The release workflow does not publish GitHub Release UI notes as a separate step; the tag and its generated release notes serve that purpose.
 
 ## Wire-schema versioning
 

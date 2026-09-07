@@ -6,15 +6,15 @@ A page-by-page guide to the RimObs Svelte SPA for first-time users.
 
 The dashboard uses a fixed two-column, two-row grid that fills the entire browser window.
 
-**Sidebar** (left column, full height) -- the RimObs wordmark sits at the top. Below it is the main navigation list: Overview, Hotspots, Instrumentation, Call Tree, Memory, Metrics, Patches, Sessions, Logs, and Settings. Items marked "soon" are planned but not yet active. On narrow viewports the sidebar collapses to icon-only mode.
+**Sidebar** (left column, full height), the RimObs wordmark sits at the top. Below it is the main navigation list: Overview, Hotspots, Instrumentation, Call Tree, Memory, Metrics, Patches, Sessions, Logs, and Settings. Items marked "soon" are planned but not yet active. On narrow viewports the sidebar collapses to icon-only mode.
 
-**Top bar** (right column, top row) -- shows the current page title on the left. The right side carries three status pills:
+**Top bar** (right column, top row), shows the current page title on the left. The right side carries three status pills:
 
 - An update badge (only visible when a newer collector version is available).
 - A session pill with a coloured dot, the active session ID, and how long ago the last data batch arrived.
 - A health pill that reads "running" or "offline" depending on whether the collector is reachable.
 
-**Main pane** (right column, bottom row) -- scrollable content area where each page renders. Maximum width is capped at 1320 px and centred.
+**Main pane** (right column, bottom row), scrollable content area where each page renders. Maximum width is capped at 1320 px and centred.
 
 ## Pages
 
@@ -22,7 +22,7 @@ The dashboard uses a fixed two-column, two-row grid that fills the entire browse
 
 Shows a grid of stat cards (TPS, FPS, batch count, sample count, active sections, GC events, allocations, bytes received) drawn from the live status endpoint. Two detail cards below list the current session metadata (ID, library version, start time, last batch) and collector metadata (status, version, update availability).
 
-Open this when you want a quick health check -- is the game running and is data flowing?
+Open this when you want a quick health check, is the game running and is data flowing?
 
 Data source: [`GET /api/v1/status`](Local-HTTP-API) polled every 2 seconds.
 
@@ -36,7 +36,7 @@ Data sources: [`GET /api/v1/hotspots`](Local-HTTP-API) polled every 3 seconds; [
 
 ### Instrumentation (`#/instrumentation`)
 
-Live dynamic patch management. A debounced search box queries the running game for method descriptors matching your text -- results show the full signature and assembly. Clicking "Instrument" adds a Harmony timing patch for that method immediately. The lower section lists every currently active patch with its status (active, pending, or stale) and a remove button.
+Live dynamic patch management. A debounced search box queries the running game for method descriptors matching your text. Results show the full signature and assembly. Clicking "Instrument" adds a Harmony timing patch for that method immediately. The lower section lists every currently active patch with its status (active, pending, or stale) and a remove button.
 
 Open this when you want to add or remove timing probes without restarting the game.
 
@@ -52,7 +52,7 @@ Data source: [`GET /api/v1/calltree`](Local-HTTP-API) polled every 4 seconds.
 
 ### Memory (`#/memory`)
 
-Four stat cards show current heap size, peak heap, peak allocation rate, and GC collection counts by generation (G0/G1/G2). A line chart plots heap size over time. Below that, a detailed event log lists every GC event the library captured: generation, pause type, heap before and after, duration, allocation rate (shown as a proportional bar), and tick number. A reference card at the bottom explains the generation labels.
+Four stat cards show current heap size, peak heap, peak allocation rate, and GC collection counts by generation (G0/G1/G2). A line chart plots heap size over time. Below that, a detailed event log lists every GC event the library captured. Each row shows generation, pause type, heap before and after, duration, allocation rate as a proportional bar, and tick number. A reference card at the bottom explains the generation labels.
 
 Open this when you are diagnosing memory pressure or unexpectedly frequent collections.
 
@@ -76,7 +76,7 @@ Data source: [`GET /api/v1/patches`](Local-HTTP-API) polled every 5 seconds.
 
 ### Sessions (`#/sessions`)
 
-Two cards: a summary card for the current active session (ID, start time, library version, section count, metric count, batch count, sample count, total section time, GC events, allocations, bytes) and a historical list of all sessions stored by the collector (ID, start time, library version, game version). The current session is highlighted.
+Two cards. The summary card covers the current active session. It shows ID, start time, library version, section and metric counts, batch and sample counts, total section time, GC events, allocations, and bytes. The second lists every session the collector has stored, with ID, start time, library version, and game version. The current session is highlighted.
 
 Open this when you want to compare when different game runs started or verify session continuity.
 
@@ -84,7 +84,7 @@ Data sources: [`GET /api/v1/sessions`](Local-HTTP-API) and [`GET /api/v1/session
 
 ### Logs (`#/logs`)
 
-A live log stream from the collector process. Filter chips at the top let you narrow to All, Information, Warning, or Error level. Each entry shows the relative timestamp, level, message, and -- for errors -- the exception text below the message.
+A live log stream from the collector process. Filter chips at the top let you narrow to All, Information, Warning, or Error level. Each entry shows the relative timestamp, level, message, and, for errors, the exception text below the message.
 
 Open this when you are debugging the collector itself or chasing a configuration problem.
 
@@ -100,11 +100,13 @@ Data source: [`GET /api/v1/status`](Local-HTTP-API) polled every 10 seconds.
 
 ## Filtering and session selection
 
-The dashboard always displays data for the current active session -- there is no session-picker or cross-session compare mode yet (the Comparison page is listed in the sidebar as "soon"). The only filtering controls that exist today are the log-level chips on the Logs page. All other pages reflect the full dataset for the running session.
+Most pages show the current active session. The Comparison page is the exception. It has two session pickers, a base and a head, and flags hotspots that look like regressions between them.
+
+The Logs page has log-level chips. Every other page reflects the full dataset for the running session.
 
 ## Screenshots
 
-> Screenshots will be added once the dashboard stabilizes.
+> Screenshots follow once the dashboard stabilizes.
 
 ## Related
 

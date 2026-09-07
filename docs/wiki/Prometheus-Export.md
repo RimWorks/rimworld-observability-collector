@@ -3,7 +3,7 @@
 Feed RimObs metrics into an existing Prometheus and Grafana stack.
 
 The collector can optionally serve a Prometheus-format `/metrics` endpoint built from
-session aggregates. It is **disabled by default** and reads only from collector summaries,
+session aggregates. It is **off by default** and reads only from collector summaries,
 never from a game hot path (PRD section 17.1).
 
 ## Enable the exporter
@@ -29,8 +29,8 @@ GET http://127.0.0.1:<collector-port>/metrics
 When `prometheus_enabled` is `false`, the endpoint returns `404` and adds no overhead.
 
 > `prometheus_port` is reserved for a future mode that hosts `/metrics` on a dedicated
-> listener. The current build serves `/metrics` on the main collector port so it shares the
-> same lifecycle, origin checks, and auto-shutdown as the rest of the API. A scrape failure
+> listener. The current build serves `/metrics` on the main collector port. It shares the
+> lifecycle, origin checks, and auto-shutdown of the rest of the API. A scrape failure
 > returns `503` and is recorded in exporter health without affecting the dashboard or API.
 
 You can confirm exporter state on the dashboard **Settings** page (enabled flag, last scrape
@@ -43,11 +43,11 @@ naming conventions.
 
 | Metric | Type | Labels | Source |
 |---|---|---|---|
-| `rimobs_collector_connected` | gauge | — | 1 when a session is reporting |
-| `rimobs_collector_batches_total` | counter | — | Telemetry batches received |
-| `rimobs_collector_samples_total` | counter | — | Section timing samples received |
-| `rimobs_tps` | gauge | — | Latest ticks-per-second |
-| `rimobs_fps` | gauge | — | Latest frames-per-second |
+| `rimobs_collector_connected` | gauge | none | 1 when a session is reporting |
+| `rimobs_collector_batches_total` | counter | none | Telemetry batches received |
+| `rimobs_collector_samples_total` | counter | none | Section timing samples received |
+| `rimobs_tps` | gauge | none | Latest ticks-per-second |
+| `rimobs_fps` | gauge | none | Latest frames-per-second |
 | `rimobs_section_duration_seconds_count` | counter | `section` | Sample count, top sections |
 | `rimobs_section_duration_seconds_sum` | counter | `section` | Total elapsed seconds, top sections |
 | `rimobs_section_duration_seconds_max` | gauge | `section` | Max elapsed seconds, top sections |

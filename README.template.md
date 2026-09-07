@@ -2,21 +2,21 @@
 
 Find out which mod is eating your TPS. RimObs profiles a running RimWorld colony, records where every tick goes, and keeps the history so you can compare one session against another. Timed sections, counters, gauges, histograms, GC events, allocation samples, and Harmony patch conflicts.
 
-## Which mod is causing my lag?
+## Which mod is causing your lag?
 
-Play a session with the mod in your list, then play one without it. RimObs stores both, so you can put the two side by side: the same hotspot table, the same metrics, and the load order that produced each one. Whatever moved is your answer.
+Play a session with the mod in your list, then play one without it. RimObs stores both. Put the two side by side and compare the hotspot table, the metrics, and the load order that produced each one. Whatever moved is your answer.
 
-The dashboard runs in your browser. You can export any session as a speedscope profile and read it as a flamegraph in a real profiler, or pack it into a diagnostic bundle and hand it to the mod author.
+The dashboard runs in your browser. Export any session as a speedscope profile and read it as a flamegraph in a real profiler. Or pack it into a diagnostic bundle and hand it to the mod author.
 
 ## How is this different from Dubs Performance Analyzer?
 
 Dubs shows you what is slow right now, in an in-game window, for the session you are in. It is good at that, and if a live readout is all you want, use it.
 
-RimObs keeps the sessions. Every run goes into a local database, so you can diff two mod lists, watch a number drift across a week of play, or open the profile from the run that actually stuttered instead of trying to reproduce it.
+RimObs keeps the sessions. Every run goes into a local database. Diff two mod lists, watch a number drift across a week of play, or open the profile from the run that actually stuttered.
 
-It also runs outside the game. The collector, the aggregation, and the dashboard are a separate process, so the work of drawing charts is not competing with the frames you are trying to measure. That process exposes a Prometheus endpoint too, if you already have Grafana pointed at something.
+It also runs outside the game. The collector, the aggregation, and the dashboard are a separate process. Drawing charts does not compete with the frames you are trying to measure. That process exposes a Prometheus endpoint too, if you already have Grafana pointed at something.
 
-## Do I need to be a modder?
+## Do you need to be a modder?
 
 No. Subscribe to the Workshop item your other mods declare as a dependency. The collector launches with the game and opens the dashboard in your browser. Everything stays on your machine.
 

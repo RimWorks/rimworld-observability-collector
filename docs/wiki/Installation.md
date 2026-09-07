@@ -18,8 +18,8 @@ After subscribing, restart RimWorld and enable RimObs in the mod list before any
 
 Two pieces ship together:
 
-- `Assemblies/RimObs.dll` -- the mod-side library. RimWorld's Mono runtime loads this at startup alongside your other mod assemblies.
-- `Collector/<rid>/RimObs.Collector` -- a per-platform native binary that runs alongside the game. The four supported runtime IDs are `win-x64`, `linux-x64`, `osx-arm64`, and `osx-x64`.
+- `Assemblies/RimObs.dll`, the mod-side library. RimWorld's Mono runtime loads this at startup alongside your other mod assemblies.
+- `Collector/<rid>/RimObs.Collector`, a per-platform native binary that runs alongside the game. The four supported runtime IDs are `win-x64`, `linux-x64`, `osx-arm64`, and `osx-x64`.
 
 The collector cannot live under `Assemblies/` because RimWorld's `ModAssemblyHandler` loads every `.dll` in that subtree into Mono, which crashes on the net10 assemblies. See [Architecture](Architecture) for details.
 
@@ -29,7 +29,7 @@ Steam Workshop handles updates automatically. For manual installs, download the 
 
 ## Uninstalling
 
-- **Workshop**: unsubscribe from the item and disable it in the mod list.
+- **Workshop**: unsubscribe from the item and turn it off in the mod list.
 - **Manual**: delete the mod folder from `Mods/`.
 
 Either way, local session data and diagnostic bundles stored in your platform's appdata directory are not removed. Delete those manually if you no longer want them.

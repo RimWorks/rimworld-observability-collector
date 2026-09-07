@@ -2,9 +2,9 @@
 
 RimObs spans three separate runtimes because each piece runs in a fundamentally different host environment.
 
-## TL;DR
+## Summary
 
-The system has three runtimes: a `net48` instrumentation library that runs inside RimWorld's Unity Mono process, a `netstandard2.0` shared wire-type library consumed by both sides, and a `net10` collector daemon that runs out-of-process. A MessagePack-framed UDP/HTTP protocol carries telemetry from the library to the collector, which stores it in SQLite and serves it through an embedded Svelte 5 SPA.
+The system has three runtimes. A `net48` instrumentation library runs inside RimWorld's Unity Mono process. A `netstandard2.0` shared wire-type library serves both sides. A `net10` collector daemon runs out of process. A MessagePack-framed UDP and HTTP protocol carries telemetry to the collector. The collector stores it in SQLite and serves it through an embedded Svelte 5 SPA.
 
 ## The three runtimes
 
@@ -17,15 +17,15 @@ The system has three runtimes: a `net48` instrumentation library that runs insid
 
 ### `RimObs.Library/` (net48)
 
-Runs inside RimWorld's Unity Mono. The target is `net48` because that is what RimWorld's bundled Mono runtime supports -- no other target is viable here.
+Runs inside RimWorld's Unity Mono. The target is `net48` because that is what RimWorld's bundled Mono runtime supports, no other target is viable here.
 
-The library's job is to be as invisible as possible. It applies Harmony IL transpilers to game methods at startup, writes measurements into a pre-allocated ring buffer, and drains that buffer via a background sender thread. The library allocates a fresh ephemeral port at bootstrap, then launches the collector child process, passing `--port <P>` so both processes agree on which port to use.
+The library's job is to be as invisible as possible. It applies Harmony IL transpilers to game methods at startup and writes measurements into a pre-allocated ring buffer. A background sender thread drains that buffer. The library allocates a fresh ephemeral port at bootstrap. It then launches the collector child process with `--port <P>`, so both processes agree on the port.
 
 Hot-path discipline is mandatory: zero allocation on the steady path, no locks, no `Task`/`async`, no string concatenation (PRD §11.6). Sections are registered by bare name; the library auto-prefixes each name with the mod's `packageId` (PRD §35.69).
 
 ### `RimObs.Wire/` (netstandard2.0)
 
-A shared project that carries only MessagePack message types -- no logic, no runtime dependencies beyond the MessagePack library itself. The `netstandard2.0` target is necessary because the same assembly is consumed from `net48` (the library) and `net10` (the collector). It is also published separately as a NuGet package so third-party tool authors can encode and decode RimObs wire messages without taking a dependency on the full library or collector.
+A shared project that carries only MessagePack message types, no logic, no runtime dependencies beyond the MessagePack library itself. The `netstandard2.0` target is necessary because the same assembly is consumed from `net48` (the library) and `net10` (the collector). It also ships as its own NuGet package. Third-party tool authors can encode and decode RimObs wire messages without depending on the full library or collector.
 
 ### `RimObs.Collector/` (net10.0)
 
@@ -33,7 +33,7 @@ A standalone daemon and CLI published as a single self-contained binary for four
 
 ### `RimObs.Dashboard/` (Svelte 5 + Vite)
 
-A static SPA built once via `pnpm build`. The build output is embedded as a .NET `EmbeddedResource` in the Collector binary and served directly from memory -- no external file serving, no CDN dependency. The dashboard uses uPlot for time-series charts.
+A static SPA built once via `pnpm build`. The build output is embedded as a .NET `EmbeddedResource` in the Collector binary and served directly from memory, no external file serving, no CDN dependency. The dashboard uses uPlot for time-series charts.
 
 ## Data flow
 
@@ -48,7 +48,7 @@ flowchart LR
     G -->|HTTP| E
 ```
 
-Data moves left to right: instrumented game code writes into pre-allocated handles, the ring buffer absorbs bursts, and a background sender thread drains the buffer over UDP or HTTP to the collector. The collector persists everything in SQLite. The dashboard reads from the collector's HTTP API and renders charts in the browser.
+Data moves left to right. Instrumented game code writes into pre-allocated handles, the ring buffer absorbs bursts, and a background sender thread drains it to the collector. The collector persists everything in SQLite. The dashboard reads from the collector's HTTP API and renders charts in the browser.
 
 ## Port allocation and collector lifecycle
 
@@ -83,7 +83,7 @@ The library itself (`RimObs.dll`) and `RimObs.Wire.dll` are both `net48` and dep
 
 ## Wire protocol
 
-Telemetry batches are encoded with MessagePack. Each batch envelope carries a `schema_version` field so the collector can detect and reject batches from an incompatible library version. There is no compression -- the batches are small and the transport is loopback or LAN. See [Wire protocol](Wire-Protocol) for the full type catalog and field definitions.
+Telemetry batches are encoded with MessagePack. Each batch envelope carries a `schema_version` field so the collector can detect and reject batches from an incompatible library version. There is no compression, the batches are small and the transport is loopback or LAN. See [Wire protocol](Wire-Protocol) for the full type catalog and field definitions.
 
 Security: all mutating HTTP endpoints enforce an `Origin` header check (CSRF). The CLI authenticates via a bearer token in the `RIMOBS_TOKEN` environment variable (PRD §35.62, §35.28).
 

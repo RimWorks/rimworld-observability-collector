@@ -4,25 +4,25 @@ The wire protocol defines the binary format used to move telemetry from the in-g
 
 ## Purpose
 
-The collector exposes an HTTP API for querying stored data after the fact (see [Local HTTP API](Local-HTTP-API)). The wire protocol is different: it is the inbound channel through which the mod library pushes live telemetry to the collector while the game is running. The bundled dashboard is one consumer of the collector's stored data; any tool can be another, and understanding this protocol is the starting point.
+The collector exposes an HTTP API for querying stored data after the fact (see [Local HTTP API](Local-HTTP-API)). The wire protocol is different. It is the inbound channel that the mod library uses to push live telemetry while the game runs. The bundled dashboard is one consumer of the collector's stored data; any tool can be another, and understanding this protocol is the starting point.
 
 ## Transport
 
-Two channels share the same port number. In standalone mode that port is `17654`. When the library launches the collector automatically it allocates an ephemeral port and passes it as a command-line argument; the library writes a discovery file so tools can read the active port without hard-coding it. The discovery mechanism lives in `RimObs.Library/Transport/CollectorScanner.cs`.
+Two channels share the same port number. In standalone mode that port is `17654`. When the library launches the collector automatically, it allocates an ephemeral port and passes it as a command-line argument. The library also writes a discovery file, so tools can read the active port without hard-coding it. The discovery mechanism lives in `RimObs.Library/Transport/CollectorScanner.cs`.
 
 **UDP** - best-effort, unreliable, no acknowledgment. Used for high-frequency telemetry batches (section timings, metrics, GC events, allocations, TPS/FPS). Dropping individual datagrams is acceptable; the ring buffer on the library side maintains sequence numbers so gaps are detectable.
 
-**HTTP POST /ingest** - reliable, used for catch-up after gaps, control messages, session metadata, and any data where loss is not acceptable. The collector returns `400` with a `reason` field when it rejects a batch.
+**HTTP POST `/ingest`** - reliable, used for catch-up after gaps, control messages, session metadata, and any data where loss is not acceptable. The collector returns `400` with a `reason` field when it rejects a batch.
 
 Both channels carry the same `TelemetryBatch` envelope.
 
 ## Envelope and schema versioning
 
-Every batch begins with a `TelemetryBatch` envelope. The `SchemaVersion` field is checked first on both channels. The collector accepts the version it was built against (`SchemaVersion.Current = 2`). On UDP, batches with an unknown version are dropped with a warning log line. On HTTP, they return `400`. Additive changes within a schema version are tolerated; bumping `SchemaVersion` signals a semantic change (PRD §35.42).
+Every batch begins with a `TelemetryBatch` envelope. The `SchemaVersion` field is checked first on both channels. The collector accepts the version it targets (`SchemaVersion.Current = 2`). On UDP, the collector drops batches with an unknown version and writes a warning log line. On HTTP, they return `400`. Additive changes within a schema version are tolerated; bumping `SchemaVersion` signals a semantic change (PRD §35.42).
 
 ## Encoding
 
-The wire format is **MessagePack**, encoded as an array of fields in declaration order (field 0 is element 0 in the array, and so on). There is no compression (PRD §35.40). The library ships its own dependency-free codec (`WireCodec`) because the `net48` Mono environment cannot load the standard MessagePack NuGet package without crashing the game's assembly loader. The output is byte-for-byte compatible with any standard MessagePack reader on the collector side.
+The wire format is **MessagePack**, encoded as an array of fields in declaration order (field 0 is element 0 in the array, and so on). There is no compression (PRD §35.40). The library ships its own dependency-free codec (`WireCodec`). The `net48` Mono environment cannot load the standard MessagePack NuGet package without crashing the game's assembly loader. The output is byte-for-byte compatible with any standard MessagePack reader on the collector side.
 
 ## Types
 
@@ -30,7 +30,7 @@ All types live in the `RimWorks.RimObs.Wire` namespace unless noted otherwise.
 
 ### `TelemetryBatch` - outer envelope
 
-Every datagram and every HTTP ingest body is a serialized `TelemetryBatch`. `Payload` is a nested MessagePack blob whose shape is determined by `BatchType`.
+Every datagram, and every HTTP body sent to `/ingest`, is a serialized `TelemetryBatch`. `Payload` is a nested MessagePack blob whose shape is determined by `BatchType`.
 
 ```csharp
 public sealed class TelemetryBatch {
@@ -242,7 +242,7 @@ None. Batches are raw MessagePack bytes. Do not wrap them in gzip or any other c
 dotnet add package RimWorks.RimObs.Wire
 ```
 
-The package targets `netstandard2.0`, so it works in any modern .NET host (.NET 6+, .NET Framework 4.6.1+). Reference it to get the type definitions without copying them; your MessagePack library of choice will handle deserialization as long as you decode array-format MessagePack in field-declaration order.
+The package targets `netstandard2.0`. That covers any modern .NET host, including .NET 6 and later and .NET Framework 4.6.1 and later. Reference it to get the type definitions without copying them. Your MessagePack library of choice handles deserialization, as long as you decode array-format MessagePack in field-declaration order.
 
 ## Related
 

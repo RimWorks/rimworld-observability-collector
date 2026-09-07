@@ -1,10 +1,10 @@
 # profiling.xml
 
-Instrument methods in any mod -- including vanilla RimWorld and third-party mods you cannot recompile -- by declaring targets in a plain XML file.
+Instrument methods in any mod, including vanilla RimWorld and third-party mods you cannot recompile, by declaring targets in a plain XML file.
 
 ## Purpose
 
-The C# [Profile API](Profile-API) requires you to modify source code. When you want to time a method in someone else's assembly, that is not an option. `profiling.xml` lets you declare targets declaratively: RimObs reads every active mod's file at game startup, resolves the methods by reflection, and installs Harmony transpiler patches automatically.
+The C# [Profile API](Profile-API) requires you to modify source code. That does not work when you want to time a method inside another mod's assembly. `profiling.xml` lets you declare targets instead. At game startup RimObs reads every active mod's file, resolves the methods by reflection, and installs Harmony transpiler patches.
 
 This covers PRD §11 "declarative profiling.xml" instrumentation style.
 
@@ -76,7 +76,7 @@ The loader recognizes exactly four element names: `Profiling`, `Section`, `Metho
 
 ## Method targeting
 
-The method spec inside `<Method>` must follow the format `Namespace.TypeName:MethodName`. The type name is resolved by scanning all assemblies loaded into the current `AppDomain` -- this includes RimWorld itself (`Assembly-CSharp.dll`), all loaded mod assemblies, and .NET framework assemblies.
+The method spec inside `<Method>` must follow the format `Namespace.TypeName:MethodName`. RimObs resolves the type name by scanning every assembly loaded into the current `AppDomain`. That covers RimWorld itself (`Assembly-CSharp.dll`), all loaded mod assemblies, and .NET framework assemblies.
 
 **Overload disambiguation.** When a type has multiple methods with the same name, RimObs selects the overload with the highest parameter count. This matches RimWorld's convention where the canonical heavy implementation takes the most arguments and lighter convenience overloads delegate to it.
 
@@ -92,10 +92,10 @@ If you need to target a specific overload, there is currently no attribute synta
 
 ## Lifecycle
 
-1. **Load** - `profiling.xml` files are read once during `RimObsMod` constructor, before any Harmony patches are installed. The loader iterates every mod in `LoadedModManager.RunningModsListForReading`.
+1. **Load** - RimObs reads `profiling.xml` files once in the `RimObsMod` constructor, before it installs any Harmony patches. The loader iterates every mod in `LoadedModManager.RunningModsListForReading`.
 2. **Resolution** - After all files are parsed, `SectionCatalog.ResolveAll()` resolves each `TypeName:MethodName` pair by reflection against all currently loaded assemblies.
 3. **Patch installation** - `PatchInstaller.InstallAll()` installs a Harmony IL transpiler on each resolved method. The transpiler wraps the entire method body in a `Profiler.Start` / `Profiler.Stop` pair.
-4. **Missing targets** - If a type or method cannot be found, RimObs logs a warning to `Player.log` in the form `[RimObs] Section 'name' unresolved: ...` and continues. No exception is thrown and no other sections are affected.
+4. **Missing targets** - If a type or method cannot be found, RimObs logs a warning to `Player.log` in the form `[RimObs] Section 'name' unresolved: ...` and continues. It throws no exception, and no other section changes.
 5. **Parse errors** - If the file fails to parse (malformed XML, wrong root element, missing `name` attribute), RimObs logs a warning per-file and skips it. Other mods' files are still processed.
 
 The scan happens once per game session. Adding or editing `profiling.xml` requires a game restart to take effect.
@@ -111,11 +111,11 @@ The scan happens once per game session. Adding or editing `profiling.xml` requir
 
 For any of these cases, use the [Profile API](Profile-API) directly from C#.
 
-Note that XML-declared patches go through the same IL transpiler as code-declared patches, so all [hot-path discipline](Hot-Path-Discipline) rules still apply: no allocation on the instrumented path, exception-safe start/stop pairing, and zero cost when the profiler is disabled.
+XML-declared patches go through the same IL transpiler as code-declared patches. Every [hot-path discipline](Hot-Path-Discipline) rule still applies. No allocation on the instrumented path, exception-safe start/stop pairing, and zero cost when the profiler is off.
 
 ## Related
 
 - [Profile API](Profile-API) - C# instrumentation API for cases XML cannot express
 - [[ObservedSection] attribute](Observed-Section-Attribute) - imperative complement: annotate methods you own directly in source
 - [Hot-Path Discipline](Hot-Path-Discipline) - allocation and performance rules that apply to all patches
-- [Troubleshooting](Troubleshooting) - diagnosing "my target method was not patched" and other startup warnings
+- [Troubleshooting](Troubleshooting) - diagnosing unpatched target methods and other startup warnings

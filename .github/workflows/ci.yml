@@ -61,3 +61,17 @@ jobs:
 
       - name: dotnet test
         run: dotnet test RimObs.sln -c Release --nologo --no-build --logger "console;verbosity=normal"
+
+  prose:
+    name: prose
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Vale
+        uses: errata-ai/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # reviewdog
+        with:
+          reporter: github-pr-check
+          fail_on_error: true

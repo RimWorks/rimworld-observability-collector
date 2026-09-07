@@ -6,7 +6,7 @@ The collector reads a single JSON file at startup; the library exposes one setti
 
 ### Collector (`config.json`)
 
-The config directory is resolved in this order:
+The collector resolves the config directory in this order:
 
 1. The `--config-dir` CLI flag (if passed).
 2. The `RIMOBS_CONFIG_DIR` environment variable.
@@ -15,7 +15,7 @@ The config directory is resolved in this order:
    - **Linux:** `~/.local/share/RimWorks.RimObs/config.json`
    - **macOS:** `~/Library/Application Support/RimWorks.RimObs/config.json`
 
-If the file does not exist, defaults apply and the file is written on the first config change via the API.
+If the file does not exist, defaults apply. The collector writes the file on the first config change through the API.
 
 ### Library (RimWorld ModSettings)
 
@@ -69,7 +69,7 @@ Full defaults are in the catalog below.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `session.split_session_on_save_load` | bool | `false` | Start a new session each time the player loads a save |
-| `session.slow_tick_threshold_us` | int | `16667` | Tick duration above which a tick is flagged as slow, in microseconds (default ~60 fps budget) |
+| `session.slow_tick_threshold_us` | int | `16667` | Tick duration that marks a tick as slow, in microseconds (default is roughly the 60 fps budget) |
 
 ### `sections`
 
@@ -124,7 +124,7 @@ Full defaults are in the catalog below.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `privacy.include_save_name` | bool | `false` | Include the save file name in session metadata |
+| `privacy.include_save_name` | bool | `false` | Include the save filename in session metadata |
 | `privacy.include_full_paths` | bool | `false` | Include full file-system paths in diagnostics |
 | `privacy.include_stack_traces` | bool | `false` | Attach stack traces to error events |
 | `privacy.include_system_info` | bool | `false` | Include OS and hardware info in session metadata |
@@ -173,7 +173,7 @@ CLI flags set process-level behaviour and are not persisted to `config.json`. To
 
 | Variable | Description |
 |---|---|
-| `RIMOBS_CONFIG_DIR` | Overrides the directory where `config.json` and the sessions database are stored |
+| `RIMOBS_CONFIG_DIR` | Overrides the directory holding `config.json` and the sessions database |
 | `RIMOBS_TOKEN` | Bearer token for CLI authentication; generated and printed at startup if absent |
 | `BROWSER` | Browser command used when auto-opening the dashboard (standard Unix convention) |
 

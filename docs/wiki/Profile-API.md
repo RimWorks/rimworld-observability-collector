@@ -12,9 +12,9 @@ Use `Obs.Profile` when you need to answer "how long does this take, and how ofte
 
 ```csharp
 SectionHandle handle = Obs.Profile.RegisterSection(
-    name:      "tick_heavy",   // required -- bare name, packageId prefix added automatically
-    subsystem: "colonists",    // optional -- groups related sections in the dashboard
-    unit:      "ms"            // optional -- informational label only; the library records nanoseconds internally
+    name:      "tick_heavy",   // required: bare name, packageId prefix added automatically
+    subsystem: "colonists",    // optional: groups related sections in the dashboard
+    unit:      "ms"            // optional: informational label only; the library records nanoseconds internally
 );
 ```
 
@@ -26,11 +26,11 @@ public static SectionHandle RegisterSection(string name, string? subsystem = nul
 
 | Parameter   | Type      | Default | Meaning |
 |-------------|-----------|---------|---------|
-| `name`      | `string`  | --      | Bare section name. Must satisfy the name rules below. The library prepends `packageId.` automatically. |
-| `subsystem` | `string?` | `null`  | Optional grouping label shown in the dashboard (e.g. `"colonists"`, `"render"`, `"pathfinding"`). |
-| `unit`      | `string?` | `null`  | Informational display hint (e.g. `"ms"`, `"ns"`, `"frames"`). The library always records wall time in nanoseconds; this field does not affect storage or arithmetic. |
+| `name`      | `string`  |,      | Bare section name. Must satisfy the name rules below. The library prepends `packageId.` automatically. |
+| `subsystem` | `string?` | `null`  | Optional grouping label shown in the dashboard (for example `"colonists"`, `"render"`, `"pathfinding"`). |
+| `unit`      | `string?` | `null`  | Informational display hint (for example `"ms"`, `"ns"`, `"frames"`). The library always records wall time in nanoseconds; this field does not affect storage or arithmetic. |
 
-**Returns:** `SectionHandle` -- a readonly struct with an integer ID. Cache this; do not call `RegisterSection` on the hot path.
+**Returns:** `SectionHandle`, a readonly struct with an integer ID. Cache this; do not call `RegisterSection` on the hot path.
 
 ## Name rules
 
@@ -109,11 +109,11 @@ The `token` returned by `Start` carries the start timestamp; `Stop` requires it 
 
 ## Exception safety
 
-`Dispose` on `MeasureScope` is always called even if the body throws, because `using` compiles to a `try`/`finally` block. The explicit `Start`/`Stop` pattern achieves the same guarantee only when wrapped in `try`/`finally` as shown above. For sections instrumented via declarative XML, the IL transpiler emits a CLR exception handler with the same guarantee (PRD SS11.6). See [Hot-Path-Discipline](Hot-Path-Discipline).
+`Dispose` on `MeasureScope` is always called even if the body throws, because `using` compiles to a `try`/`finally` block. The explicit `Start`/`Stop` pattern achieves the same guarantee only inside a `try`/`finally`, as shown in the preceding example. For sections instrumented via declarative XML, the IL transpiler emits a CLR exception handler with the same guarantee (PRD SS11.6). See [Hot-Path-Discipline](Hot-Path-Discipline).
 
 ## Handle lifetime
 
-`SectionHandle` is stable for the lifetime of the process. The registry returns the same handle if you register the same name twice. Registering inside a hot path allocates nothing on the second call, but the first call does a dictionary write under a lock; do not call `RegisterSection` in a loop.
+`SectionHandle` is stable for the lifetime of the process. The registry returns the same handle if you register the same name twice. Registering inside a hot path allocates nothing on the second call. The first call does a dictionary write under a lock, so do not call `RegisterSection` in a loop.
 
 The idiomatic pattern is a static field, initialized once:
 
@@ -124,11 +124,11 @@ private static readonly SectionHandle s_TickHandle =
 
 ## Owners and grouping
 
-The `packageId` prefix is derived from the calling assembly's registration in `OwnerRegistry`. RimObs registers all loaded mods at startup via `ModContentPack.PackageId`. Mods cannot register sections that appear to belong to a different mod: `RegisterSection` uses `Assembly.GetCallingAssembly()` to determine the owner, so the prefix is always the caller's own `packageId`. The dashboard groups sections by owner automatically; no explicit grouping call is needed.
+The `packageId` prefix is derived from the calling assembly's registration in `OwnerRegistry`. RimObs registers all loaded mods at startup via `ModContentPack.PackageId`. Mods cannot register sections that appear to belong to a different mod. `RegisterSection` calls `Assembly.GetCallingAssembly()` to find the owner, so the prefix is always the caller's own `packageId`. The dashboard groups sections by owner automatically; no explicit grouping call is needed.
 
 ## Related
 
 - [Metrics API](Metrics-API)
-- [Profiling-XML](Profiling-XML) -- declarative alternative to hand-written `RegisterSection` calls
-- [[ObservedSection] attribute](Observed-Section-Attribute) -- attribute-based alternative for methods you own
+- [Profiling-XML](Profiling-XML): declarative alternative to hand-written `RegisterSection` calls
+- [[ObservedSection] attribute](Observed-Section-Attribute): attribute-based alternative for methods you own
 - [Hot-Path-Discipline](Hot-Path-Discipline)

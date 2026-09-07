@@ -98,7 +98,7 @@ Collector sessions list
 Collector sessions list --format=json | jq '.sessions[].session_id'
 ```
 
-**Table output columns:** `SESSION ID`, `STARTED (UTC)`, `LIBRARY`, `GAME` -- sorted newest-first.
+**Table output columns:** `SESSION ID`, `STARTED (UTC)`, `LIBRARY`, `GAME`. Rows sort newest-first.
 
 **JSON output shape:**
 
@@ -169,9 +169,9 @@ Collector -h
 
 ## Exit behavior
 
-**Game-managed mode** (`--parent-pid` set): the collector polls the parent process every 2 seconds. When the parent exits it shuts down immediately. As a fallback, if no telemetry has arrived for 5 minutes the collector also shuts down, guarding against the case where the game process crashes before the PID watcher fires.
+**Game-managed mode** (`--parent-pid` set): the collector polls the parent process every 2 seconds. When the parent exits it shuts down immediately. As a fallback, the collector also shuts down, guarding against the case where the game process crashes before the PID watcher fires.
 
-**Standalone mode** (no `--parent-pid`): the collector runs until SIGINT (Ctrl+C) or SIGTERM. The fixed default port `17654` is used unless overridden with `--port`.
+**Standalone mode** (no `--parent-pid`): the collector runs until SIGINT (Ctrl+C) or SIGTERM. The collector uses the fixed default port `17654` unless `--port` overrides it.
 
 This behavior supersedes PRD §35.71 (fixed-port daemon reuse). See `.claude/rules/project-overview.md` §4 for the full decision record.
 
