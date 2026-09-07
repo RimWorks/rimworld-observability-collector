@@ -45,24 +45,29 @@ export function hitTest(tree: TreeNode[], depth: number, atUs: number): number {
     return -1;
 }
 
-export function moveFocus(tree: TreeNode[], index: number, move: FocusMove): number {
-    const from = tree[index];
-    if (!from) return index;
-
-    if (move === 'up') return from.parentIndex >= 0 ? from.parentIndex : index;
-
-    if (move === 'down') {
-        for (let i = index + 1; i < tree.length; i++) {
-            if (tree[i].parentIndex === index) return i;
-            if (tree[i].depth <= from.depth) break;
-        }
-        return index;
+// buildFrameTree emits a parent before its children, so a child is always forward of its
+// parent and a sibling is the next node at the same depth under the same parent.
+function firstChild(tree: TreeNode[], index: number, from: TreeNode): number {
+    for (let i = index + 1; i < tree.length; i++) {
+        if (tree[i].parentIndex === index) return i;
+        if (tree[i].depth <= from.depth) break;
     }
+    return index;
+}
 
-    const step = move === 'right' ? 1 : -1;
+function nextSibling(tree: TreeNode[], index: number, from: TreeNode, step: number): number {
     for (let i = index + step; i >= 0 && i < tree.length; i += step) {
         if (tree[i].depth === from.depth && tree[i].parentIndex === from.parentIndex) return i;
         if (tree[i].depth < from.depth) break;
     }
     return index;
+}
+
+export function moveFocus(tree: TreeNode[], index: number, move: FocusMove): number {
+    const from = tree[index];
+    if (!from) return index;
+
+    if (move === 'up') return from.parentIndex >= 0 ? from.parentIndex : index;
+    if (move === 'down') return firstChild(tree, index, from);
+    return nextSibling(tree, index, from, move === 'right' ? 1 : -1);
 }

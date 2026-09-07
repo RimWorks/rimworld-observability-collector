@@ -54,7 +54,9 @@ export function readTheme(el: Element): DrawTheme {
 
 function parseHex(hex: string): [number, number, number] {
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [128, 128, 128];
+    return m
+        ? [Number.parseInt(m[1], 16), Number.parseInt(m[2], 16), Number.parseInt(m[3], 16)]
+        : [128, 128, 128];
 }
 
 function lighten(hex: string, lift: number): string {

@@ -52,21 +52,21 @@ internal sealed class SampleRingBuffer {
         return true;
     }
 
-    public int Drain(int[] sectionIds, int[] parentIds, long[] startTimestamps, long[] elapsedTicks, int[] frameOrdinals, int[] nodeIds, int[] parentNodeIds, int maxCount) {
+    public int Drain(SampleBatch batch, int maxCount) {
         int n = 0;
         long expected = _read + 1;
-        int cap = Math.Min(maxCount, Math.Min(sectionIds.Length, Math.Min(parentIds.Length, Math.Min(startTimestamps.Length, Math.Min(elapsedTicks.Length, Math.Min(frameOrdinals.Length, Math.Min(nodeIds.Length, parentNodeIds.Length)))))));
+        int cap = Math.Min(maxCount, batch.Capacity);
         while (n < cap) {
             int idx = (int)((expected - 1) & _mask);
             if (Volatile.Read(ref _slots[idx].Sequence) != expected)
                 break;
-            sectionIds[n] = _slots[idx].SectionId;
-            parentIds[n] = _slots[idx].ParentId;
-            startTimestamps[n] = _slots[idx].StartTimestamp;
-            elapsedTicks[n] = _slots[idx].ElapsedTicks;
-            frameOrdinals[n] = _slots[idx].FrameOrdinal;
-            nodeIds[n] = _slots[idx].NodeId;
-            parentNodeIds[n] = _slots[idx].ParentNodeId;
+            batch.SectionIds[n] = _slots[idx].SectionId;
+            batch.ParentIds[n] = _slots[idx].ParentId;
+            batch.StartTimestamps[n] = _slots[idx].StartTimestamp;
+            batch.ElapsedTicks[n] = _slots[idx].ElapsedTicks;
+            batch.FrameOrdinals[n] = _slots[idx].FrameOrdinal;
+            batch.NodeIds[n] = _slots[idx].NodeId;
+            batch.ParentNodeIds[n] = _slots[idx].ParentNodeId;
             n++;
             expected++;
         }

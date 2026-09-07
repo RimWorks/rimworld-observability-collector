@@ -27,13 +27,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private readonly ManualResetEventSlim _stop = new(false);
     private readonly string _ownerId;
 
-    private readonly int[] _sectionIds = new int[BatchSize];
-    private readonly int[] _parentIds = new int[BatchSize];
-    private readonly long[] _startTimestamps = new long[BatchSize];
-    private readonly long[] _elapsedTicks = new long[BatchSize];
-    private readonly int[] _frameOrdinals = new int[BatchSize];
-    private readonly int[] _nodeIds = new int[BatchSize];
-    private readonly int[] _parentNodeIds = new int[BatchSize];
+    private readonly SampleBatch _batch = new SampleBatch(BatchSize);
     private readonly int[] _registrationIds = new int[64];
     private readonly string[] _registrationNames = new string[64];
     private readonly string?[] _registrationSubsystems = new string?[64];
@@ -160,18 +154,18 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     private void FlushSamples() {
         while (true) {
-            int n = _ring.Drain(_sectionIds, _parentIds, _startTimestamps, _elapsedTicks, _frameOrdinals, _nodeIds, _parentNodeIds, BatchSize);
+            int n = _ring.Drain(_batch, BatchSize);
             if (n == 0)
                 return;
 
             SectionBatch batch = new() {
-                SectionIds = Slice(_sectionIds, n),
-                ParentIds = Slice(_parentIds, n),
-                StartTimestamps = Slice(_startTimestamps, n),
-                ElapsedTicks = Slice(_elapsedTicks, n),
-                FrameOrdinals = Slice(_frameOrdinals, n),
-                NodeIds = Slice(_nodeIds, n),
-                ParentNodeIds = Slice(_parentNodeIds, n),
+                SectionIds = Slice(_batch.SectionIds, n),
+                ParentIds = Slice(_batch.ParentIds, n),
+                StartTimestamps = Slice(_batch.StartTimestamps, n),
+                ElapsedTicks = Slice(_batch.ElapsedTicks, n),
+                FrameOrdinals = Slice(_batch.FrameOrdinals, n),
+                NodeIds = Slice(_batch.NodeIds, n),
+                ParentNodeIds = Slice(_batch.ParentNodeIds, n),
             };
             SendBatch(BatchType.Sections, batch);
             Interlocked.Add(ref _sent, n);

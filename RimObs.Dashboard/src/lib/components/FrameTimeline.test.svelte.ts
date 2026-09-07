@@ -17,9 +17,15 @@ vi.mock('../frameDraw', async (importOriginal) => {
 // jsdom has no canvas and no ResizeObserver, and the component must survive both.
 beforeAll(() => {
     globalThis.ResizeObserver ??= class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
+        observe() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
+        unobserve() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
+        disconnect() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
     } as unknown as typeof ResizeObserver;
 });
 

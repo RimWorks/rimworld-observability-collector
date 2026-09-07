@@ -93,7 +93,7 @@ function resolveParents(
     let orphanCount = 0;
 
     for (const i of order) {
-        while (openStack.length > 0 && relEnd[openStack[openStack.length - 1]] <= relStart[i]) {
+        while (openStack.length > 0 && relEnd[openStack.at(-1)!] <= relStart[i]) {
             openStack.pop();
         }
         const parentNodeId = parent_node_ids[i];
@@ -101,7 +101,7 @@ function resolveParents(
             const wire = idToWire.get(parentNodeId);
             if (wire === undefined) {
                 orphanCount++;
-                parentWire[i] = openStack.length > 0 ? openStack[openStack.length - 1] : NO_PARENT;
+                parentWire[i] = openStack.length > 0 ? openStack.at(-1)! : NO_PARENT;
             } else {
                 parentWire[i] = wire;
             }
@@ -128,16 +128,20 @@ function computeDepths(parentWire: number[]): number[] {
 
 // emit in sorted order, pulling an unemitted parent forward first. only an exact
 // interval tie needs this; real containment already sorts a parent before its child.
-function emitInDrawOrder(
-    order: number[],
-    parentWire: number[],
-    depth: number[],
-    section_ids: number[],
-    node_ids: number[],
-    relStart: number[],
-    relEnd: number[],
-    dur_us: number[],
-): TreeNode[] {
+// the wire format is parallel arrays, so they travel together rather than as eight arguments
+interface DrawColumns {
+    order: number[];
+    parentWire: number[];
+    depth: number[];
+    section_ids: number[];
+    node_ids: number[];
+    relStart: number[];
+    relEnd: number[];
+    dur_us: number[];
+}
+
+function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
+    const { order, parentWire, depth, section_ids, node_ids, relStart, relEnd, dur_us } = cols;
     const nodes: TreeNode[] = [];
     const wireToOutput = new Array<number>(parentWire.length).fill(-1);
 
@@ -195,7 +199,7 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         relEnd,
     );
     const depth = computeDepths(parentWire);
-    const nodes = emitInDrawOrder(
+    const nodes = emitInDrawOrder({
         order,
         parentWire,
         depth,
@@ -204,7 +208,7 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         relStart,
         relEnd,
         dur_us,
-    );
+    });
 
     return { nodes, orphanCount };
 }

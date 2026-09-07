@@ -150,20 +150,14 @@ public sealed class ProfilerOverheadTests {
     public void Ring_write_with_a_frame_ordinal_is_zero_alloc() {
         const int iterations = 100_000;
         SampleRingBuffer ring = new(1024);
-        int[] ids = new int[1024];
-        int[] parents = new int[1024];
-        long[] starts = new long[1024];
-        long[] elapsed = new long[1024];
-        int[] ordinals = new int[1024];
-        int[] nodeIds = new int[1024];
-        int[] parentNodeIds = new int[1024];
+        SampleBatch batch = new SampleBatch(1024);
 
         for (int warm = 0; warm < 50_000; warm++) {
             ring.TryWrite(1, -1, 1, -1, 0L, 0L, warm);
             if ((warm & 511) == 511)
-                ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 1024);
+                ring.Drain(batch, 1024);
         }
-        ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 1024);
+        ring.Drain(batch, 1024);
         long droppedBefore = ring.Dropped;
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -175,7 +169,7 @@ public sealed class ProfilerOverheadTests {
             if (ring.TryWrite(1, -1, 1, -1, 0L, 0L, i))
                 written++;
             if ((i & 511) == 511)
-                ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 1024);
+                ring.Drain(batch, 1024);
         }
         long after = GC.GetAllocatedBytesForCurrentThread();
 

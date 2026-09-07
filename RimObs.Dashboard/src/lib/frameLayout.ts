@@ -31,6 +31,25 @@ export function foldFrame(tree: TreeNode[], minVisibleDurationUs: number): Uint8
     return folded;
 }
 
+// pulled out of layoutFrame so the hot loop reads as three cases, not eight branches
+function isHidden(n: TreeNode, i: number, folded: Uint8Array, opts: LayoutOptions): boolean {
+    if (folded[i] === 1) return true;
+    if (n.depth >= opts.maxDepth) return true;
+    return n.endUs <= opts.viewStartUs || n.startUs >= opts.viewEndUs;
+}
+
+function quadOf(n: TreeNode, i: number): Quad {
+    return {
+        depth: n.depth,
+        startUs: n.startUs,
+        endUs: n.endUs,
+        totalUs: n.durUs,
+        sectionId: n.sectionId,
+        count: 1,
+        firstIndex: i,
+    };
+}
+
 export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
     const span = opts.viewEndUs - opts.viewStartUs;
     if (span <= 0 || opts.widthPx <= 0) return [];
@@ -50,21 +69,11 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
 
     for (let i = 0; i < tree.length; i++) {
         const n = tree[i];
-        if (folded[i] === 1) continue;
-        if (n.depth >= opts.maxDepth) continue;
-        if (n.endUs <= opts.viewStartUs || n.startUs >= opts.viewEndUs) continue;
+        if (isHidden(n, i, folded, opts)) continue;
 
         if (n.durUs >= minUs) {
             flush(n.depth);
-            out.push({
-                depth: n.depth,
-                startUs: n.startUs,
-                endUs: n.endUs,
-                totalUs: n.durUs,
-                sectionId: n.sectionId,
-                count: 1,
-                firstIndex: i,
-            });
+            out.push(quadOf(n, i));
             continue;
         }
 
@@ -78,15 +87,7 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
         }
 
         flush(n.depth);
-        open.set(n.depth, {
-            depth: n.depth,
-            startUs: n.startUs,
-            endUs: n.endUs,
-            totalUs: n.durUs,
-            sectionId: n.sectionId,
-            count: 1,
-            firstIndex: i,
-        });
+        open.set(n.depth, quadOf(n, i));
     }
 
     for (const run of open.values()) out.push(run);

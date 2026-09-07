@@ -12,9 +12,15 @@ const realGetContext = HTMLCanvasElement.prototype.getContext;
 
 beforeAll(() => {
     globalThis.ResizeObserver ??= class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
+        observe() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
+        unobserve() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
+        disconnect() {
+            // the stub exists so jsdom has a ResizeObserver, it never needs to react
+        }
     } as unknown as typeof ResizeObserver;
 });
 
@@ -87,13 +93,20 @@ const IMPORT_BODY = {
     contents: ['manifest.json', 'frames.json', 'hotspots.json'],
 };
 
+// String() on a Request gives "[object Request]", not the url the test wants to match.
+function requestUrl(input: RequestInfo | URL): string {
+    if (typeof input === 'string') return input;
+    if (input instanceof URL) return input.href;
+    return input.url;
+}
+
 function mockFetch(
     frames: unknown = FRAMES_BODY,
     importBody: unknown = IMPORT_BODY,
     importStatus = 200,
 ) {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
+        const url = requestUrl(input);
         let body: unknown;
         let status = 200;
         if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
@@ -506,7 +519,7 @@ describe('Flamegraph page', () => {
     it('refuses a bundle whose frame ring is empty, deletes it, and stays live', async () => {
         const realFetch = globalThis.fetch;
         globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-            if (String(input).includes('/file/frames.json'))
+            if (requestUrl(input).includes('/file/frames.json'))
                 return Promise.resolve(
                     new Response(JSON.stringify({ ...BUNDLE_FRAMES_BODY, frames: [] }), {
                         status: 200,

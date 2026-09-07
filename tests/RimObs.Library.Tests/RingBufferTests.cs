@@ -12,14 +12,15 @@ public sealed class RingBufferTests {
             ring.TryWrite(i, i * 7, i * 3, i * 3 - 1, i * 100L, i * 1000L, 1).Should().BeTrue();
         }
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] nodeIds = new int[16];
-        int[] parentNodeIds = new int[16];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 16);
+        SampleBatch batch = new SampleBatch(16);
+        var ids = batch.SectionIds;
+        var parents = batch.ParentIds;
+        var starts = batch.StartTimestamps;
+        var elapsed = batch.ElapsedTicks;
+        var ordinals = batch.FrameOrdinals;
+        var nodeIds = batch.NodeIds;
+        var parentNodeIds = batch.ParentNodeIds;
+        int n = ring.Drain(batch, 16);
 
         n.Should().Be(10);
         for (int i = 0; i < 10; i++) {
@@ -36,14 +37,15 @@ public sealed class RingBufferTests {
         ring.TryWrite(1, -1, 100, -1, 0L, 0L, 1).Should().BeTrue();
         ring.TryWrite(2, 1, 101, 100, 0L, 0L, 1).Should().BeTrue();
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] nodeIds = new int[16];
-        int[] parentNodeIds = new int[16];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 16);
+        SampleBatch batch = new SampleBatch(16);
+        var ids = batch.SectionIds;
+        var parents = batch.ParentIds;
+        var starts = batch.StartTimestamps;
+        var elapsed = batch.ElapsedTicks;
+        var ordinals = batch.FrameOrdinals;
+        var nodeIds = batch.NodeIds;
+        var parentNodeIds = batch.ParentNodeIds;
+        int n = ring.Drain(batch, 16);
 
         n.Should().Be(2);
         nodeIds[0].Should().Be(100);
@@ -58,14 +60,15 @@ public sealed class RingBufferTests {
         for (int i = 0; i < 5; i++)
             ring.TryWrite(i, -1, i * 10, i * 10 - 1, 0L, 0L, 1).Should().BeTrue();
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] nodeIds = new int[16];
-        int[] parentNodeIds = new int[16];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 16);
+        SampleBatch batch = new SampleBatch(16);
+        var ids = batch.SectionIds;
+        var parents = batch.ParentIds;
+        var starts = batch.StartTimestamps;
+        var elapsed = batch.ElapsedTicks;
+        var ordinals = batch.FrameOrdinals;
+        var nodeIds = batch.NodeIds;
+        var parentNodeIds = batch.ParentNodeIds;
+        int n = ring.Drain(batch, 16);
 
         n.Should().Be(5);
         for (int i = 0; i < 5; i++) {
@@ -87,21 +90,22 @@ public sealed class RingBufferTests {
     [Fact]
     public void Multiple_drain_cycles_progress_read_pointer() {
         SampleRingBuffer ring = new(8);
-        int[] ids = new int[8];
-        int[] parents = new int[8];
-        long[] starts = new long[8];
-        long[] elapsed = new long[8];
-        int[] ordinals = new int[8];
-        int[] nodeIds = new int[8];
-        int[] parentNodeIds = new int[8];
+        SampleBatch batch = new SampleBatch(8);
+        var ids = batch.SectionIds;
+        var parents = batch.ParentIds;
+        var starts = batch.StartTimestamps;
+        var elapsed = batch.ElapsedTicks;
+        var ordinals = batch.FrameOrdinals;
+        var nodeIds = batch.NodeIds;
+        var parentNodeIds = batch.ParentNodeIds;
 
         ring.TryWrite(1, -1, 0, -1, 0, 0, 1);
         ring.TryWrite(2, -1, 0, -1, 0, 0, 1);
-        ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 8).Should().Be(2);
+        ring.Drain(batch, 8).Should().Be(2);
 
         ring.TryWrite(3, -1, 0, -1, 0, 0, 1);
         ring.TryWrite(4, -1, 0, -1, 0, 0, 1);
-        ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 8).Should().Be(2);
+        ring.Drain(batch, 8).Should().Be(2);
         ids[0].Should().Be(3);
         ids[1].Should().Be(4);
     }
@@ -113,14 +117,15 @@ public sealed class RingBufferTests {
         ring.TryWrite(2, 1, 0, -1, 110L, 20L, 7).Should().BeTrue();
         ring.TryWrite(3, -1, 0, -1, 200L, 30L, 8).Should().BeTrue();
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] nodeIds = new int[16];
-        int[] parentNodeIds = new int[16];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, parentNodeIds, 16);
+        SampleBatch batch = new SampleBatch(16);
+        var ids = batch.SectionIds;
+        var parents = batch.ParentIds;
+        var starts = batch.StartTimestamps;
+        var elapsed = batch.ElapsedTicks;
+        var ordinals = batch.FrameOrdinals;
+        var nodeIds = batch.NodeIds;
+        var parentNodeIds = batch.ParentNodeIds;
+        int n = ring.Drain(batch, 16);
 
         n.Should().Be(3);
         ordinals[0].Should().Be(7);
@@ -128,67 +133,36 @@ public sealed class RingBufferTests {
         ordinals[2].Should().Be(8);
     }
 
+    // SampleBatch sizes all seven arrays together, so a short-array mismatch is no longer
+    // reachable. What still needs guarding is that a drain never runs past the batch.
     [Fact]
-    public void Drain_is_capped_by_the_shortest_destination_array() {
-        SampleRingBuffer ring = new(16);
-        for (int i = 0; i < 5; i++)
-            ring.TryWrite(i, -1, 0, -1, 0L, 0L, 1).Should().BeTrue();
-
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] nodeIds = new int[16];
-        int[] parentNodeIds = new int[16];
-
-        int n = ring.Drain(ids, parents, starts, elapsed, new int[2], nodeIds, parentNodeIds, 16);
-
-        n.Should().Be(2);
-        ids[0].Should().Be(0);
-        ids[1].Should().Be(1);
-        ring.Drain(ids, parents, starts, elapsed, new int[16], nodeIds, parentNodeIds, 16).Should().Be(3);
-        ids[0].Should().Be(2);
-    }
-
-    [Fact]
-    public void Drain_is_capped_by_the_shortest_node_id_array() {
+    public void Drain_is_capped_by_the_batch_capacity() {
         SampleRingBuffer ring = new(16);
         for (int i = 0; i < 5; i++)
             ring.TryWrite(i, -1, i, -1, 0L, 0L, 1).Should().BeTrue();
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] parentNodeIds = new int[16];
-
-        int[] shortNodeIds = new int[2];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, shortNodeIds, parentNodeIds, 16);
+        SampleBatch small = new SampleBatch(2);
+        int n = ring.Drain(small, 16);
 
         n.Should().Be(2);
-        shortNodeIds[0].Should().Be(0);
-        shortNodeIds[1].Should().Be(1);
+        small.SectionIds[0].Should().Be(0);
+        small.SectionIds[1].Should().Be(1);
+
+        // the rest stay queued for the next drain rather than being dropped
+        SampleBatch rest = new SampleBatch(16);
+        ring.Drain(rest, 16).Should().Be(3);
+        rest.SectionIds[0].Should().Be(2);
     }
 
     [Fact]
-    public void Drain_is_capped_by_the_shortest_parent_node_id_array() {
+    public void Drain_is_capped_by_max_count_below_capacity() {
         SampleRingBuffer ring = new(16);
         for (int i = 0; i < 5; i++)
             ring.TryWrite(i, -1, i, -1, 0L, 0L, 1).Should().BeTrue();
 
-        int[] ids = new int[16];
-        int[] parents = new int[16];
-        long[] starts = new long[16];
-        long[] elapsed = new long[16];
-        int[] ordinals = new int[16];
-        int[] nodeIds = new int[16];
-
-        int[] shortParentNodeIds = new int[2];
-        int n = ring.Drain(ids, parents, starts, elapsed, ordinals, nodeIds, shortParentNodeIds, 16);
-
-        n.Should().Be(2);
-        nodeIds[0].Should().Be(0);
-        nodeIds[1].Should().Be(1);
+        SampleBatch batch = new SampleBatch(16);
+        ring.Drain(batch, 2).Should().Be(2);
+        batch.SectionIds[0].Should().Be(0);
+        ring.Drain(batch, 16).Should().Be(3);
     }
 }

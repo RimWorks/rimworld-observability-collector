@@ -139,6 +139,7 @@ export interface GcResponse {
 export interface CallNode {
     id: number;
     name: string;
+    subsystem?: string | null;
     call_count: number;
     total_ns: number;
     is_other: boolean;

@@ -23,7 +23,9 @@ export function percent(value: number): string {
     if (!Number.isFinite(value)) return '-';
     if (value === 0) return '0%';
     const abs = Math.abs(value);
-    const decimals = abs >= 1 ? 1 : abs >= 0.1 ? 2 : 3;
+    let decimals = 3;
+    if (abs >= 1) decimals = 1;
+    else if (abs >= 0.1) decimals = 2;
     return `${value.toFixed(decimals)}%`;
 }
 

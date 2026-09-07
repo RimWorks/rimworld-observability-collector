@@ -38,14 +38,14 @@ export async function shippedPackages(solution = 'RimObs.sln') {
   let shipped = false;
 
   for (const line of out.split('\n')) {
-    const project = line.match(/^Project '(.+?)'/);
+    const project = /^Project '(.+?)'/.exec(line);
     if (project) {
       shipped = !NOT_SHIPPED.test(project[1]);
       continue;
     }
     if (!shipped) continue;
 
-    const row = line.match(/^\s*>\s+(\S+)\s+(?:\(A\)\s+)?(\S+)\s+(\S+)\s*$/);
+    const row = /^\s*>\s+(\S+)\s+(?:\(A\)\s+)?(\S+)\s+(\S+)\s*$/.exec(line);
     if (!row) continue;
 
     const [, name, requested, resolved] = row;
@@ -73,8 +73,9 @@ export async function writeStamp(modPath = process.cwd()) {
     for (const { name, label, requested, resolved } of packages) {
       // a floating request is where a new game or Harmony release enters
       const via = VIA[name];
-      const note = via ? `  (${via} ${requested})`
-        : requested.includes('*') ? `  (requested ${requested})` : '';
+      let note = '';
+      if (via) note = `  (${via} ${requested})`;
+      else if (requested.includes('*')) note = `  (requested ${requested})`;
       lines.push(`  ${label.padEnd(nameWidth)}  ${resolved.padEnd(note ? versionWidth : 0)}${note}`);
     }
   }
