@@ -39,7 +39,7 @@ jobs:
           node-version: 22
 
       - name: Install release dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Krafs.Rimworld.Ref floats on 1.6.* with no lock file, so this is where a new
       # RimWorld release enters and where breakage would first show up.

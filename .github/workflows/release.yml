@@ -43,7 +43,7 @@ jobs:
           node-version: 22
 
       - name: Install release dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: pnpm install (dashboard)
         working-directory: RimObs.Dashboard
