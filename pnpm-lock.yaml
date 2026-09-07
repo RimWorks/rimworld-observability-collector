@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@rimworks/mod-ci':
+        specifier: github:RimWorks/mod-ci#v1.1.0
+        version: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.2(semantic-release@25.0.9))
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.0
         version: 13.0.1(semantic-release@25.0.9)
@@ -134,6 +137,17 @@ packages:
   '@pnpm/npm-conf@3.0.3':
     resolution: {integrity: sha512-//0sR/cow/s4ICQaYoAobOl4aU8cjU6x/V24V7XkKotb9+O+3zySIYp146vpaobYHnxa4pZX8NkV54Z5AwbDKA==}
     engines: {node: '>=12'}
+
+  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5':
+    resolution: {gitHosted: true, integrity: sha512-5WF0y9UrshL2Ip+5cca3vKFf/4N17jsM8XAcOOso/amMKW+QIXlA22AiK3g54q3MyDAD9be56BF9iFnXR7ikHg==, tarball: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5}
+    version: 1.0.0
+    engines: {node: '>=22'}
+    hasBin: true
+    peerDependencies:
+      semantic-release-steam: '>=2'
+    peerDependenciesMeta:
+      semantic-release-steam:
+        optional: true
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -1465,6 +1479,10 @@ snapshots:
       '@pnpm/config.env-replace': 1.1.0
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
+
+  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.2(semantic-release@25.0.9))':
+    optionalDependencies:
+      semantic-release-steam: 2.1.2(semantic-release@25.0.9)
 
   '@sec-ant/readable-stream@0.4.1': {}
 
