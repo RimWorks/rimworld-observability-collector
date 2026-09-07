@@ -35,8 +35,8 @@ jobs:
           # lcov writes paths relative to the dashboard dir, sonar resolves them from the repo root.
           (Get-Content coverage\lcov.info) -replace '^SF:', 'SF:RimObs.Dashboard/' | Set-Content coverage\lcov.info
 
-      # TODO(25 S1481 warnings in the test projects): drop analyzer-severity once those are cleared.
-      - uses: RimWorks/mod-ci/.github/actions/dotnet-sonar@2a4af7891b92cd20917a0dd9f726532314a602a1 # v1.2.0
+      # analyzer-severity stays off until the 25 S1481 warnings in the test projects are cleared.
+      - uses: RimWorks/mod-ci/.github/actions/dotnet-sonar@5698991b43ade4de809d49d9695ac88e0895b298 # v1.2.1
         with:
           solution: RimObs.sln
           project-key: RimWorks_rimworld-observability-collector
@@ -47,4 +47,4 @@ jobs:
           analyzer-severity: none
           exclusions: RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**
           coverage-exclusions: "**/*.test.*,**/*.spec.*,RimObs.Dashboard/src/report/**"
-          extra-begin-args: /d:sonar.javascript.lcov.reportPaths="RimObs.Dashboard/coverage/lcov.info"
+          extra-begin-args: /d:sonar.javascript.lcov.reportPaths=RimObs.Dashboard/coverage/lcov.info
