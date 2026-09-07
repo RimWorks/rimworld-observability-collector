@@ -17,12 +17,13 @@
         onSelect?: (ordinal: number) => void;
     } = $props();
 
-    const HEIGHT_PX = 44;
+    const HEIGHT_PX = 132;
 
     let bars = $derived(buildBars(ordinals, durationsUs));
     let canvasEl = $state<HTMLCanvasElement | null>(null);
     let hostEl = $state<HTMLDivElement | null>(null);
     let widthPx = $state(600);
+    let heightPx = $state(HEIGHT_PX);
     let dpr = $state(1);
     let hoverIndex = $state(-1);
     let ro: ResizeObserver | null = null;
@@ -40,10 +41,10 @@
 
         const read = (token: string, fallback: string) => cssVar(host, token) || fallback;
         canvas.width = Math.max(1, Math.round(widthPx * dpr));
-        canvas.height = Math.round(HEIGHT_PX * dpr);
+        canvas.height = Math.max(1, Math.round(heightPx * dpr));
         drawStrip(ctx, bars, {
             widthPx,
-            heightPx: HEIGHT_PX,
+            heightPx,
             dpr,
             selectedOrdinal,
             theme: {
@@ -60,13 +61,16 @@
         void bars;
         void selectedOrdinal;
         void widthPx;
+        void heightPx;
         void dpr;
         paint();
     });
 
     function measure(): void {
         if (!hostEl) return;
-        widthPx = Math.max(1, Math.round(hostEl.getBoundingClientRect().width));
+        const box = hostEl.getBoundingClientRect();
+        widthPx = Math.max(1, Math.round(box.width));
+        heightPx = Math.max(1, Math.round(box.height) || HEIGHT_PX);
         dpr = globalThis.devicePixelRatio || 1;
     }
 
@@ -120,7 +124,7 @@
             <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
             <canvas
                 bind:this={canvasEl}
-                style="width:100%;height:{HEIGHT_PX}px"
+                style="width:100%;height:100%"
                 onclick={handleClick}
                 onmousemove={handleMove}
                 onmouseleave={() => (hoverIndex = -1)}
@@ -133,55 +137,83 @@
 
 <style>
     .strip {
-        margin-bottom: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        background: var(--bg-surface);
+        margin-bottom: var(--s-2);
     }
     .head {
         display: flex;
         justify-content: space-between;
-        font-size: 0.75rem;
-        margin-bottom: 0.25rem;
+        align-items: center;
+        padding: 4px 8px;
+        font-size: var(--f-small, 11.5px);
+        border-bottom: 1px solid var(--border-soft);
     }
     .dim {
         color: var(--text-dim);
     }
     .read {
         font-family: var(--font-mono);
+        color: var(--text-dim);
     }
     .plot {
         position: relative;
         display: grid;
         grid-template-columns: var(--gut, 112px) 1fr;
+        height: calc(132px * var(--f, 1.08));
+        background: var(--bg-void);
     }
     .axis {
         position: relative;
-        height: 100%;
     }
     .axis span {
         position: absolute;
         left: 0;
-        right: -100vw;
+        width: 100%;
+        height: 0;
         border-top: 1px dashed var(--border);
-        pointer-events: none;
     }
     .axis b,
     .axis em {
         position: absolute;
-        bottom: 1px;
-        font: 400 var(--f-tiny, 10.5px) / 1 var(--font-mono);
-        color: var(--text-faint);
+        bottom: 2px;
+        font: 400 calc(10.5px * var(--f, 1.08)) / 1 var(--font-mono);
         font-style: normal;
+        white-space: nowrap;
+    }
+    .axis b {
+        left: 6px;
+        color: var(--text-faint);
+        font-weight: 400;
     }
     .axis em {
-        left: 56px;
+        right: 8px;
         color: var(--border-strong);
     }
     .canvaswrap {
+        position: relative;
         min-width: 0;
+        border-left: 1px solid var(--border);
+    }
+    /* the dashed rules continue across the bars so a bar can be read against them */
+    .canvaswrap::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+            to top,
+            transparent 0 24.9%,
+            var(--border-soft) 24.9%,
+            transparent 25.1%
+        );
+        opacity: 0.5;
     }
     canvas {
         display: block;
-        border: 1px solid var(--border);
-        border-radius: 3px;
+        width: 100%;
+        height: 100%;
         cursor: pointer;
     }
 </style>

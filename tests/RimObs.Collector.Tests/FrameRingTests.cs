@@ -187,6 +187,45 @@ public sealed class FrameRingTests {
     }
 
     [Fact]
+    public void BaselineMedians_takes_the_median_of_each_sections_per_frame_total() {
+        FrameRing ring = new(16);
+        // section 10 costs 100, 200 then 300 ticks across three sealed frames.
+        long[] costs = [100, 200, 300];
+        for (int f = 0; f < 3; f++)
+            ring.Add(f + 1, 10, -1, f + 1, -1, f * 1000L, costs[f]);
+        ring.Add(99, 10, -1, 99, -1, 99000L, 1L);
+
+        ring.BaselineMedians(128)[10].Should().Be(200);
+    }
+
+    // a section that runs twice in one frame costs the sum of both, not either one.
+    [Fact]
+    public void BaselineMedians_sums_repeats_within_a_frame_before_taking_the_median() {
+        FrameRing ring = new(16);
+        ring.Add(1, 10, -1, 1, -1, 0L, 50L);
+        ring.Add(1, 10, -1, 2, -1, 100L, 70L);
+        ring.Add(2, 10, -1, 3, -1, 1000L, 500L);
+
+        ring.BaselineMedians(128)[10].Should().Be(120);
+    }
+
+    [Fact]
+    public void BaselineMedians_only_walks_the_newest_frames_it_was_asked_for() {
+        FrameRing ring = new(16);
+        for (int f = 1; f <= 5; f++)
+            ring.Add(f, 10, -1, f, -1, f * 1000L, f * 100L);
+        ring.Add(99, 10, -1, 99, -1, 99000L, 1L);
+
+        // frames 3, 4 and 5 cost 300, 400 and 500, so the window median is 400.
+        ring.BaselineMedians(3)[10].Should().Be(400);
+    }
+
+    [Fact]
+    public void BaselineMedians_on_an_empty_ring_returns_nothing() {
+        new FrameRing(8).BaselineMedians(128).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Clear_resets_the_counters_and_reopens_at_a_lower_ordinal() {
         FrameRing ring = new(8);
         ring.Add(0, 10, -1, 100, -1, 1L, 5L);

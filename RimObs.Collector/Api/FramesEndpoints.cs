@@ -47,6 +47,22 @@ public static class FramesEndpoints {
             });
         });
 
+        // its own endpoint on a slow poll: 128 frames of nodes is far too much work to put
+        // on /frames/latest at 10/s.
+        endpoints.MapGet("/api/v1/frames/baseline", (SessionAggregator aggregator, int? frames) => {
+            SessionMeta? meta = aggregator.Meta;
+            double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+            Dictionary<int, long> medians = aggregator.Frames.BaselineMedians(frames ?? 128);
+            Dictionary<string, double> mapped = new(medians.Count);
+            foreach (KeyValuePair<int, long> entry in medians)
+                mapped[entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] = entry.Value * usPerTick;
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                frames = frames ?? 128,
+                median_us = mapped,
+            });
+        });
+
         return endpoints;
     }
 

@@ -165,6 +165,40 @@ public sealed class FrameRing {
         }
     }
 
+    /// <summary>
+    /// Median total ticks per section over the newest <paramref name="frames"/> frames, which
+    /// is what the call tree compares a row against.
+    /// </summary>
+    public Dictionary<int, long> BaselineMedians(int frames) {
+        FrameSnapshot[] recent = SnapshotStrip(0).Length == 0 ? [] : Snapshot();
+        if (recent.Length == 0)
+            return [];
+        int take = Math.Min(frames <= 0 ? recent.Length : frames, recent.Length);
+        Dictionary<int, List<long>> perSection = [];
+        Dictionary<int, long> perFrame = [];
+        for (int f = recent.Length - take; f < recent.Length; f++) {
+            perFrame.Clear();
+            FrameSnapshot frame = recent[f];
+            for (int i = 0; i < frame.NodeCount; i++) {
+                int id = frame.SectionIds[i];
+                perFrame[id] = perFrame.TryGetValue(id, out long sum) ? sum + frame.NodeElapsedTicks[i] : frame.NodeElapsedTicks[i];
+            }
+            foreach (KeyValuePair<int, long> entry in perFrame) {
+                if (!perSection.TryGetValue(entry.Key, out List<long>? samples))
+                    perSection[entry.Key] = samples = [];
+                samples.Add(entry.Value);
+            }
+        }
+
+        Dictionary<int, long> medians = new(perSection.Count);
+        foreach (KeyValuePair<int, List<long>> entry in perSection) {
+            List<long> samples = entry.Value;
+            samples.Sort();
+            medians[entry.Key] = samples[samples.Count / 2];
+        }
+        return medians;
+    }
+
     public FrameRingStats ComputeStats() => StatsFor(Snapshot());
 
     // TODO(perf): sorts the whole ring per call, 2000 longs at a few hz. incremental

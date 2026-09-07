@@ -123,9 +123,21 @@
         }
     }
 
+    // 128 frames of nodes is real work, so it gets its own slow poll.
+    const baselineRes = new Resource(() => api.frameBaseline(), 5000);
+    let baselineUs = $derived(
+        new Map(Object.entries(baselineRes.data?.median_us ?? {}).map(([k, v]) => [Number(k), v])),
+    );
+
     const sectionsRes = new Resource(() => api.allSections(), 10000);
-    onMount(() => sectionsRes.start());
-    onDestroy(() => sectionsRes.stop());
+    onMount(() => {
+        sectionsRes.start();
+        baselineRes.start();
+    });
+    onDestroy(() => {
+        sectionsRes.stop();
+        baselineRes.stop();
+    });
 
     async function openBundle(e: Event) {
         const input = e.currentTarget as HTMLInputElement;
@@ -396,6 +408,7 @@
             {names}
             {selectedNode}
             frameDurationUs={frame?.duration_us ?? 0}
+            {baselineUs}
             onSelect={(i) => {
                 selectedNode = i;
                 timeline?.focusNode(i);
@@ -423,6 +436,7 @@
         --f-body: calc(13.5px * var(--f));
         --f-ui: calc(12.5px * var(--f));
         --f-small: calc(11.5px * var(--f));
+        --f-tiny: calc(10.5px * var(--f));
         --gut: calc(112px * var(--f));
         display: flex;
         flex-direction: column;
@@ -447,8 +461,11 @@
         align-items: center;
         gap: var(--s-2);
         flex-wrap: wrap;
-        padding: var(--s-2) 0;
-        border-bottom: 1px solid var(--border-soft);
+        padding: var(--s-2) var(--s-2);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        margin-bottom: var(--s-2);
     }
     .bar button {
         font: inherit;
@@ -471,6 +488,10 @@
         font-size: var(--f-ui);
         color: var(--text-dim);
     }
+    .ord b {
+        color: var(--text);
+        font-weight: 500;
+    }
     .paused {
         color: var(--warn);
         font-size: var(--f-small);
@@ -490,7 +511,7 @@
         border: 1px solid var(--border);
         border-radius: var(--r-sm);
         padding: 2px 6px;
-        max-width: 190px;
+        max-width: 150px;
     }
     .readout {
         margin-left: auto;
@@ -511,18 +532,25 @@
         display: flex;
         align-items: center;
         gap: var(--s-2);
-        padding: var(--s-2) 0;
+        padding: var(--s-2);
         font-size: var(--f-ui);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        margin-bottom: var(--s-2);
     }
     .scrub input {
         flex: 1;
     }
 
     .avg {
-        padding: var(--s-2) 0;
+        padding: 5px 8px;
         font-size: var(--f-small);
         color: var(--text-dim);
-        border-bottom: 1px solid var(--border-soft);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        margin-bottom: var(--s-2);
     }
     .avg b {
         color: var(--text);
@@ -536,12 +564,16 @@
     .stage {
         display: grid;
         grid-template-columns: var(--gut) 1fr;
-        border-bottom: 1px solid var(--border);
+        background: var(--bg-void);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        overflow: hidden;
     }
     .gutter {
         border-right: 1px solid var(--border);
-        padding: var(--s-2) var(--s-2) 0 0;
+        padding: calc(24px * var(--f)) var(--s-2) var(--s-2) var(--s-2);
         font-size: var(--f-ui);
+        background: var(--bg-surface);
     }
     .lane {
         color: var(--text-dim);
@@ -563,10 +595,11 @@
     .foot {
         font-size: var(--f-small);
         color: var(--text-faint);
-        padding: var(--s-1) 0;
+        padding: var(--s-1) var(--s-2);
     }
     .foot:first-of-type {
         border-top: 1px solid var(--border);
+        margin-top: var(--s-2);
         padding-top: var(--s-2);
     }
 </style>

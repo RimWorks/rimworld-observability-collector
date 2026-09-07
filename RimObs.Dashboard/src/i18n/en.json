@@ -116,6 +116,8 @@
     "tree.col.self": "Self",
     "tree.col.total": "Total",
     "tree.col.calls": "Calls",
+    "tree.col.delta": "\u0394 median",
+    "tree.col.alloc": "alloc",
     "flamegraph.median": "median",
     "flamegraph.p99": "p99",
     "flamegraph.budget": "budget",
