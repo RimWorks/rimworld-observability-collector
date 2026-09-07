@@ -525,6 +525,25 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
     });
 
+    // the bundle's newest frame usually reuses an ordinal the poller already drew, so the
+    // effect short-circuits and the delta keeps a value computed from two live frames.
+    it('drops the live delta when the source switches to a bundle', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('frame-overhead')).toBeInTheDocument());
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 4322, duration_us: 30000 },
+        });
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-overhead').textContent).toContain('\u0394'),
+        );
+
+        await openFile(getByLabelText);
+        await screen.findByTestId('frame-scrub');
+        expect(screen.getByTestId('frame-overhead').textContent).not.toContain('\u0394');
+    });
+
     it('shows the import error and stays live when the import request fails', async () => {
         mockFetch(FRAMES_BODY, { message: 'boom' }, 500);
         const { getByLabelText } = render(Flamegraph);

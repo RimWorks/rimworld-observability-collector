@@ -34,8 +34,8 @@ public static class BundleSizeEstimator {
     private const int CallEdgeBytesPerRow = 150;
     private const int GcEventBytesPerRow = 120;
     private const int PatchBytesPerRow = 256;
-    // 45 bytes a node on real data, 56 for headroom. that is ~24%, not a lot.
-    // revisit if a real session ever measures above 50.
+    // 38 to 52 bytes a node depending on the stopwatch frequency: a non-decimal QPC rate
+    // stops us round-tripping short, so every start_us and dur_us prints ~17 digits. 9% left.
     private const int FrameBytesPerNode = 56;
 
     public static BundleSizeEstimate Estimate(BundleEstimateInput input) {

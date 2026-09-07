@@ -127,6 +127,15 @@
     let lastOrdinal = -1;
     let lastDurationUs: number | null = null;
 
+    // a bundle's newest frame often carries the ordinal the poller just drew, so without
+    // this the delta and overhead stay at their live values while bundle data is on screen.
+    $effect(() => {
+        void source;
+        lastOrdinal = -1;
+        lastDurationUs = null;
+        deltaUs = null;
+    });
+
     // smoothOverhead gates the actual update to once a second; this just feeds it.
     $effect(() => {
         if (frame === null || frame.capture_ordinal === lastOrdinal) return;

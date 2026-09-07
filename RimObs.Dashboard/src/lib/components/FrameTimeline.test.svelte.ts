@@ -5,6 +5,7 @@ import { layoutFrame, quadIndexForNode } from '../frameLayout';
 import { fitView } from '../frameView';
 import { buildFrameTree, type FrameData } from '../frameTree';
 import { drawTimeline } from '../frameDraw';
+import { ns } from '../format';
 
 // jsdom's canvas has no getContext, so without this mock the draw path never runs and
 // nothing drawTimeline is handed can be asserted on.
@@ -518,9 +519,9 @@ describe('FrameTimeline', () => {
         expect(screen.getByTestId('frame-range').textContent).toBe(fitted);
     });
 
-    // the "keeps the zoom" test reuses the same duration_us, so a clamp-on-
-    // arrival mutant is a no-op there. a shorter frame is the case the plan actually cares about.
-    it('does not clamp the view when a shorter frame arrives while zoomed into the tail', async () => {
+    // a view held over from a longer frame culls every node in a shorter one, so the scrubber
+    // lands on a blank canvas that only Escape recovers. the span shrinks to the new frame.
+    it('clamps the view into a shorter frame that arrives while zoomed into the tail', async () => {
         const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
@@ -530,7 +531,8 @@ describe('FrameTimeline', () => {
             frame: { ...FRAME, capture_ordinal: 1235, duration_us: 300 },
             names: NAMES,
         });
-        expect(screen.getByTestId('frame-range').textContent).toBe(zoomed);
+        expect(screen.getByTestId('frame-range').textContent).not.toBe(zoomed);
+        expect(screen.getByTestId('frame-range').textContent).toBe(ns(300 * 1000));
     });
 
     // vitest-setup.ts stubs matchMedia to matches: false, so this overrides it locally

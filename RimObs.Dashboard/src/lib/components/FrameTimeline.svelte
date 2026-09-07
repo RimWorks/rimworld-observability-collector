@@ -42,7 +42,11 @@
     });
 
     let view = $state<ViewRange | null>(null);
-    let effectiveView = $derived(view ?? fitView(frame?.duration_us ?? 0));
+    // clamped on read, not just on write: the frame changes under us on every poll and on
+    // every scrub, and a view from a longer frame culls every node in a shorter one.
+    let effectiveView = $derived(
+        view ? clampView(view, frame?.duration_us ?? 0) : fitView(frame?.duration_us ?? 0),
+    );
 
     // holds the in-flight interpolated range while a zoom animation runs, so the layout
     // (quads) tracks what is actually painted instead of jumping to the target at t=0.
