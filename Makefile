@@ -3,7 +3,7 @@
 CONFIG ?= Debug
 RIDS ?= win-x64 linux-x64 osx-arm64 osx-x64
 DASHBOARD_DIR := RimObs.Dashboard
-SLN := RimObs.sln
+SLN := RimObs.slnx
 
 # The collector must NOT live under Assemblies/: RimWorld's ModAssemblyHandler loads every
 # .dll under Assemblies/ recursively and Mono segfaults trying to read the net10 collector's

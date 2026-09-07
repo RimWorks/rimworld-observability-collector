@@ -89,7 +89,7 @@ RimWorld mod and a multi-project .NET solution:
 
 - `About/`: RimWorld mod metadata (About.xml, Preview.png, loadFolders.xml).
 - `Assemblies/`: RimWorld's deploy directory. `RimObs.Library` builds straight here.
-- `RimObs.sln`: single solution so Rider/VS resolve `RimObs.Wire` from both net48 and net10.0 consumers.
+- `RimObs.slnx`: single solution so Rider/VS resolve `RimObs.Wire` from both net48 and net10.0 consumers.
 - `Makefile` + `make.ps1`: see `make build`, `make test`, `make publish-collector`.
 - `docs/wiki/`: source for [the wiki](https://github.com/RimWorks/rimworld-observability-collector/wiki). Edit here, not on the wiki site; CI mirrors on push to `main`.
 

@@ -3,7 +3,7 @@
   <!-- Local only. CI gets these rules from dotnet-sonarscanner, and leaving the analyzer on
        here makes the "dotnet format" verify step exit 2, which blocks the release. -->
   <ItemGroup Condition="'$(CI)' != 'true'">
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.33.0.1635" PrivateAssets="all" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.33.*" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

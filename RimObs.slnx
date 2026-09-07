@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="RimObs.Collector/RimObs.Collector.csproj" />
+  <Project Path="RimObs.Library/RimObs.Library.csproj" />
+  <Project Path="RimObs.Wire/RimObs.Wire.csproj" />
+  <Project Path="Source/RimObs.Patches.Concord/RimObs.Patches.Concord.csproj" />
+  <Project Path="Source/RimObs.Patches.Harmony/RimObs.Patches.Harmony.csproj" />
+  <Project Path="tests/RimObs.Collector.Tests/RimObs.Collector.Tests.csproj" />
+  <Project Path="tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj" />
+  <Project Path="tests/RimObs.Patches.Concord.Tests/RimObs.Patches.Concord.Tests.csproj" />
+</Solution>

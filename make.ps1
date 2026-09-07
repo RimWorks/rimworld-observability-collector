@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptDir
 
-$Sln = 'RimObs.sln'
+$Sln = 'RimObs.slnx'
 $DashboardDir = 'RimObs.Dashboard'
 $Rids = @('win-x64','linux-x64','osx-arm64','osx-x64')
 

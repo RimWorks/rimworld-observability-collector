@@ -44,11 +44,11 @@ jobs:
       # Krafs.Rimworld.Ref floats on 1.6.* with no lock file, so this is where a new
       # RimWorld release enters and where breakage would first show up.
       - name: dotnet restore
-        run: dotnet restore RimObs.sln
+        run: dotnet restore RimObs.slnx
 
       - name: Record resolved RimWorld version
         run: |
-          version=$(dotnet list RimObs.sln package \
+          version=$(dotnet list RimObs.slnx package \
             | awk '/Krafs.Rimworld.Ref/ {print $NF; exit}')
           echo "RIMWORLD_REF=${version:-unknown}" >> "$GITHUB_ENV"
           echo "resolved RimWorld ref: ${version:-unknown}"
@@ -56,13 +56,18 @@ jobs:
       # Assemblies/ is gitignored, so a checkout has no DLLs. Skipping this publishes a
       # mod with no code in it.
       - name: dotnet build
-        run: dotnet build RimObs.sln -c Release --nologo --no-restore
+        run: dotnet build RimObs.slnx -c Release --nologo --no-restore
 
+      # coverlet's IL instrumentation inflates a timed hot path about tenfold, so the
+      # wall-clock benchmarks run in a second pass with the collector switched off.
       - name: dotnet test
         run: |
           set -o pipefail
-          dotnet test RimObs.sln -c Release --nologo --no-build \
-            --logger "console;verbosity=normal" | tee test-output.txt
+          dotnet test RimObs.slnx -c Release --nologo --no-build \
+            --logger "console;verbosity=normal" --filter "Category!=Benchmark" | tee test-output.txt
+          dotnet test tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj -c Release \
+            --nologo --no-build --logger "console;verbosity=normal" \
+            -p:RunSettingsFilePath= --filter "Category=Benchmark" | tee -a test-output.txt
           passed=$(grep -oE 'Passed:[[:space:]]+[0-9]+' test-output.txt | grep -oE '[0-9]+' | paste -sd+ | bc)
           echo "TESTS_PASSED=${passed:-unknown}" >> "$GITHUB_ENV"
 

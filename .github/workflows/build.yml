@@ -38,7 +38,7 @@ jobs:
       # analyzer-severity stays off until the 25 S1481 warnings in the test projects are cleared.
       - uses: RimWorks/mod-ci/.github/actions/dotnet-sonar@5698991b43ade4de809d49d9695ac88e0895b298 # v1.2.1
         with:
-          solution: RimObs.sln
+          solution: RimObs.slnx
           project-key: RimWorks_rimworld-observability-collector
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           dotnet-version: |

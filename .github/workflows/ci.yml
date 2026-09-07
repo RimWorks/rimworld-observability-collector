@@ -48,19 +48,26 @@ jobs:
         run: pnpm build
 
       - name: dotnet restore
-        run: dotnet restore RimObs.sln
+        run: dotnet restore RimObs.slnx
 
       - name: Check formatting
         if: matrix.os == 'ubuntu-latest'
         run: |
-          dotnet format RimObs.sln --verify-no-changes
+          dotnet format RimObs.slnx --verify-no-changes
           cd RimObs.Dashboard && pnpm lint
 
       - name: dotnet build
-        run: dotnet build RimObs.sln -c Release --nologo --no-restore
+        run: dotnet build RimObs.slnx -c Release --nologo --no-restore
 
+      # coverlet's IL instrumentation inflates a timed hot path about tenfold, so the
+      # wall-clock benchmarks run in a second pass with the collector switched off.
       - name: dotnet test
-        run: dotnet test RimObs.sln -c Release --nologo --no-build --logger "console;verbosity=normal"
+        run: |
+          dotnet test RimObs.slnx -c Release --nologo --no-build \
+            --logger "console;verbosity=normal" --filter "Category!=Benchmark"
+          dotnet test tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj -c Release \
+            --nologo --no-build --logger "console;verbosity=normal" \
+            -p:RunSettingsFilePath= --filter "Category=Benchmark"
 
   prose:
     name: prose
