@@ -4,7 +4,7 @@
         <Authors>RimWorks</Authors>
         <TargetFrameworks>net472;net48</TargetFrameworks>
         <LangVersion>latest</LangVersion>
-        <OutDir Condition="'$(TargetFramework)' == 'net48'">..\Assemblies\</OutDir>
+        <OutDir Condition="'$(TargetFramework)' == 'net472'">..\Assemblies\</OutDir>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>True</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>
