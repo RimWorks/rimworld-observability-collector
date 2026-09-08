@@ -1,13 +1,19 @@
 name: ci
 
 on:
-  push:
-    branches: [main, beta]
+  # no push trigger: release.yml calls this workflow, so a push would run everything twice.
   pull_request:
     branches: [main, beta]
+  workflow_call:
 
+# release.yml holds contents: write, and a called workflow would inherit it without this.
 permissions:
   contents: read
+
+# literal prefix: github.workflow is the caller's name in a called workflow.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -18,10 +24,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -33,7 +39,7 @@ jobs:
           run_install: false
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -50,12 +56,6 @@ jobs:
       - name: dotnet restore
         run: dotnet restore RimObs.slnx
 
-      - name: Check formatting
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          dotnet format RimObs.slnx --verify-no-changes
-          cd RimObs.Dashboard && pnpm lint
-
       - name: dotnet build
         run: dotnet build RimObs.slnx -c Release --nologo --no-restore
 
@@ -69,16 +69,18 @@ jobs:
             --nologo --no-build --logger "console;verbosity=normal" \
             -p:RunSettingsFilePath= --filter "Category=Benchmark"
 
-  prose:
-    name: prose
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      # last on purpose, so a formatting nit never hides a real test failure.
+      - name: Check formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dotnet format RimObs.slnx --verify-no-changes
+          cd RimObs.Dashboard && pnpm lint
 
-      - name: Vale
-        uses: errata-ai/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # reviewdog
-        with:
-          reporter: github-pr-check
-          fail_on_error: true
+  prose:
+    uses: RimWorks/mod-ci/.github/workflows/prose.yml@dbb33c36ad8165dd9ffbe567c07055cbfb0b5c21 # v1.4.0
+
+  links:
+    # no lychee.toml here, so the shared default --config arg is dropped.
+    uses: RimWorks/mod-ci/.github/workflows/links.yml@dbb33c36ad8165dd9ffbe567c07055cbfb0b5c21 # v1.4.0
+    with:
+      args: --no-progress README.md README.template.md

@@ -16,17 +16,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # the owner pushes to main with admin bypass, so branch protection cannot gate publishing.
+  # calling the checks here is what stops a broken commit reaching nuget or steam.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  sonar:
+    uses: ./.github/workflows/sonar.yml
+    secrets: inherit
+
   release:
     name: semantic-release
+    needs: [ci, sonar]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -38,7 +49,7 @@ jobs:
           run_install: false
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -49,6 +60,7 @@ jobs:
         working-directory: RimObs.Dashboard
         run: pnpm install --no-frozen-lockfile
 
+      # dist/ is an embedded resource in the collector, so this is packaging, not a check.
       - name: Build dashboard
         working-directory: RimObs.Dashboard
         run: pnpm build
@@ -56,18 +68,10 @@ jobs:
       - name: dotnet restore
         run: dotnet restore RimObs.slnx
 
+      # Assemblies/ is gitignored, so a checkout has no DLLs. Skipping this publishes a
+      # mod with no code in it. The ci job checks the build, this one produces it.
       - name: dotnet build
         run: dotnet build RimObs.slnx -c Release --nologo --no-restore
-
-      # coverlet's IL instrumentation inflates a timed hot path about tenfold, so the
-      # wall-clock benchmarks run in a second pass with the collector switched off.
-      - name: dotnet test
-        run: |
-          dotnet test RimObs.slnx -c Release --nologo --no-build \
-            --logger "console;verbosity=normal" --filter "Category!=Benchmark"
-          dotnet test tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj -c Release \
-            --nologo --no-build --logger "console;verbosity=normal" \
-            -p:RunSettingsFilePath= --filter "Category=Benchmark"
 
       - name: NuGet login (OIDC trusted publishing)
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
@@ -75,7 +79,7 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      - uses: RimWorks/mod-ci/.github/actions/steam-login@79a54854b2795cf5cc12025b3d86ede3b354af94
+      - uses: RimWorks/mod-ci/.github/actions/steam-login@79a54854b2795cf5cc12025b3d86ede3b354af94 # v1.3.0
         with:
           steam-config-vdf-b64: ${{ secrets.STEAM_CONFIG_VDF_B64 }}
           steam-username: ${{ secrets.STEAM_USERNAME }}

@@ -1,0 +1,45 @@
+name: sonar
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_call:
+
+# release.yml holds contents: write, and a called workflow would inherit it without this.
+permissions:
+  contents: read
+
+# literal prefix: github.workflow is the caller's name in a called workflow.
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    uses: RimWorks/mod-ci/.github/workflows/sonar.yml@dbb33c36ad8165dd9ffbe567c07055cbfb0b5c21 # v1.4.0
+    # SONAR_TOKEN is declared uppercase in the shared workflow so inherit reaches it.
+    secrets: inherit
+    with:
+      solution: RimObs.slnx
+      project-key: RimWorks_rimworld-observability-collector
+      runner: windows-latest
+      dotnet-version: |
+        8.0.x
+        10.0.x
+      node-version: '22'
+      package-manager: pnpm
+      cache-dependency-path: RimObs.Dashboard/pnpm-lock.yaml
+      pre-scan-command: |
+        cd RimObs.Dashboard
+        pnpm install --no-frozen-lockfile
+        pnpm build
+        pnpm vitest run --coverage
+        # lcov writes paths relative to the dashboard dir, sonar resolves them from the repo root.
+        sed -i 's|^SF:|SF:RimObs.Dashboard/|' coverage/lcov.info
+      # analyzer-severity stays off until the 25 S1481 warnings in the test projects are cleared.
+      analyzer-severity: none
+      # The benchmarks read ~4x slow under coverlet, so ci.yml runs them in its own uninstrumented pass.
+      test-filter: Category!=Benchmark
+      exclusions: RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**
+      coverage-exclusions: "**/*.test.*,**/*.spec.*,RimObs.Dashboard/src/report/**"
+      extra-begin-args: /d:sonar.javascript.lcov.reportPaths=RimObs.Dashboard/coverage/lcov.info
