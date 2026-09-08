@@ -7,7 +7,6 @@
     import Sidebar from './lib/components/Sidebar.svelte';
     import TopBar from './lib/components/TopBar.svelte';
     import Overview from './routes/Overview.svelte';
-    import Hotspots from './routes/Hotspots.svelte';
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import Memory from './routes/Memory.svelte';
@@ -52,8 +51,6 @@
             <div class="view">
                 {#if route.id === 'overview'}
                     <Overview status={status.data} />
-                {:else if route.id === 'hotspots'}
-                    <Hotspots />
                 {:else if route.id === 'instrumentation'}
                     <Instrumentation />
                 {:else if route.id === 'flamegraph'}

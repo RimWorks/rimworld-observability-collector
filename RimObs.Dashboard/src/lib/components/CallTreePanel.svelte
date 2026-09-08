@@ -10,6 +10,8 @@
     } from '../frameTable';
     import type { TreeNode } from '../frameTree';
     import { ns } from '../format';
+    import { api, type SectionTimeseriesResponse } from '../api';
+    import LineChart from './LineChart.svelte';
     import { deltaSeverity } from '../frameCost';
     import { t } from '../i18n';
     import { SvelteSet } from 'svelte/reactivity';
@@ -41,6 +43,43 @@
     ] as const;
 
     let expanded = $state(new SvelteSet<string>());
+
+    // the per-second trend the Hotspots page used to own. session scope only: it is a session
+    // ring, and it says nothing about the single frame on screen.
+    let trendSectionId = $state<number | null>(null);
+    let trend = $state<SectionTimeseriesResponse | null>(null);
+    let trendLoading = $state(false);
+
+    async function toggleTrend(sectionId: number): Promise<void> {
+        if (trendSectionId === sectionId) {
+            trendSectionId = null;
+            return;
+        }
+        trendSectionId = sectionId;
+        trend = null;
+        trendLoading = true;
+        try {
+            const data = await api.sectionTimeseries(sectionId);
+            if (trendSectionId === sectionId) trend = data;
+        } finally {
+            if (trendSectionId === sectionId) trendLoading = false;
+        }
+    }
+
+    let trendX = $derived.by(() => {
+        const points = trend?.points ?? [];
+        if (points.length === 0) return [];
+        const last = points[points.length - 1].t;
+        return points.map((p) => p.t - last);
+    });
+    let trendSeries = $derived.by(() => [
+        {
+            label: t('tree.trend.mean'),
+            values: (trend?.points ?? []).map((p) => p.mean_ns),
+            stroke: '--cyan',
+            fill: 'rgba(57, 196, 212, 0.12)',
+        },
+    ]);
     let sortColumn = $state<SortColumn>('total');
     let ascending = $state(false);
     let inverted = $state(false);
@@ -262,8 +301,36 @@
                                 onclick={() => row.nodes.length > 0 && onSelect?.(row.nodes[0])}
                                 >{labelFor(row.sectionId, names)}</button
                             >
+                            {#if scope === 'session'}
+                                <button
+                                    type="button"
+                                    class="trend-toggle"
+                                    aria-expanded={trendSectionId === row.sectionId}
+                                    onclick={() => toggleTrend(row.sectionId)}
+                                    data-testid="trend-toggle">{t('tree.trend.open')}</button
+                                >
+                            {/if}
                         </td>
                     </tr>
+                    {#if scope === 'session' && trendSectionId === row.sectionId}
+                        <tr class="trend-row">
+                            <td colspan="11">
+                                {#if trendLoading}
+                                    <p class="trend-state">{t('tree.trend.loading')}</p>
+                                {:else if (trend?.points.length ?? 0) === 0}
+                                    <p class="trend-state">{t('tree.trend.empty')}</p>
+                                {:else}
+                                    <LineChart
+                                        x={trendX}
+                                        series={trendSeries}
+                                        height={160}
+                                        format={(n) => ns(n)}
+                                        xFormat={(n) => `${n}s`}
+                                    />
+                                {/if}
+                            </td>
+                        </tr>
+                    {/if}
                 {/each}
             </tbody>
         </table>
@@ -396,6 +463,30 @@
     }
     .c-pctile {
         width: 80px;
+    }
+    .trend-toggle {
+        margin-left: var(--s-2);
+        font: inherit;
+        font-size: var(--f-tiny, 11px);
+        color: var(--text-faint);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        cursor: pointer;
+    }
+    .trend-toggle:hover,
+    .trend-toggle[aria-expanded='true'] {
+        color: var(--cyan);
+    }
+    .trend-row > td {
+        padding: var(--s-3) var(--rail) var(--s-4);
+        background: var(--bg-surface);
+    }
+    .trend-state {
+        margin: 0;
+        color: var(--text-faint);
+        font-size: var(--f-ui, 12px);
     }
     thead th {
         position: sticky;

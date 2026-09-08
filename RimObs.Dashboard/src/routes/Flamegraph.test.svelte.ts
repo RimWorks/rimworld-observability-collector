@@ -79,6 +79,14 @@ const HOTSPOTS_BODY = {
     ],
 };
 
+const TIMESERIES_BODY = {
+    schema_version: 6,
+    section_id: 10,
+    // empty on purpose: uplot cannot paint under jsdom, and the drawer's own behaviour is what
+    // this covers. the chart itself is exercised by a real browser, not here.
+    points: [],
+};
+
 const CALL_TREE_BODY = {
     schema_version: 6,
     roots: [
@@ -160,6 +168,7 @@ function mockFetch(
         else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
+        else if (url.includes('/timeseries')) body = TIMESERIES_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
         else if (url.includes('/api/v1/import/bundle')) {
@@ -668,6 +677,27 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('scope-session'));
         await waitFor(() => expect(screen.getAllByTestId('tree-p50').length).toBeGreaterThan(0));
         expect(screen.getAllByTestId('tree-p50')[0].textContent).toContain('ms');
+    });
+
+    // the per-second trend drill-down, ported from the Hotspots page. session scope only:
+    // it is a session ring and says nothing about the one frame on screen.
+    it('opens a per-section trend drawer in session scope', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        expect(screen.queryByTestId('trend-toggle')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('scope-session'));
+        await waitFor(() =>
+            expect(screen.getAllByTestId('trend-toggle').length).toBeGreaterThan(0),
+        );
+
+        await fireEvent.click(screen.getAllByTestId('trend-toggle')[0]);
+        await waitFor(() =>
+            expect(screen.getAllByTestId('trend-toggle')[0].getAttribute('aria-expanded')).toBe(
+                'true',
+            ),
+        );
+        expect(screen.getByText(/no samples in the last five minutes/i)).toBeInTheDocument();
     });
 
     // baselineUs is a per-frame median over 128 frames. against a session cumulative total it
