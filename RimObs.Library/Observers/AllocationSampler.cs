@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 using System.Threading;
 
@@ -15,7 +14,7 @@ internal sealed class AllocationSampler {
 
     public AllocationSampler() {
         long now = Stopwatch.GetTimestamp();
-        _lastHeapBytes = GC.GetTotalMemory(forceFullCollection: false);
+        _lastHeapBytes = AllocatedBytesReader.GetTotalBytes();
         _windowStartTimestamp = now;
     }
 
@@ -23,8 +22,10 @@ internal sealed class AllocationSampler {
 
     public bool TryPollWindow(long windowDurationMs, out AllocationSample sample) {
         long now = Stopwatch.GetTimestamp();
-        long heapNow = GC.GetTotalMemory(forceFullCollection: false);
+        long heapNow = AllocatedBytesReader.GetTotalBytes();
 
+        // Boehm's counter never drops, so this only guards the GC.GetTotalMemory fallback,
+        // which can shrink after a collection.
         long heapDelta = heapNow - _lastHeapBytes;
         if (heapDelta > 0) {
             _windowBytesAccumulator += heapDelta;

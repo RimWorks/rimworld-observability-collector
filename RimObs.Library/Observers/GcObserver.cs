@@ -22,7 +22,7 @@ internal sealed class GcObserver {
         _lastCounts = new int[_maxGeneration + 1];
         for (int gen = 0; gen <= _maxGeneration; gen++)
             _lastCounts[gen] = GC.CollectionCount(gen);
-        _lastHeapBytes = GC.GetTotalMemory(forceFullCollection: false);
+        _lastHeapBytes = AllocatedBytesReader.GetTotalBytes();
         _lastHeapTimestamp = Stopwatch.GetTimestamp();
     }
 
@@ -33,9 +33,11 @@ internal sealed class GcObserver {
     public long AllocationRateBytesPerMinute => Interlocked.Read(ref _allocationRateBytesPerMinute);
 
     public bool TryPoll(long currentTick, out GcEventSample sample) {
-        long heapNow = GC.GetTotalMemory(forceFullCollection: false);
+        long heapNow = AllocatedBytesReader.GetTotalBytes();
         long timestampNow = Stopwatch.GetTimestamp();
 
+        // Boehm's counter never drops, so this only guards the GC.GetTotalMemory fallback,
+        // which can shrink after a collection.
         long heapDelta = heapNow - _lastHeapBytes;
         long elapsedTimestampTicks = timestampNow - _lastHeapTimestamp;
         if (heapDelta > 0 && elapsedTimestampTicks > 0) {
