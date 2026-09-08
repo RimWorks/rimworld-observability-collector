@@ -28,7 +28,7 @@ public sealed class ControlClient {
         HttpResponseMessage res = await _http.SendAsync(req);
         if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.NotFound)
             return;
-        throw new ControlClientException((int)res.StatusCode);
+        throw await Failure(res);
     }
 
     private async Task<T> Roundtrip<T>(HttpMethod method, string path, byte[]? body) where T : class {
@@ -39,9 +39,21 @@ public sealed class ControlClient {
         }
         HttpResponseMessage res = await _http.SendAsync(req);
         if (!res.IsSuccessStatusCode) {
-            throw new ControlClientException((int)res.StatusCode);
+            throw await Failure(res);
         }
         byte[] raw = await res.Content.ReadAsByteArrayAsync();
         return WireCodec.Deserialize<T>(raw);
+    }
+
+    // the library answers a refusal or a drain timeout with a ControlPatchResponse body, so keep
+    // its reason instead of throwing away everything but the status code.
+    private static async Task<ControlClientException> Failure(HttpResponseMessage res) {
+        byte[] raw = await res.Content.ReadAsByteArrayAsync();
+        string? reason = null;
+        if (raw.Length > 0) {
+            try { reason = WireCodec.Deserialize<ControlPatchResponse>(raw).ErrorReason; }
+            catch (Exception) { reason = null; }
+        }
+        return new ControlClientException((int)res.StatusCode, string.IsNullOrEmpty(reason) ? null : reason);
     }
 }

@@ -44,6 +44,8 @@
     "instrumentation.status.stale": "veraltet",
     "instrumentation.remove": "Entfernen",
     "instrumentation.unavailable": "Live-Instrumentierung ist nicht verfügbar. Die spielseitige Bibliothek ist älter als der Collector oder der Steuerkanal hat sich noch nicht verbunden.",
+    "instrumentation.timeout": "Das Spiel hat nicht rechtzeitig geantwortet. Pause aufheben und erneut versuchen.",
+    "instrumentation.failed": "Die Anfrage ist fehlgeschlagen. Prüfe das Collector-Log.",
     "sections.title": "Sektionen",
     "sections.empty": "Noch keine Sektionen registriert.",
     "sessions.current": "aktuell",

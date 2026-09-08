@@ -48,7 +48,12 @@ internal static class FrameTickPatches {
 
     private static void TickPostfix() => FrameTickCounters.RecordTick();
 
-    private static void FrameBeginPrefix() => FrameTickCounters.BeginFrame();
+    // frames keep rendering while the colony is paused, ticks dont, so this is the drain site
+    // that lets a patch request land on a paused game.
+    private static void FrameBeginPrefix() {
+        FrameTickCounters.BeginFrame();
+        ControlServices.Queue.Drain();
+    }
 
     private static void FramePostfix() => FrameTickCounters.RecordFrame();
 }

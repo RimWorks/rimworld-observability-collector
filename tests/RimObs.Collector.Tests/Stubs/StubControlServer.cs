@@ -17,6 +17,12 @@ public sealed class StubControlServer : System.IDisposable {
     public System.Func<ControlPatchListResponse>? OnList { get; set; }
     public System.Func<int, bool>? OnUnpatch { get; set; }
 
+    // set to mimic the library refusing or timing out; the body carries the reason like it does.
+    public int? PatchHttpStatus { get; set; }
+    public int? UnpatchHttpStatus { get; set; }
+    public int? ListHttpStatus { get; set; }
+    public string? FailureReason { get; set; }
+
     public int Port { get; }
 
     public StubControlServer(string secret) {
@@ -72,15 +78,30 @@ public sealed class StubControlServer : System.IDisposable {
             return;
         }
         if (method == "POST" && path == "/patch") {
+            if (PatchHttpStatus is int status) {
+                Write(ctx, WireCodec.Serialize(new ControlPatchResponse {
+                    Status = PatchStatus.Refused,
+                    ErrorReason = FailureReason,
+                }), status);
+                return;
+            }
             ControlPatchRequest req = WireCodec.Deserialize<ControlPatchRequest>(body);
             Write(ctx, WireCodec.Serialize(OnPatch?.Invoke(req) ?? new ControlPatchResponse { Status = PatchStatus.Active, PatchId = 1 }));
             return;
         }
         if (method == "GET" && path == "/patches") {
+            if (ListHttpStatus is int listStatus) {
+                ctx.Response.StatusCode = listStatus;
+                return;
+            }
             Write(ctx, WireCodec.Serialize(OnList?.Invoke() ?? new ControlPatchListResponse()));
             return;
         }
         if (method == "DELETE" && path.StartsWith("/patch/", System.StringComparison.Ordinal)) {
+            if (UnpatchHttpStatus is int status) {
+                ctx.Response.StatusCode = status;
+                return;
+            }
             int id = int.Parse(path.Substring("/patch/".Length));
             bool ok = OnUnpatch?.Invoke(id) ?? true;
             ctx.Response.StatusCode = ok ? 200 : 404;
@@ -89,8 +110,8 @@ public sealed class StubControlServer : System.IDisposable {
         ctx.Response.StatusCode = 404;
     }
 
-    private static void Write(HttpListenerContext ctx, byte[] body) {
-        ctx.Response.StatusCode = 200;
+    private static void Write(HttpListenerContext ctx, byte[] body, int status = 200) {
+        ctx.Response.StatusCode = status;
         ctx.Response.ContentLength64 = body.Length;
         ctx.Response.OutputStream.Write(body, 0, body.Length);
     }

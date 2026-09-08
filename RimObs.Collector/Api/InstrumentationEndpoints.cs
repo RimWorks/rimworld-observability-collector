@@ -1,3 +1,4 @@
+using System.Net.Http;
 using RimWorks.RimObs.Collector.Instrumentation;
 using RimWorks.RimObs.Collector.Storage;
 using RimWorks.RimObs.Wire;
@@ -14,10 +15,16 @@ public static class InstrumentationEndpoints {
             if (!registry.IsAvailable)
                 return Unavailable();
             ControlClient client = new(registry.ControlPort, registry.ControlSecret);
-            ControlSearchResponse res = await client.SearchAsync(new ControlSearchRequest {
-                Query = q ?? string.Empty,
-                Limit = limit ?? 50,
-            });
+            ControlSearchResponse res;
+            try {
+                res = await client.SearchAsync(new ControlSearchRequest {
+                    Query = q ?? string.Empty,
+                    Limit = limit ?? 50,
+                });
+            }
+            catch (ControlClientException ex) {
+                return ControlFailed(ex);
+            }
             return Results.Ok(new {
                 schema_version = SchemaVersion.Current,
                 results = res.Results,
@@ -31,7 +38,13 @@ public static class InstrumentationEndpoints {
             if (error is not null)
                 return error;
             ControlClient client = new(registry.ControlPort, registry.ControlSecret);
-            ControlPatchResponse res = await client.PatchAsync(req!);
+            ControlPatchResponse res;
+            try {
+                res = await client.PatchAsync(req!);
+            }
+            catch (ControlClientException ex) {
+                return ControlFailed(ex);
+            }
             if (res.Status == PatchStatus.Active) {
                 long rowId = store.Insert(req!.TypeFullName, req.MethodName, string.Join(";", req.ParamTypeFullNames));
                 store.UpdateLivePatchId(rowId, res.PatchId);
@@ -46,8 +59,15 @@ public static class InstrumentationEndpoints {
             ControlPatchEntry[] live = [];
             if (registry.IsAvailable) {
                 ControlClient client = new(registry.ControlPort, registry.ControlSecret);
-                ControlPatchListResponse res = await client.ListAsync();
-                live = res.Patches;
+                // persisted rows come from our own sqlite, so a control blip must not drop the
+                // whole list. no live entry already reads as stale downstream.
+                try {
+                    ControlPatchListResponse res = await client.ListAsync();
+                    live = res.Patches;
+                }
+                catch (Exception ex) when (ex is ControlClientException or HttpRequestException or TaskCanceledException) {
+                    live = [];
+                }
             }
             return Results.Ok(new {
                 schema_version = SchemaVersion.Current,
@@ -62,7 +82,13 @@ public static class InstrumentationEndpoints {
             int? livePatchId = store.Find(id)?.LivePatchId;
             if (registry.IsAvailable && livePatchId is not null) {
                 ControlClient client = new(registry.ControlPort, registry.ControlSecret);
-                await client.UnpatchAsync(livePatchId.Value);
+                try {
+                    await client.UnpatchAsync(livePatchId.Value);
+                }
+                catch (ControlClientException ex) {
+                    // the patch is still live in the game, so keep the row and let the caller retry.
+                    return ControlFailed(ex);
+                }
             }
             store.Delete(id);
             return Results.NoContent();
@@ -70,6 +96,14 @@ public static class InstrumentationEndpoints {
 
         return endpoints;
     }
+
+    // a drain timeout means the game is paused or wedged; anything else is the control endpoint
+    // itself failing, and neither should surface as an empty 500.
+    private static IResult ControlFailed(ControlClientException ex) => Results.Json(new {
+        schema_version = SchemaVersion.Current,
+        reason = ex.Status == 504 ? "instrumentation_timeout" : "instrumentation_failed",
+        detail = ex.Reason,
+    }, statusCode: ex.Status == 504 ? 504 : 502);
 
     private static IResult Unavailable() => Results.Json(new {
         schema_version = SchemaVersion.Current,

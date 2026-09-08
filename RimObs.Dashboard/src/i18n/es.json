@@ -44,6 +44,8 @@
     "instrumentation.status.stale": "obsoleto",
     "instrumentation.remove": "Eliminar",
     "instrumentation.unavailable": "La instrumentación en vivo no está disponible. La biblioteca del lado del juego es más antigua que el collector o el canal de control aún no se ha conectado.",
+    "instrumentation.timeout": "El juego no respondió a tiempo. Reanuda la colonia e inténtalo de nuevo.",
+    "instrumentation.failed": "La solicitud falló. Revisa el registro del recolector.",
     "sections.title": "Secciones",
     "sections.empty": "Aún no hay secciones registradas.",
     "sessions.current": "actual",

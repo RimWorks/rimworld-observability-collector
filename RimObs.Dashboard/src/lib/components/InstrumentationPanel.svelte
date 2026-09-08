@@ -18,6 +18,7 @@
     let query = $state('');
     let searchResults = $state<MethodDescriptor[]>([]);
     let searchLoading = $state(false);
+    let actionError = $state<string | null>(null);
 
     const patches = new Resource<InstrumentationPatchesResponse>(
         () => api.instrumentationPatches(),
@@ -59,17 +60,34 @@
     }
 
     async function instrument(m: MethodDescriptor) {
-        await api.instrumentationPatch({
-            typeFullName: m.typeFullName,
-            methodName: m.methodName,
-            paramTypeFullNames: m.paramTypeFullNames,
-        });
+        actionError = null;
+        try {
+            await api.instrumentationPatch({
+                typeFullName: m.typeFullName,
+                methodName: m.methodName,
+                paramTypeFullNames: m.paramTypeFullNames,
+            });
+        } catch (e: unknown) {
+            actionError = failureText(e);
+            return;
+        }
         await patches.refresh();
     }
 
     export async function remove(id: number) {
-        await api.instrumentationUnpatch(id);
+        actionError = null;
+        try {
+            await api.instrumentationUnpatch(id);
+        } catch (e: unknown) {
+            actionError = failureText(e);
+            return;
+        }
         await patches.refresh();
+    }
+
+    function failureText(e: unknown): string {
+        if (e instanceof ApiError && e.status === 504) return t('instrumentation.timeout');
+        return t('instrumentation.failed');
     }
 </script>
 
@@ -103,6 +121,10 @@
         </ul>
     {:else if query.trim() && !searchLoading}
         <p class="blank">{t('instrumentation.search.noresults')}</p>
+    {/if}
+
+    {#if actionError}
+        <p class="blank err-msg" role="alert">{actionError}</p>
     {/if}
 
     <h3>
@@ -206,6 +228,9 @@
     .asm {
         font-size: 0.72rem;
         white-space: nowrap;
+    }
+    .err-msg {
+        color: var(--bad);
     }
     .err {
         grid-column: 1 / -1;

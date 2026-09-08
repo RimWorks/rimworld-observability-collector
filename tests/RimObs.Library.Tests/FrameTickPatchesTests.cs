@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
 using FluentAssertions;
@@ -56,6 +57,23 @@ public sealed class FrameTickPatchesTests : IDisposable {
 
         SectionCatalog.Entries.Should().Contain(e => e.Name == FrameTickPatches.TickSection);
         SectionCatalog.Entries.Should().Contain(e => e.Name == FrameTickPatches.FrameSection);
+    }
+
+    // regression: the queue used to drain only from the tick prefix, so every patch request
+    // timed out while the colony was paused and ticks were not running.
+    [Fact]
+    public void TheFramePrefixDrainsControlOps() {
+        MethodInfo frame = typeof(Targets).GetMethod(nameof(Targets.Frame))!;
+        SectionCatalog.RegisterDirect(FrameTickPatches.FrameSection, frame);
+        FrameTickPatches.InstallAll();
+        bool ran = false;
+        ControlServices.Queue.Enqueue(new ControlOp(ControlOpKind.Patch, () => ran = true));
+
+        MethodInfo prefix = _backend.Prefixes.Find(p => ReferenceEquals(p.Target, frame)).Injection;
+        prefix.Invoke(null, null);
+
+        ran.Should().BeTrue();
+        ControlServices.Queue.PendingCount.Should().Be(0);
     }
 
     [Fact]

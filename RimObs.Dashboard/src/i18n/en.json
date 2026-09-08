@@ -204,5 +204,7 @@
   "flamegraph.overhead.offrame": "of frame",
   "flamegraph.timerres": "timer res",
   "flamegraph.overhead.hint": "An estimate, not a measurement: scope count times a benchmarked 73.4ns per scope, smoothed and refreshed once a second. Timing the profiler with itself would change the number it reports.",
-  "tip.tree.patched": "Other mods patch this method too. Their timings land inside this section. Patched by:"
+  "tip.tree.patched": "Other mods patch this method too. Their timings land inside this section. Patched by:",
+  "instrumentation.timeout": "The game did not answer in time. Unpause the colony and try again.",
+  "instrumentation.failed": "The request failed. Check the collector log."
 }

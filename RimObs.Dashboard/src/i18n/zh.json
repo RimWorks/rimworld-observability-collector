@@ -44,6 +44,8 @@
     "instrumentation.status.stale": "已失效",
     "instrumentation.remove": "移除",
     "instrumentation.unavailable": "实时插桩不可用。游戏端的库版本低于采集器，或控制通道尚未连接。",
+    "instrumentation.timeout": "游戏未及时响应。请取消暂停后重试。",
+    "instrumentation.failed": "请求失败。请查看采集器日志。",
     "sections.title": "节点",
     "sections.empty": "尚未注册任何节点。",
     "sessions.current": "当前",

@@ -44,6 +44,8 @@
     "instrumentation.status.stale": "obsolète",
     "instrumentation.remove": "Supprimer",
     "instrumentation.unavailable": "L'instrumentation en direct est indisponible. La bibliothèque côté jeu est plus ancienne que le collecteur ou le canal de contrôle n'est pas encore connecté.",
+    "instrumentation.timeout": "Le jeu n'a pas répondu à temps. Reprenez la partie et réessayez.",
+    "instrumentation.failed": "La requête a échoué. Consultez le journal du collecteur.",
     "sections.title": "Sections",
     "sections.empty": "Aucune section enregistrée.",
     "sessions.current": "actuelle",

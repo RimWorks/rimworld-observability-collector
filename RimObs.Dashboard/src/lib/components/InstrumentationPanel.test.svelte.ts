@@ -4,7 +4,7 @@ import Panel from './InstrumentationPanel.svelte';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function mockApi(opts: { available?: boolean; live?: unknown[] } = {}) {
+function mockApi(opts: { available?: boolean; live?: unknown[]; patchStatus?: number } = {}) {
     const available = opts.available ?? true;
     const live = opts.live ?? [{ patchId: 5, sectionId: 42, signature: 'A:B()', status: 'active' }];
     vi.stubGlobal(
@@ -15,6 +15,18 @@ function mockApi(opts: { available?: boolean; live?: unknown[] } = {}) {
                     ok: false,
                     status: 503,
                     statusText: 'unavailable',
+                    json: async () => ({}),
+                };
+            }
+            if (
+                opts.patchStatus &&
+                typeof url === 'string' &&
+                url.endsWith('/instrumentation/patch')
+            ) {
+                return {
+                    ok: false,
+                    status: opts.patchStatus,
+                    statusText: 'timeout',
                     json: async () => ({}),
                 };
             }
@@ -95,6 +107,17 @@ describe('InstrumentationPanel', () => {
         mockApi({ live: [] });
         render(Panel);
         expect(await screen.findByTestId('patch-status')).toHaveTextContent(/stale/i);
+    });
+
+    // regression: a failed patch request used to be swallowed, so the button did nothing.
+    it('shows a message when the patch request times out', async () => {
+        mockApi({ patchStatus: 504 });
+        const { container } = render(Panel);
+        const box = container.querySelector('input[type=search]')! as HTMLInputElement;
+        await fireEvent.input(box, { target: { value: 'Path' } });
+        const button = await screen.findByText('Instrument');
+        await fireEvent.click(button);
+        expect(await screen.findByRole('alert')).toHaveTextContent(/did not answer in time/i);
     });
 
     it('reports the merged patches to its parent', async () => {
