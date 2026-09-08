@@ -32,6 +32,7 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.8.0",
     "@fontsource/chakra-petch": "^5.2.7",
     "@fontsource/hanken-grotesk": "^5.2.8",
     "@fontsource/ibm-plex-mono": "^5.2.7",

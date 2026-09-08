@@ -1,14 +1,18 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { api, ApiError } from '../lib/api';
+    import { api, ApiError, type StatusResponse } from '../lib/api';
     import { Resource } from '../lib/poll.svelte';
     import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
+    import Tooltip from '../lib/components/Tooltip.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
     import CallTreePanel from '../lib/components/CallTreePanel.svelte';
     import { buildFrameTree } from '../lib/frameTree';
+    import { flattenCallNodes, sessionTotalUs } from '../lib/sessionTree';
+    import type { CallTreeResponse } from '../lib/api';
     import { buildBars, stepOrdinal } from '../lib/frameStrip';
+    import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { ns, count } from '../lib/format';
     import {
         estimateOverheadUs,
@@ -22,11 +26,16 @@
         timerResText,
         budgetSeverity,
         deltaSeverity,
-        TICK_BUDGET_US,
+        FRAME_BUDGET_US,
+        tickBudgetUs,
+        speedMultiplier,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
 
     const RATES = [
+        { ms: 16, label: '60/s' },
+        { ms: 25, label: '40/s' },
+        { ms: 50, label: '20/s' },
         { ms: 100, label: '10/s' },
         { ms: 250, label: '4/s' },
         { ms: 500, label: '2/s' },
@@ -36,7 +45,7 @@
     const LIVE = 'live';
     const NO_DROPS = { pre_frame_samples: 0, late_samples: 0 };
 
-    let rateMs = $state(250);
+    let rateMs = $state(16);
     let framesRes = $state<Resource<FrameResponse> | null>(null);
     let source = $state(LIVE);
     let imported = $state<{ token: string; label: string } | null>(null);
@@ -49,6 +58,8 @@
     let pinnedOrdinal = $state<number | null>(null);
     let pinnedRes = $state<FrameResponse | null>(null);
     const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [] };
+    // the baseline is a median over 128 frames, so it says nothing about a session total.
+    const NO_BASELINE = new Map<number, number>();
 
     let live = $derived(source === LIVE);
     let pinned = $derived(live && pinnedOrdinal !== null);
@@ -66,10 +77,38 @@
         return () => res.stop();
     });
 
-    // rides along on /frames/latest, so the strip costs no second request. it keeps filling
-    // while paused, which is how you find the spike you paused to go looking at.
-    let strip = $derived(framesRes?.data?.strip ?? NO_STRIP);
+    // rides along on /frames/latest, so the strip costs no second request. pausing freezes it
+    // with the frame, and resuming leaves a cut mark where the gap is.
+    let frozenStrip = $state<FrameStripData | null>(null);
+    let frozenRoots = $state<CallTreeResponse['roots'] | null>(null);
+    let cutOrdinals = $state<number[]>([]);
+    let strip = $derived(frozenStrip ?? framesRes?.data?.strip ?? NO_STRIP);
     let stripBars = $derived(buildBars(strip.ordinals, strip.durations_us));
+    // a cut that has scrolled out of the strip's window is no longer a gap anyone can see.
+    let shownCuts = $derived(visibleCuts(cutOrdinals, strip.ordinals));
+
+    // One gate. Everything that pauses goes through pauseAt, everything that resumes goes
+    // through resume, so no caller can freeze half the page.
+    function pauseAt(ordinal: number | null): void {
+        if (!paused) {
+            frozenStrip = framesRes?.data?.strip ?? null;
+            frozenRoots = liveRoots;
+        }
+
+        paused = true;
+        void showOrdinal(ordinal ?? pinnedOrdinal ?? liveOrdinal);
+    }
+
+    function resume(): void {
+        if (paused) {
+            cutOrdinals = recordCut(cutOrdinals, frozenStrip?.ordinals ?? []);
+            frozenStrip = null;
+            frozenRoots = null;
+        }
+
+        paused = false;
+        void showOrdinal(null);
+    }
 
     async function showOrdinal(ordinal: number | null): Promise<void> {
         pinnedOrdinal = ordinal;
@@ -89,19 +128,19 @@
     function step(delta: number): void {
         const next = stepOrdinal(stripBars, pinnedOrdinal ?? liveOrdinal, delta);
         if (next === null) return;
-        paused = true;
-        void showOrdinal(next);
+        pauseAt(next);
     }
 
     function jumpToNewest(): void {
-        paused = false;
-        void showOrdinal(null);
+        resume();
     }
 
     function togglePause(): void {
-        paused = !paused;
-        if (!paused) void showOrdinal(null);
-        else if (pinnedOrdinal === null && liveOrdinal !== null) void showOrdinal(liveOrdinal);
+        if (paused) {
+            resume();
+        } else {
+            pauseAt(null);
+        }
     }
 
     function handleTransportKey(e: KeyboardEvent): void {
@@ -129,13 +168,29 @@
         new Map(Object.entries(baselineRes.data?.median_us ?? {}).map(([k, v]) => [Number(k), v])),
     );
 
+    // the speed setting is guessed from the TPS the collector already reports.
+    const statusRes = new Resource<StatusResponse>(() => api.status(), 1000);
+    let tps = $derived(statusRes.data?.receive?.tps ?? null);
+
     const sectionsRes = new Resource(() => api.allSections(), 10000);
+    let treeScope = $state<'frame' | 'session'>('frame');
+    // the session tree follows the same rate control as the frame poll, so it needs a fresh
+    // Resource whenever that rate changes. it costs about the same as one /frames/latest.
+    let sessionTreeRes = $state<Resource<CallTreeResponse> | null>(null);
+    $effect(() => {
+        const res = new Resource<CallTreeResponse>(() => api.callTree(12, 24), rateMs);
+        sessionTreeRes = res;
+        res.start();
+        return () => res.stop();
+    });
     onMount(() => {
         sectionsRes.start();
+        statusRes.start();
         baselineRes.start();
     });
     onDestroy(() => {
         sectionsRes.stop();
+        statusRes.stop();
         baselineRes.stop();
     });
 
@@ -184,7 +239,9 @@
     let selectedNode = $state(-1);
     let timeline = $state<{ focusNode: (i: number) => void } | null>(null);
     // while pinned the page reads a specific ordinal instead of whatever the poller last saw.
-    let liveRes = $derived(pinned ? pinnedRes : (framesRes?.data ?? null));
+    let liveRes = $derived(
+        pinned ? (pinnedRes ?? framesRes?.data ?? null) : (framesRes?.data ?? null),
+    );
     let liveOrdinal = $derived(framesRes?.data?.frame?.capture_ordinal ?? null);
     let frame = $derived(
         live ? (liveRes?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
@@ -207,7 +264,10 @@
     let timerResNs = $derived(timerResolutionNs(stopwatchFrequency));
     // the timeline builds this too, but a shared derived keeps the row indices and the bar
     // indices talking about the same array.
-    let treeNodes = $derived(frame ? buildFrameTree(frame).nodes : []);
+    let frameNodes = $derived(frame ? buildFrameTree(frame).nodes : []);
+    let liveRoots = $derived(sessionTreeRes?.data?.roots ?? []);
+    let sessionRoots = $derived(frozenRoots ?? liveRoots);
+    let treeNodes = $derived(treeScope === 'session' ? flattenCallNodes(sessionRoots) : frameNodes);
 
     let overhead = $state(OVERHEAD_SEED);
     let deltaUs = $state<number | null>(null);
@@ -300,9 +360,9 @@
                 {#if imported}<option value={imported.token}>{imported.label}</option>{/if}
             </select>
         </label>
-        <label class="picker">
-            <span class="dim">{t('flamegraph.source.import')}</span>
+        <label class="filebtn">
             <input type="file" accept=".zip" onchange={openBundle} />
+            {t('flamegraph.source.import')}
         </label>
         {#if live}
             <label class="picker">
@@ -316,21 +376,50 @@
         <span class="readout mono">
             {t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b>
             &middot; {t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b>
-            &middot; {t('flamegraph.budget')} <b>{ns(TICK_BUDGET_US * 1000)}</b>
+            &middot;
+            <Tooltip text={t('tip.flamegraph.budget')} align="end">
+                <span class="mono" data-testid="frame-budget"
+                    >{t('flamegraph.budget')} <b>{ns(FRAME_BUDGET_US * 1000)}</b></span
+                >
+            </Tooltip>
+            &middot;
+            <Tooltip
+                text={t('tip.flamegraph.tickBudget').replace('{n}', String(speedMultiplier(tps)))}
+                align="end"
+            >
+                <span class="mono" data-testid="tick-budget"
+                    >{t('flamegraph.tickBudget')} <b>{ns(tickBudgetUs(tps) * 1000)}</b></span
+                >
+            </Tooltip>
         </span>
     </div>
 
     {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
 
+    {#if live}
+        <div class="modes">
+            <div class="seg" role="group" aria-label={t('flamegraph.mode')}>
+                <button type="button" class="on" data-testid="mode-time"
+                    >{t('flamegraph.mode.time')}</button
+                >
+                <button
+                    type="button"
+                    class="off"
+                    disabled
+                    title={t('tree.soon')}
+                    data-testid="mode-alloc">{t('flamegraph.mode.alloc')}</button
+                >
+            </div>
+        </div>
+    {/if}
+
     {#if live && stripBars.length > 0}
         <FrameStrip
             ordinals={strip.ordinals}
             durationsUs={strip.durations_us}
+            cutOrdinals={shownCuts}
             selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
-            onSelect={(o) => {
-                paused = true;
-                void showOrdinal(o);
-            }}
+            onSelect={(o) => pauseAt(o)}
         />
     {/if}
 
@@ -406,10 +495,14 @@
         <CallTreePanel
             nodes={treeNodes}
             {names}
-            {selectedNode}
-            frameDurationUs={frame?.duration_us ?? 0}
-            {baselineUs}
+            bind:scope={treeScope}
+            selectedNode={treeScope === 'session' ? -1 : selectedNode}
+            frameDurationUs={treeScope === 'session'
+                ? sessionTotalUs(sessionRoots)
+                : (frame?.duration_us ?? 0)}
+            baselineUs={treeScope === 'session' ? NO_BASELINE : baselineUs}
             onSelect={(i) => {
+                if (treeScope === 'session') return;
                 selectedNode = i;
                 timeline?.focusNode(i);
             }}
@@ -424,6 +517,7 @@
     </p>
     <p class="foot mono" data-testid="frame-overhead">
         {#if deltaUs !== null}<span
+                class="delta"
                 class:warn={deltaSeverity(deltaUs) === 1}
                 class:cool={deltaSeverity(deltaUs) === -1}>&Delta; {deltaText(deltaUs)}</span
             >{overheadLine ? ' · ' : ''}{/if}{overheadLine}
@@ -461,13 +555,10 @@
         align-items: center;
         gap: var(--s-2);
         flex-wrap: wrap;
-        padding: var(--s-2) var(--s-2);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        margin-bottom: var(--s-2);
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border-soft);
     }
-    .bar button {
+    .bar > button {
         font: inherit;
         font-size: var(--f-ui);
         color: var(--text);
@@ -477,11 +568,11 @@
         padding: 3px 9px;
         cursor: pointer;
     }
-    .bar button.icon {
+    .bar > button.icon {
         font-family: var(--font-mono);
         padding: 3px 7px;
     }
-    .bar button:hover {
+    .bar > button:hover {
         border-color: var(--border-strong);
     }
     .ord {
@@ -502,8 +593,7 @@
         gap: var(--s-1);
         font-size: var(--f-ui);
     }
-    .picker select,
-    .picker input[type='file'] {
+    .picker select {
         font: inherit;
         font-size: var(--f-ui);
         color: var(--text);
@@ -512,6 +602,31 @@
         border-radius: var(--r-sm);
         padding: 2px 6px;
         max-width: 150px;
+    }
+    .filebtn {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        font-size: var(--f-ui);
+        color: var(--text);
+        background: var(--bg-surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 3px 9px;
+        cursor: pointer;
+    }
+    .filebtn:hover {
+        border-color: var(--border-strong);
+    }
+    .filebtn:focus-within {
+        box-shadow: var(--ring-focus);
+    }
+    .filebtn input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
     }
     .readout {
         margin-left: auto;
@@ -523,34 +638,59 @@
         font-weight: 500;
     }
 
+    .modes {
+        display: flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .seg {
+        display: flex;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        background: var(--bg-surface-2);
+    }
+    .seg button {
+        font: inherit;
+        font-size: var(--f-ui);
+        color: var(--text-faint);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        padding: 3px 12px;
+        cursor: pointer;
+    }
+    .seg button.on {
+        background: color-mix(in srgb, var(--cyan) 20%, var(--bg-elev));
+        color: var(--cyan-soft);
+        font-weight: 500;
+    }
+    .seg button[disabled] {
+        cursor: not-allowed;
+    }
     .import-error {
         color: var(--bad);
         font-size: var(--f-ui);
-        padding: var(--s-2) 0;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border-soft);
     }
     .scrub {
         display: flex;
         align-items: center;
         gap: var(--s-2);
-        padding: var(--s-2);
+        padding: 6px 12px;
         font-size: var(--f-ui);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        margin-bottom: var(--s-2);
+        border-bottom: 1px solid var(--border-soft);
     }
     .scrub input {
         flex: 1;
     }
 
     .avg {
-        padding: 5px 8px;
+        padding: 6px 12px;
         font-size: var(--f-small);
         color: var(--text-dim);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        margin-bottom: var(--s-2);
+        border-bottom: 1px solid var(--border-soft);
     }
     .avg b {
         color: var(--text);
@@ -565,15 +705,16 @@
         display: grid;
         grid-template-columns: var(--gut) 1fr;
         background: var(--bg-void);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        overflow: hidden;
+        border-bottom: 1px solid var(--border);
+        height: 600px;
+        overflow: auto;
+        resize: vertical;
     }
     .gutter {
         border-right: 1px solid var(--border);
         padding: calc(24px * var(--f)) var(--s-2) var(--s-2) var(--s-2);
         font-size: var(--f-ui);
-        background: var(--bg-surface);
+        background: var(--bg-base);
     }
     .lane {
         color: var(--text-dim);
@@ -595,7 +736,11 @@
     .foot {
         font-size: var(--f-small);
         color: var(--text-faint);
-        padding: var(--s-1) var(--s-2);
+        padding: var(--s-1) 12px;
+    }
+    .foot .delta {
+        display: inline-block;
+        width: 90px;
     }
     .foot:first-of-type {
         border-top: 1px solid var(--border);

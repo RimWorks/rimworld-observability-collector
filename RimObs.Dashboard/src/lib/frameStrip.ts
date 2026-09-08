@@ -1,4 +1,4 @@
-import { TICK_BUDGET_US } from './frameCost';
+import { FRAME_BUDGET_US } from './frameCost';
 
 // Neo normalises every bar against 66.667ms (15fps) and clamps, so a 200ms stall and a 70ms
 // one both read as full height. The budget line is what gives the strip its scale.
@@ -18,14 +18,14 @@ export function barHeight(durationUs: number): number {
 }
 
 /** Fraction of the strip height the budget line sits at. */
-export function budgetLine(budgetUs = TICK_BUDGET_US): number {
+export function budgetLine(budgetUs = FRAME_BUDGET_US): number {
     return Math.min(1, budgetUs / STRIP_FULL_SCALE_US);
 }
 
 export function buildBars(
     ordinals: readonly number[],
     durationsUs: readonly number[],
-    budgetUs = TICK_BUDGET_US,
+    budgetUs = FRAME_BUDGET_US,
 ): StripBar[] {
     const n = Math.min(ordinals.length, durationsUs.length);
     const bars = new Array<StripBar>(n);

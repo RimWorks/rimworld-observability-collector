@@ -35,8 +35,9 @@ describe('barHeight', () => {
 });
 
 describe('budgetLine', () => {
-    it('puts the 60fps budget at a quarter height', () => {
-        expect(budgetLine()).toBeCloseTo(0.25, 2);
+    // 45.45ms of the strip's 66.67ms full scale.
+    it('puts the frame budget at just over two thirds height', () => {
+        expect(budgetLine()).toBeCloseTo(0.682, 2);
     });
 
     it('clamps a budget past full scale', () => {
@@ -46,7 +47,7 @@ describe('budgetLine', () => {
 
 describe('buildBars', () => {
     it('marks bars over the budget', () => {
-        const out = buildBars([1, 2], [10_000, 20_000]);
+        const out = buildBars([1, 2], [40_000, 50_000]);
         expect(out[0].overBudget).toBe(false);
         expect(out[1].overBudget).toBe(true);
     });

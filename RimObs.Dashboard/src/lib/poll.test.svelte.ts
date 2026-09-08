@@ -84,4 +84,28 @@ describe('Resource start/stop', () => {
         expect(calls).toBe(1);
         res.stop();
     });
+
+    it('skips a tick while a refresh is still in flight', async () => {
+        vi.useFakeTimers();
+        let started = 0;
+        let release: (() => void) | null = null;
+        const res = new Resource<number>(() => {
+            started += 1;
+            return new Promise<number>((resolve) => {
+                release = () => resolve(started);
+            });
+        }, 10);
+
+        res.start();
+        expect(started).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(50);
+        expect(started).toBe(1);
+
+        release!();
+        await vi.advanceTimersByTimeAsync(20);
+        expect(started).toBe(2);
+
+        res.stop();
+    });
 });

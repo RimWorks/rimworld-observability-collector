@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-    TICK_BUDGET_US,
+    FRAME_BUDGET_US,
+    speedMultiplier,
+    tickBudgetUs,
     PER_SAMPLE_OVERHEAD_NS,
     OVERHEAD_SEED,
     DELTA_DEAD_BAND_US,
@@ -17,9 +19,12 @@ import {
     deltaSeverity,
 } from './frameCost';
 
-describe('TICK_BUDGET_US', () => {
-    it('is a sixtieth of a second in microseconds', () => {
-        expect(TICK_BUDGET_US).toBe(16667);
+describe('FRAME_BUDGET_US', () => {
+    // Verse.TickManager.TickManagerUpdate: `clock.ElapsedMilliseconds > 45.454544f` ends the
+    // tick loop, which is 1000 / TickManager.WorstAllowedFPS.
+    it("is RimWorld's own 45.45 ms tick-loop bailout", () => {
+        expect(FRAME_BUDGET_US).toBeCloseTo(45454.5, 1);
+        expect(FRAME_BUDGET_US).toBeCloseTo(1_000_000 / 22, 0);
     });
 });
 
@@ -49,8 +54,8 @@ describe('shareOfFrame', () => {
 });
 
 describe('shareOfBudget', () => {
-    it('matches the live example: 959us against the tick budget is 5.8%', () => {
-        expect(percent(shareOfBudget(959))).toBe('5.8%');
+    it('matches the live example: 959us against the frame budget is 2.1%', () => {
+        expect(percent(shareOfBudget(959))).toBe('2.1%');
     });
 
     it('returns 0 for a non-finite input', () => {
@@ -59,11 +64,11 @@ describe('shareOfBudget', () => {
     });
 
     it('does not special-case a negative duration', () => {
-        expect(shareOfBudget(-1666.7)).toBeCloseTo(-10, 3);
+        expect(shareOfBudget(-4545.45)).toBeCloseTo(-10, 3);
     });
 
-    it('does not clamp at 100% for a frame over the tick budget', () => {
-        expect(percent(shareOfBudget(20_000))).toBe('120.0%');
+    it('does not clamp at 100% for a frame over the frame budget', () => {
+        expect(percent(shareOfBudget(54_545.4))).toBe('120.0%');
     });
 });
 
@@ -107,11 +112,11 @@ describe('estimateOverheadUs', () => {
         expect(estimateOverheadUs(-5)).toBe(0);
     });
 
-    it('matches the live 9-node example: 0.66096us, 0.016% of frame, 0.004% of budget', () => {
+    it('matches the live 9-node example: 0.66096us, 0.016% of frame, 0.001% of budget', () => {
         const overheadUs = estimateOverheadUs(9);
         expect(overheadUs).toBeCloseTo(0.66096, 5);
         expect(percent(shareOfFrame(overheadUs, 4045))).toBe('0.016%');
-        expect(percent(shareOfBudget(overheadUs))).toBe('0.004%');
+        expect(percent(shareOfBudget(overheadUs))).toBe('0.001%');
     });
 
     // pathological node count, just to guard the constant from drifting to zero.
@@ -119,8 +124,8 @@ describe('estimateOverheadUs', () => {
         expect(estimateOverheadUs(100_000)).toBeCloseTo(7344, 5);
     });
 
-    it('can read over 100% of the tick budget, proving the readout is not clamped', () => {
-        expect(shareOfBudget(estimateOverheadUs(300_000))).toBeGreaterThan(100);
+    it('can read over 100% of the frame budget, proving the readout is not clamped', () => {
+        expect(shareOfBudget(estimateOverheadUs(1_000_000))).toBeGreaterThan(100);
     });
 });
 
@@ -195,9 +200,9 @@ describe('smoothOverhead', () => {
 });
 
 describe('budgetSeverity', () => {
-    it('is 0 exactly at the tick budget and 1 just over it', () => {
-        expect(budgetSeverity(16667)).toBe(0);
-        expect(budgetSeverity(16668)).toBe(1);
+    it('is 0 exactly at the frame budget and 1 just over it', () => {
+        expect(budgetSeverity(45454.5)).toBe(0);
+        expect(budgetSeverity(45455)).toBe(1);
     });
 
     it('is 0 for a non-finite duration', () => {
@@ -215,5 +220,53 @@ describe('deltaSeverity', () => {
         expect(deltaSeverity(DELTA_DEAD_BAND_US)).toBe(1);
         expect(deltaSeverity(-499)).toBe(0);
         expect(deltaSeverity(-DELTA_DEAD_BAND_US)).toBe(-1);
+    });
+});
+
+describe('speedMultiplier', () => {
+    it('reads normal speed', () => {
+        expect(speedMultiplier(60)).toBe(1);
+    });
+
+    it('reads fast', () => {
+        expect(speedMultiplier(180)).toBe(3);
+    });
+
+    it('reads ultrafast', () => {
+        expect(speedMultiplier(900)).toBe(15);
+    });
+
+    it('reads the mapless ultrafast boost', () => {
+        expect(speedMultiplier(9000)).toBe(150);
+    });
+
+    it('snaps a game running a little behind to the speed it asked for', () => {
+        expect(speedMultiplier(880)).toBe(15);
+    });
+
+    it('falls back to normal with no reading', () => {
+        expect(speedMultiplier(null)).toBe(1);
+        expect(speedMultiplier(0)).toBe(1);
+        expect(speedMultiplier(Number.NaN)).toBe(1);
+    });
+});
+
+describe('tickBudgetUs', () => {
+    it('gives a tick a sixtieth of a second at normal speed', () => {
+        expect(tickBudgetUs(60)).toBeCloseTo(16666.7, 0);
+    });
+
+    it('shrinks the tick budget as the speed rises', () => {
+        expect(tickBudgetUs(900)).toBeCloseTo(1111.1, 0);
+    });
+});
+
+describe('budgetSeverity', () => {
+    it('passes a frame under RimWorld own 45.45 ms bailout', () => {
+        expect(budgetSeverity(45000)).toBe(0);
+    });
+
+    it('flags a frame over it', () => {
+        expect(budgetSeverity(46000)).toBe(1);
     });
 });

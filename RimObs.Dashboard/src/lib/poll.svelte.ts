@@ -6,6 +6,7 @@ export class Resource<T> {
     error = $state<string>('');
     consecutiveFailures = $state<number>(0);
     private timer: ReturnType<typeof setInterval> | null = null;
+    private inFlight = false;
 
     constructor(
         private readonly loader: () => Promise<T>,
@@ -13,6 +14,8 @@ export class Resource<T> {
     ) {}
 
     async refresh() {
+        if (this.inFlight) return;
+        this.inFlight = true;
         try {
             const next = await this.loader();
             this.data = next;
@@ -23,6 +26,8 @@ export class Resource<T> {
             this.state = this.data ? 'ok' : 'error';
             this.error = (err as Error).message;
             this.consecutiveFailures += 1;
+        } finally {
+            this.inFlight = false;
         }
     }
 

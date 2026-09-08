@@ -602,7 +602,7 @@ describe('FrameTimeline', () => {
         const ofFrame = screen.getByText('of frame').nextElementSibling?.textContent;
         const ofBudget = screen.getByText('of budget').nextElementSibling?.textContent;
         expect(ofFrame).toBe('2.5%');
-        expect(ofBudget).toBe('2.4%');
+        expect(ofBudget).toBe('0.88%');
         expect(ofFrame).not.toBe(ofBudget);
     });
 
@@ -612,7 +612,7 @@ describe('FrameTimeline', () => {
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         const readout = screen.getByTestId('frame-selected');
         expect(readout).toHaveTextContent('2.5% of frame');
-        expect(readout).toHaveTextContent('2.4% of budget');
+        expect(readout).toHaveTextContent('0.88% of budget');
     });
 
     // a long frame lets budget share pass 100% while frame share stays under it.
@@ -620,8 +620,8 @@ describe('FrameTimeline', () => {
         const overBudget: FrameData = {
             capture_ordinal: 1,
             start_us: 0,
-            end_us: 40000,
-            duration_us: 40000,
+            end_us: 109_090.8,
+            duration_us: 109_090.8,
             node_count: 2,
             nodes: {
                 section_ids: [10, 30],
@@ -629,7 +629,7 @@ describe('FrameTimeline', () => {
                 node_ids: [1, 2],
                 parent_node_ids: [-1, 1],
                 start_us: [0, 0],
-                dur_us: [40000, 20000],
+                dur_us: [109_090.8, 54_545.4],
             },
         };
         render(FrameTimeline, { frame: overBudget, names: NAMES });

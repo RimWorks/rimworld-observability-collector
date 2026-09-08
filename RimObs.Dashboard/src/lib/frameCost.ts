@@ -1,5 +1,40 @@
-/** rimworld targets 60 TPS, so one tick gets a sixtieth of a second. */
-export const TICK_BUDGET_US = 16667;
+/**
+ * Verse.TickManager.TickManagerUpdate breaks out of its tick loop once the frame has spent
+ * 45.454544 ms in it (TickManager.WorstAllowedFPS is 22), and hands the frame back to
+ * rendering. That is RimWorld's own definition of a frame that ran long, and it does not
+ * move with the speed setting.
+ */
+export const FRAME_BUDGET_US = 45454.5;
+
+/** RimWorld's simulation clock at Normal speed. */
+export const BASE_TPS = 60;
+
+/** Every value Verse.TickManager.TickRateMultiplier can return, paused aside. */
+export const TICK_MULTIPLIERS = [1, 3, 6, 12, 15, 18, 150] as const;
+
+/**
+ * The speed setting the game is on, guessed from the TPS it is achieving. Ratio distance, not
+ * linear, because the legal multipliers run from 1 to 150. A game falling behind its target
+ * reads as the next speed down, which is the one case this cannot tell apart.
+ */
+export function speedMultiplier(tps: number | null | undefined): number {
+    if (tps == null || !Number.isFinite(tps) || tps <= 0) return 1;
+    let best = TICK_MULTIPLIERS[0];
+    let bestDistance = Infinity;
+    for (const multiplier of TICK_MULTIPLIERS) {
+        const distance = Math.abs(Math.log(tps / (multiplier * BASE_TPS)));
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = multiplier;
+        }
+    }
+    return best;
+}
+
+/** How long one tick may take to sustain the current speed. */
+export function tickBudgetUs(tps: number | null | undefined): number {
+    return 1_000_000 / (BASE_TPS * speedMultiplier(tps));
+}
 
 /**
  * cost of one enabled Profiler.Start/Stop pair. source of truth is
@@ -16,7 +51,7 @@ export function shareOfFrame(durUs: number, frameDurationUs: number): number {
 
 export function shareOfBudget(durUs: number): number {
     if (!Number.isFinite(durUs)) return 0;
-    return (durUs / TICK_BUDGET_US) * 100;
+    return (durUs / FRAME_BUDGET_US) * 100;
 }
 
 export function percent(value: number): string {
@@ -87,7 +122,7 @@ export const DELTA_DEAD_BAND_US = 500;
 
 export function budgetSeverity(frameDurationUs: number): 0 | 1 {
     if (!Number.isFinite(frameDurationUs)) return 0;
-    return frameDurationUs > TICK_BUDGET_US ? 1 : 0;
+    return frameDurationUs > FRAME_BUDGET_US ? 1 : 0;
 }
 
 export function deltaSeverity(deltaUs: number): -1 | 0 | 1 {

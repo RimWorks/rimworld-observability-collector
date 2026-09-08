@@ -8,6 +8,9 @@ const LABEL_GAP = LABEL_PAD * 2;
 const MIN_QUAD_PX = 1;
 const HOVER_LIFT = 0.15;
 const INK_THRESHOLD = 0.16;
+// below this a truncated name says nothing, so the bar reads better bare.
+const MIN_LABEL_CHARS = 10;
+const ELLIPSIS = '\u2026';
 const FOCUS_RING_PX = 2;
 
 const SUBSYSTEM_TOKENS = ['--sub-tick', '--sub-ai', '--sub-render', '--sub-ui'];
@@ -109,6 +112,9 @@ export function drawTimeline(
     ctx.textBaseline = 'middle';
 
     const pxPerUs = widthPx / span;
+    // the flame font is monospace, so one measurement fits every label.
+    const charPx = ctx.measureText('.').width;
+    const minLabelPx = charPx * MIN_LABEL_CHARS;
     let labelRow = -1;
     let labelEnd = 0;
 
@@ -141,9 +147,14 @@ export function drawTimeline(
             );
         }
 
-        const text = q.count > 1 ? `${opts.label(q)} (${q.count})` : opts.label(q);
+        const full = q.count > 1 ? `${opts.label(q)} (${q.count})` : opts.label(q);
+        const availPx = w - LABEL_PAD * 2;
+        if (availPx < minLabelPx) continue;
+
+        const maxChars = Math.floor(availPx / charPx);
+        const text =
+            full.length > maxChars ? full.slice(0, Math.max(maxChars - 1, 1)) + ELLIPSIS : full;
         const textWidth = ctx.measureText(text).width;
-        if (textWidth + LABEL_PAD * 2 > w) continue;
         if (q.depth === labelRow && x < labelEnd) continue;
 
         ctx.fillStyle = ink;

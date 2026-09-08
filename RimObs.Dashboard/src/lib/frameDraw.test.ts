@@ -209,11 +209,34 @@ describe('drawTimeline', () => {
         expect(text?.args[2]).toBeCloseTo(2 * ROW_HEIGHT + ROW_HEIGHT / 2);
     });
 
-    it('skips a label that does not fit its own quad', () => {
+    // 7px per character in the stub, so a 10-character floor is 70px plus the 8px of padding.
+    it('drops a label on a quad too narrow for ten characters', () => {
         const { ctx, calls } = recorder();
-        drawTimeline(ctx, [quad({ endUs: 5 })], opts());
+        drawTimeline(ctx, [quad({ endUs: 70 })], opts());
         expect(calls.some((c) => c.op === 'fillText')).toBe(false);
         expect(calls.some((c) => c.op === 'fillRect')).toBe(true);
+    });
+
+    it('truncates a label that does not fit rather than dropping it', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad({ startUs: 0, endUs: 100 })], opts());
+        const text = calls.find((c) => c.op === 'fillText');
+        // 100px wide, 8px padding, 7px a character: 13 characters, 12 of them from the name.
+        expect(text?.args[0]).toBe('Verse.TickLi\u2026');
+    });
+
+    it('keeps the whole label when it fits', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad({ startUs: 0, endUs: 400 })], opts());
+        const text = calls.find((c) => c.op === 'fillText');
+        expect(text?.args[0]).toBe('Verse.TickList.Tick');
+    });
+
+    it('truncates a collapsed run label with its count still attached', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad({ startUs: 0, endUs: 120, count: 312, sectionId: -1 })], opts());
+        const text = calls.find((c) => c.op === 'fillText');
+        expect(text?.args[0]).toBe('Verse.TickList.\u2026');
     });
 
     it('skips a label that would overlap the one already drawn in that row', () => {

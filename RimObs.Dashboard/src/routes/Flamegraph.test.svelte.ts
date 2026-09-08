@@ -57,6 +57,23 @@ const FRAMES_BODY = {
     strip: { ordinals: [4319, 4320, 4321], durations_us: [5000, 40000, 16200] },
 };
 
+// section 10 is the frame's root, so a baseline for it makes the delta column render.
+const BASELINE_BODY = { frames: 128, median_us: { 10: 1000, 30: 100 } };
+
+const CALL_TREE_BODY = {
+    schema_version: 6,
+    roots: [
+        {
+            id: 10,
+            name: 'root',
+            call_count: 5,
+            total_ns: 3_000_000,
+            is_other: false,
+            children: [],
+        },
+    ],
+};
+
 const SECTIONS_BODY = {
     schema_version: 6,
     sections: [
@@ -121,6 +138,8 @@ function mockFetch(
         let body: unknown;
         let status = 200;
         if (/\/api\/v1\/frames\/\d+$/.test(url)) body = frameAtBody(url);
+        else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
+        else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
         else if (url.includes('/api/v1/import/bundle')) {
@@ -319,14 +338,14 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('frame-overhead')).not.toHaveTextContent('timer res');
     });
 
-    it('marks the Duration stat as a warning once the frame runs over the tick budget', async () => {
-        mockFetch({ ...FRAMES_BODY, frame: { ...FRAMES_BODY.frame, duration_us: 20_000 } });
+    it('marks the Duration stat as a warning once the frame runs over the frame budget', async () => {
+        mockFetch({ ...FRAMES_BODY, frame: { ...FRAMES_BODY.frame, duration_us: 50_000 } });
         render(Flamegraph);
         await waitFor(() => expect(screen.getByTestId('frame-duration')).toBeInTheDocument());
         expect(screen.getByTestId('frame-duration').className).toContain('warn');
     });
 
-    it('leaves the Duration stat unwarned under the tick budget', async () => {
+    it('leaves the Duration stat unwarned under the frame budget', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByTestId('frame-duration')).toBeInTheDocument());
         expect(screen.getByTestId('frame-duration').className).not.toContain('warn');
@@ -594,6 +613,69 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('pause'));
         expect(screen.queryByTestId('paused-badge')).toBeNull();
         await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+    });
+
+    // Neo freezes the history with the frame and marks the gap on resume. a strip that keeps
+    // filling while paused hides the fact that the run either side of the pause is not continuous.
+    it('freezes the frame history while paused and resumes from live after', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const strip = screen.getByTestId('frame-strip');
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(strip).toBeInTheDocument();
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
+            strip: { ordinals: [9998, 9999], durations_us: [1000, 2000] },
+        });
+        const before = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(before));
+        expect(screen.getByText('4321')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+    });
+
+    // baselineUs is a per-frame median over 128 frames. against a session cumulative total it
+    // is meaningless, so the delta column has to go blank rather than print a wrong number.
+    it('blanks the delta column in session scope', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-delta').length).toBeGreaterThan(0));
+        // frame scope has a real per-frame baseline for section 10, so it prints a delta
+        await waitFor(() =>
+            expect(screen.getAllByTestId('tree-delta')[0].textContent?.trim()).not.toBe(''),
+        );
+
+        await fireEvent.click(screen.getByTestId('scope-session'));
+        await waitFor(() =>
+            expect(screen.getAllByTestId('tree-delta')[0].textContent?.trim()).toBe(''),
+        );
+    });
+
+    // the chip names the thread the tree belongs to, so it has to carry that thread's time.
+    it('shows the thread total in the call tree thread chip', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('thread-chip')).toBeInTheDocument());
+        const chip = screen.getByTestId('thread-chip');
+        expect(chip).toHaveTextContent('MainThread');
+        expect(chip).toHaveTextContent(screen.getByTestId('frame-duration').textContent!);
+    });
+
+    // the timeline holds its zoom in component state, so a single render where frame is null
+    // tears it down and loses the zoom. pausing must never blank the stage.
+    it('keeps a frame on screen while the pinned fetch is in flight', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const canvas = screen.getAllByRole('img')[0];
+
+        await fireEvent.click(screen.getByTestId('pause'));
+
+        expect(screen.queryByText(/no frames yet/i)).toBeNull();
+        expect(screen.getByTestId('frame-duration')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        expect(screen.getAllByRole('img')[0]).toBe(canvas);
     });
 
     // stepping reads a specific ordinal, so the card must follow the step, not the poller.
