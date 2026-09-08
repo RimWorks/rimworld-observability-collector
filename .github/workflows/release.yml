@@ -20,11 +20,11 @@ jobs:
   # calling the checks here is what stops a broken commit reaching nuget or steam.
   ci:
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
 
   sonar:
     uses: ./.github/workflows/sonar.yml
-    secrets: inherit
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   release:
     name: semantic-release

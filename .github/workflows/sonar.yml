@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: true
 
 # release.yml holds contents: write, and a called workflow would inherit it without this.
 permissions:
@@ -17,8 +20,8 @@ concurrency:
 jobs:
   analyze:
     uses: RimWorks/mod-ci/.github/workflows/sonar.yml@dbb33c36ad8165dd9ffbe567c07055cbfb0b5c21 # v1.4.0
-    # SONAR_TOKEN is declared uppercase in the shared workflow so inherit reaches it.
-    secrets: inherit
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
       solution: RimObs.slnx
       project-key: RimWorks_rimworld-observability-collector
