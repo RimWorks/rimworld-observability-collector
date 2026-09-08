@@ -21,6 +21,8 @@ public sealed record FrameSnapshot(
 public sealed record FrameRingStats(
     int FrameCount,
     long MedianDurationTicks,
+    long P75DurationTicks,
+    long P90DurationTicks,
     long P99DurationTicks,
     long MinDurationTicks,
     long MaxDurationTicks,
@@ -205,7 +207,7 @@ public sealed class FrameRing {
     // percentiles if the endpoint ever gets hot.
     public static FrameRingStats StatsFor(FrameSnapshot[] frames) {
         if (frames.Length == 0)
-            return new FrameRingStats(0, 0, 0, 0, 0, -1, -1);
+            return new FrameRingStats(0, 0, 0, 0, 0, 0, 0, -1, -1);
 
         long[] durations = new long[frames.Length];
         int newest = int.MinValue;
@@ -218,11 +220,14 @@ public sealed class FrameRing {
                 oldest = frames[i].CaptureOrdinal;
         }
         Array.Sort(durations);
-        int p99 = Math.Min(frames.Length - 1, (int)(frames.Length * 0.99));
+        // the array is already sorted, so each extra percentile is one more index
+        int Pct(double q) => Math.Min(frames.Length - 1, (int)(frames.Length * q));
         return new FrameRingStats(
             frames.Length,
             durations[frames.Length / 2],
-            durations[p99],
+            durations[Pct(0.75)],
+            durations[Pct(0.90)],
+            durations[Pct(0.99)],
             durations[0],
             durations[frames.Length - 1],
             newest,

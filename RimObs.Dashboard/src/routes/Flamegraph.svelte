@@ -13,7 +13,7 @@
     import type { CallTreeResponse } from '../lib/api';
     import { buildBars, stepOrdinal } from '../lib/frameStrip';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
-    import { ns, count } from '../lib/format';
+    import { ns, count, gradeFromShare } from '../lib/format';
     import {
         estimateOverheadUs,
         shareOfFrame,
@@ -31,6 +31,14 @@
         speedMultiplier,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
+
+    // the whole spread against the frame budget, coloured by how much of it each one eats
+    const PERCENTILES = [
+        { key: 'median_us', label: 'flamegraph.p50' },
+        { key: 'p75_us', label: 'flamegraph.p75' },
+        { key: 'p90_us', label: 'flamegraph.p90' },
+        { key: 'p99_us', label: 'flamegraph.p99' },
+    ] as const;
 
     const RATES = [
         { ms: 16, label: '60/s' },
@@ -387,10 +395,15 @@
         {/if}
 
         <span class="readout mono">
-            {t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b>
-            &middot; {t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b>
-            &middot;
-            <Tooltip text={t('tip.flamegraph.budget')} align="end">
+            {#each PERCENTILES as p (p.key)}
+                {@const v = stats?.[p.key] ?? 0}
+                {t(p.label)}
+                <b class="g{gradeFromShare(v / FRAME_BUDGET_US)}" data-testid="stat-{p.key}"
+                    >{ns(v * 1000)}</b
+                >
+                &middot;
+            {/each}
+            <Tooltip text={t('tip.flamegraph.budget')}>
                 <span class="mono" data-testid="frame-budget"
                     >{t('flamegraph.budget')} <b>{ns(FRAME_BUDGET_US * 1000)}</b></span
                 >
@@ -398,7 +411,6 @@
             &middot;
             <Tooltip
                 text={t('tip.flamegraph.tickBudget').replace('{n}', String(speedMultiplier(tps)))}
-                align="end"
             >
                 <span class="mono" data-testid="tick-budget"
                     >{t('flamegraph.tickBudget')} <b>{ns(tickBudgetUs(tps) * 1000)}</b></span
@@ -650,6 +662,21 @@
     .readout b {
         color: var(--text);
         font-weight: 500;
+    }
+    .readout b.g0 {
+        color: var(--grade-0);
+    }
+    .readout b.g1 {
+        color: var(--grade-1);
+    }
+    .readout b.g2 {
+        color: var(--grade-2);
+    }
+    .readout b.g3 {
+        color: var(--grade-3);
+    }
+    .readout b.g4 {
+        color: var(--grade-4);
     }
 
     .modes {

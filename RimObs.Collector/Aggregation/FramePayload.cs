@@ -36,6 +36,8 @@ public static class FramePayload {
             newest_ordinal = stats.NewestOrdinal,
             oldest_ordinal = stats.OldestOrdinal,
             median_us = stats.MedianDurationTicks * usPerTick,
+            p75_us = stats.P75DurationTicks * usPerTick,
+            p90_us = stats.P90DurationTicks * usPerTick,
             p99_us = stats.P99DurationTicks * usPerTick,
             min_us = stats.MinDurationTicks * usPerTick,
             max_us = stats.MaxDurationTicks * usPerTick,

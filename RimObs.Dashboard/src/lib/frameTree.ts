@@ -21,6 +21,8 @@ export interface FrameStats {
     newest_ordinal: number;
     oldest_ordinal: number;
     median_us: number;
+    p75_us: number;
+    p90_us: number;
     p99_us: number;
     min_us: number;
     max_us: number;

@@ -49,6 +49,8 @@ const FRAMES_BODY = {
         newest_ordinal: 4400,
         oldest_ordinal: 2322,
         median_us: 5000,
+        p75_us: 20000,
+        p90_us: 46000,
         p99_us: 99000,
         min_us: 8000,
         max_us: 40000,
@@ -677,6 +679,25 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('scope-session'));
         await waitFor(() => expect(screen.getAllByTestId('tree-p50').length).toBeGreaterThan(0));
         expect(screen.getAllByTestId('tree-p50')[0].textContent).toContain('ms');
+    });
+
+    // the readout grades each percentile against the 45.45ms frame budget, so a spread that
+    // crosses the budget has to change colour rather than all read the same.
+    it('colours each percentile by its share of the frame budget', async () => {
+        render(Flamegraph);
+        // wait for real stats: the element renders with a zero placeholder before they land
+        await waitFor(() => expect(screen.getByTestId('stat-p99_us').textContent).toContain('ms'));
+        // 5ms of 45.45 is 11%, 99ms is over it entirely
+        const low = screen.getByTestId('stat-median_us').className;
+        const high = screen.getByTestId('stat-p99_us').className;
+        expect(low).not.toBe(high);
+        expect(high).toContain('g4');
+    });
+
+    it('shows the whole percentile spread, not just median and p99', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('stat-p75_us')).toBeInTheDocument());
+        expect(screen.getByTestId('stat-p90_us')).toBeInTheDocument();
     });
 
     // the per-second trend drill-down, ported from the Hotspots page. session scope only:
