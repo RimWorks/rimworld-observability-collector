@@ -3,11 +3,32 @@
     import StatCard from '../lib/components/StatCard.svelte';
     import Card from '../lib/components/Card.svelte';
     import BundleExportForm from '../lib/components/BundleExportForm.svelte';
+    import LineChart from '../lib/components/LineChart.svelte';
+    import { Resource } from '../lib/poll.svelte';
+    import { summarize, heapSeries } from '../lib/gc';
+    import type { GcResponse } from '../lib/api';
+    import { onMount, onDestroy } from 'svelte';
     import { count, bytes, rate, relativeTime } from '../lib/format';
     import { t } from '../lib/i18n';
 
     let { status }: { status: StatusResponse | null } = $props();
     let r = $derived(status?.receive);
+
+    // the heap trend and generation counts, all that survived the Memory page
+    const gcRes = new Resource<GcResponse>(() => api.gc(200), 4000);
+    onMount(() => gcRes.start());
+    onDestroy(() => gcRes.stop());
+    let gcEvents = $derived(gcRes.data?.events ?? []);
+    let gc = $derived(summarize(gcEvents));
+    let heap = $derived(heapSeries(gcEvents));
+    let heapSeriesData = $derived([
+        {
+            label: t('overview.heap.series'),
+            values: heap.heap,
+            stroke: '--cyan',
+            fill: 'rgba(57, 196, 212, 0.12)',
+        },
+    ]);
 
     let exporting = $state(false);
     let exportError = $state<string | null>(null);
@@ -121,6 +142,28 @@
                 </div>
             {:else}
                 <p class="none">{t('overview.noSession')}</p>
+            {/if}
+        </Card>
+        <Card title={t('overview.heap')}>
+            {#if gcEvents.length === 0}
+                <p class="none">{t('overview.heap.empty')}</p>
+            {:else}
+                <dl>
+                    <dt>{t('overview.heap.current')}</dt>
+                    <dd class="mono">{bytes(gc.currentHeap)}</dd>
+                    <dt>{t('overview.heap.peak')}</dt>
+                    <dd class="mono">{bytes(gc.peakHeap)}</dd>
+                    <dt>{t('overview.heap.gens')}</dt>
+                    <dd class="mono" data-testid="gc-gens">
+                        {gc.perGen[0]} / {gc.perGen[1]} / {gc.perGen[2]}
+                    </dd>
+                </dl>
+                <LineChart
+                    x={heap.ticks}
+                    series={heapSeriesData}
+                    height={140}
+                    format={(n) => bytes(n)}
+                />
             {/if}
         </Card>
         <Card title={t('overview.collector')}>

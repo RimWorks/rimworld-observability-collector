@@ -1,6 +1,13 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { api, ApiError, type StatusResponse, type HotspotsResponse } from '../lib/api';
+    import {
+        api,
+        ApiError,
+        type StatusResponse,
+        type HotspotsResponse,
+        type GcResponse,
+    } from '../lib/api';
+    import { summarize } from '../lib/gc';
     import { Resource } from '../lib/poll.svelte';
     import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
@@ -13,7 +20,7 @@
     import type { CallTreeResponse } from '../lib/api';
     import { buildBars, stepOrdinal } from '../lib/frameStrip';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
-    import { ns, count, gradeFromShare } from '../lib/format';
+    import { ns, count, bytes, gradeFromShare } from '../lib/format';
     import {
         estimateOverheadUs,
         shareOfFrame,
@@ -191,6 +198,9 @@
         ),
     );
 
+    const gcRes = new Resource<GcResponse>(() => api.gc(200), 4000);
+    let peakAllocRate = $derived(summarize(gcRes.data?.events ?? []).peakAllocRate);
+
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     let treeScope = $state<'frame' | 'session'>('frame');
     // the session tree follows the same rate control as the frame poll, so it needs a fresh
@@ -205,12 +215,14 @@
     onMount(() => {
         sectionsRes.start();
         hotspotsRes.start();
+        gcRes.start();
         statusRes.start();
         baselineRes.start();
     });
     onDestroy(() => {
         sectionsRes.stop();
         hotspotsRes.stop();
+        gcRes.stop();
         statusRes.stop();
         baselineRes.stop();
     });
@@ -416,6 +428,12 @@
                     >{t('flamegraph.tickBudget')} <b>{ns(tickBudgetUs(tps) * 1000)}</b></span
                 >
             </Tooltip>
+            {#if peakAllocRate > 0}
+                &middot;
+                <span class="mono" data-testid="alloc-rate"
+                    >{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
+                >
+            {/if}
         </span>
     </div>
 

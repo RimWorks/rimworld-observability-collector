@@ -10,7 +10,6 @@ export const routes: RouteDef[] = [
     { id: 'overview', title: 'Overview', icon: 'gauge' },
     { id: 'flamegraph', title: 'Flamegraph', icon: 'flame' },
     { id: 'instrumentation', title: 'Instrumentation', icon: 'probe' },
-    { id: 'memory', title: 'Memory', icon: 'memory' },
     { id: 'comparison', title: 'Comparison', icon: 'compare' },
     { id: 'settings', title: 'Settings', icon: 'cog' },
 ];

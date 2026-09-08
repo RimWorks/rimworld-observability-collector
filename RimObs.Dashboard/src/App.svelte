@@ -9,7 +9,6 @@
     import Overview from './routes/Overview.svelte';
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
-    import Memory from './routes/Memory.svelte';
     import Comparison from './routes/Comparison.svelte';
     import Settings from './routes/Settings.svelte';
 
@@ -55,8 +54,6 @@
                     <Instrumentation />
                 {:else if route.id === 'flamegraph'}
                     <Flamegraph />
-                {:else if route.id === 'memory'}
-                    <Memory />
                 {:else if route.id === 'comparison'}
                     <Comparison />
                 {:else if route.id === 'settings'}
