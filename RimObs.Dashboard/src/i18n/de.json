@@ -152,5 +152,6 @@
     "flamegraph.overhead.offrame": "des Frames",
     "flamegraph.timerres": "Timer-Auflösung",
     "flamegraph.overhead.hint": "Eine Schätzung, keine Messung: Anzahl der Scopes mal einem gemessenen Referenzwert von 73,4 ns pro Scope, geglättet und einmal pro Sekunde aktualisiert. Den Profiler mit sich selbst zu timen würde die gemeldete Zahl verändern.",
-    "tip.tree.patched": "Andere Mods patchen diese Methode ebenfalls. Ihre Laufzeiten landen in diesem Abschnitt. Gepatcht von:"
+    "tip.tree.patched": "Andere Mods patchen diese Methode ebenfalls. Ihre Laufzeiten landen in diesem Abschnitt. Gepatcht von:",
+    "tree.pie.other": "Sonstige"
 }

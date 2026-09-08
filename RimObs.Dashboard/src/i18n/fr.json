@@ -152,5 +152,6 @@
     "flamegraph.overhead.offrame": "de la frame",
     "flamegraph.timerres": "résolution du minuteur",
     "flamegraph.overhead.hint": "Une estimation, pas une mesure : le nombre de portées multiplié par un coût de référence de 73,4 ns par portée, lissé et actualisé une fois par seconde. Chronométrer le profileur avec lui-même changerait le chiffre qu'il rapporte.",
-    "tip.tree.patched": "D’autres mods patchent aussi cette méthode. Leurs temps sont comptés dans cette section. Patché par :"
+    "tip.tree.patched": "D’autres mods patchent aussi cette méthode. Leurs temps sont comptés dans cette section. Patché par :",
+    "tree.pie.other": "autres"
 }

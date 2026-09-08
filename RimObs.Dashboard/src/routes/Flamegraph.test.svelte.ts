@@ -867,6 +867,18 @@ describe('Flamegraph page', () => {
         expect(await screen.findByTestId('patch-status')).toHaveTextContent(/active/i);
     });
 
+    it('draws the pie tab from the frames own sections', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+
+        await fireEvent.click(screen.getByRole('button', { name: /^pie$/i }));
+
+        const chart = await screen.findByTestId('pie-chart');
+        expect(chart.querySelectorAll('path').length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('tab-soon')).toBeNull();
+    });
+
     it('shows no context menu until a bar is right-clicked', async () => {
         mockFetch();
         render(Flamegraph);

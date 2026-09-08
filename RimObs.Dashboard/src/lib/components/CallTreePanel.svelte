@@ -17,6 +17,8 @@
     import { SvelteSet } from 'svelte/reactivity';
     import Tooltip from './Tooltip.svelte';
     import Icon from './Icon.svelte';
+    import PieChart from './PieChart.svelte';
+    import { pieSlices } from '../pieSlices';
 
     let {
         nodes,
@@ -142,6 +144,10 @@
         for (const key of allExpandableKeys(nodes)) expanded.add(key);
     }
 
+    let slices = $derived(
+        activeTab === 'pie' ? pieSlices(nodes, names, 8, t('tree.pie.other')) : [],
+    );
+
     function share(totalUs: number): number {
         if (!(frameDurationUs > 0)) return 0;
         return Math.min(100, (totalUs / frameDurationUs) * 100);
@@ -215,7 +221,19 @@
         </button>
     </div>
 
-    {#if activeTab !== 'tree'}
+    {#if activeTab === 'pie'}
+        {#if slices.length === 0}
+            <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>
+        {:else}
+            <PieChart
+                {slices}
+                onSelect={(sectionId) => {
+                    const row = rows.find((r) => r.sectionId === sectionId);
+                    if (row && row.nodes.length > 0) onSelect?.(row.nodes[0]);
+                }}
+            />
+        {/if}
+    {:else if activeTab !== 'tree'}
         <p class="empty" data-testid="tab-soon">{t('tree.soon')}</p>
     {:else if rows.length === 0}
         <p class="empty" data-testid="tree-empty">{t('tree.empty')}</p>
