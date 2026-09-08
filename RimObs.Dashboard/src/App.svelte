@@ -11,9 +11,7 @@
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import Memory from './routes/Memory.svelte';
-    import Sessions from './routes/Sessions.svelte';
     import Comparison from './routes/Comparison.svelte';
-    import Logs from './routes/Logs.svelte';
     import Settings from './routes/Settings.svelte';
 
     const status = new Resource<StatusResponse>(() => api.status(), 2000);
@@ -62,12 +60,8 @@
                     <Flamegraph />
                 {:else if route.id === 'memory'}
                     <Memory />
-                {:else if route.id === 'sessions'}
-                    <Sessions />
                 {:else if route.id === 'comparison'}
                     <Comparison />
-                {:else if route.id === 'logs'}
-                    <Logs />
                 {:else if route.id === 'settings'}
                     <Settings />
                 {/if}

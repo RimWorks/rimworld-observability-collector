@@ -15,9 +15,16 @@ afterEach(() => {
 });
 
 describe('App route dispatch', () => {
-    it('renders the Logs route for #/logs', async () => {
+    it('renders the Comparison route for #/comparison', async () => {
+        globalThis.location.hash = '#/comparison';
+        render(App);
+        expect(await screen.findByText('Select sources to compare')).toBeInTheDocument();
+    });
+
+    // a hash naming a route that no longer exists must not render a blank shell
+    it('falls back to Overview for a route that was cut', async () => {
         globalThis.location.hash = '#/logs';
         render(App);
-        expect(await screen.findByText('Warning')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     });
 });
