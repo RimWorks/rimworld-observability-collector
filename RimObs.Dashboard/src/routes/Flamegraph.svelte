@@ -564,7 +564,9 @@
                 class="delta"
                 class:warn={deltaSeverity(deltaUs) === 1}
                 class:cool={deltaSeverity(deltaUs) === -1}>&Delta; {deltaText(deltaUs)}</span
-            >{overheadLine ? ' · ' : ''}{/if}{overheadLine}
+            >{overheadLine ? ' · ' : ''}{/if}{#if overheadLine}<Tooltip
+                text={t('flamegraph.overhead.hint')}><span>{overheadLine}</span></Tooltip
+            >{/if}
     </p>
 </div>
 

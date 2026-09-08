@@ -57,6 +57,7 @@
     }
 </script>
 
+<!-- prettier-ignore -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <span
@@ -69,14 +70,10 @@
     onfocus={show}
     onblur={hide}
     aria-describedby={open ? id : undefined}
+    >{@render children()}{#if open}<span class="tt-bubble" bind:this={bubbleEl} role="tooltip" {id}
+            >{text}</span
+        >{/if}</span
 >
-    {@render children()}
-    {#if open}
-        <span class="tt-bubble" bind:this={bubbleEl} role="tooltip" {id}>
-            {text}
-        </span>
-    {/if}
-</span>
 
 <style>
     .tt-wrap {
