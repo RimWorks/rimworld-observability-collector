@@ -59,8 +59,18 @@ public static class Program {
     }
 
     internal static void ConfigureLogger(Logging.RingBufferLogSink ringSink, string? logDir) {
+        Log.Logger = BuildLoggerConfiguration(ringSink, logDir).CreateLogger();
+    }
+
+    /// <summary>Separate from the global assignment so a test can build a logger of its own.</summary>
+    internal static LoggerConfiguration BuildLoggerConfiguration(
+        Logging.RingBufferLogSink ringSink,
+        string? logDir) {
         LoggerConfiguration config = new LoggerConfiguration()
             .MinimumLevel.Information()
+            // the dashboard polls several endpoints a second, so ASP.NET per-request logging
+            // churns the whole ring buffer in about three minutes and evicts real errors.
+            .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.Console()
             .WriteTo.Sink(ringSink);
 
@@ -78,7 +88,7 @@ public static class Program {
             }
         }
 
-        Log.Logger = config.CreateLogger();
+        return config;
     }
 
     public static WebApplication BuildApp(string[] args, int port, CollectorToken? token = null, string? sessionsDir = null, Logging.RingBufferLogSink? logSink = null, ServeOptions? serveOptions = null, Config.ConfigStore? configStore = null) {
