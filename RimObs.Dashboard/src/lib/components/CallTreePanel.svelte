@@ -300,8 +300,12 @@
                                     onclick={() => toggle(row)}
                                     aria-expanded={row.expanded}
                                     aria-label={labelFor(row.sectionId, names)}
-                                    >{row.expanded ? '▾' : '▸'}</button
                                 >
+                                    <Icon
+                                        name={row.expanded ? 'chevronDown' : 'chevron'}
+                                        size={13}
+                                    />
+                                </button>
                             {:else}
                                 <span class="twist"></span>
                             {/if}
@@ -590,8 +594,11 @@
         background: var(--bg-surface);
     }
     .twist {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
         width: 13px;
+        height: 13px;
+        vertical-align: middle;
         font: inherit;
         color: var(--text-faint);
         background: none;
