@@ -153,32 +153,6 @@ export interface CallTreeResponse {
     roots: CallNode[];
 }
 
-export interface CaptureSummary {
-    id: string;
-    session_id: string;
-    trigger: 'manual' | 'slow_tick';
-    status: 'running' | 'finalized';
-    started_utc: string;
-    stopped_utc: string | null;
-    finalize_reason: 'none' | 'user_stopped' | 'time_cap' | 'size_cap' | 'dashboard_closed';
-    edge_count: number;
-    estimated_bytes: number;
-    dropped_samples: number;
-    warning: string | null;
-    roots: CallNode[];
-}
-
-export interface CapturesResponse {
-    schema_version: number;
-    active_capture_id: string | null;
-    captures: CaptureSummary[];
-}
-
-export interface CaptureResponse {
-    schema_version: number;
-    capture: CaptureSummary;
-}
-
 export interface LogEntry {
     timestamp: string;
     level: string;
@@ -537,25 +511,5 @@ export const api = {
         });
         if (!res.ok && res.status !== 404)
             throw new ApiError(res.status, `delete failed: ${res.status}`);
-    },
-    captures: (tree = false) =>
-        get<CapturesResponse>(`/api/v1/sessions/current/captures${tree ? '?tree=true' : ''}`),
-    capture: (id: string) =>
-        get<CaptureResponse>(`/api/v1/sessions/current/captures?id=${encodeURIComponent(id)}`),
-    startCapture: async (): Promise<CaptureResponse> => {
-        const res = await fetch('/api/v1/captures/start', {
-            method: 'POST',
-            headers: { accept: 'application/json', ...authHeaders() },
-        });
-        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
-        return res.json() as Promise<CaptureResponse>;
-    },
-    stopCapture: async (): Promise<CaptureResponse> => {
-        const res = await fetch('/api/v1/captures/stop', {
-            method: 'POST',
-            headers: { accept: 'application/json', ...authHeaders() },
-        });
-        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
-        return res.json() as Promise<CaptureResponse>;
     },
 };

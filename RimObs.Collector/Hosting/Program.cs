@@ -119,8 +119,6 @@ public static class Program {
         builder.Services.AddHostedService<Bundle.BundleImportSweeper>();
         builder.Services.AddSingleton<Exporters.ExporterHealth>();
         builder.Services.AddSingleton<Exporters.PrometheusMetricsBuilder>();
-        builder.Services.AddSingleton<Captures.CaptureManager>();
-        builder.Services.AddHostedService<Captures.CaptureTimeCapWatcher>();
         builder.Services.AddSingleton<Instrumentation.SessionMetaRegistry>();
         builder.Services.AddSingleton(_ => hasPersister
             ? Storage.DynamicPatchStore.Open(ResolveDynamicPatchStorePath(sessionsDir)!)
@@ -167,7 +165,6 @@ public static class Program {
     public static void MapApiEndpoints(WebApplication app) {
         app.MapStatusEndpoints();
         app.MapSessionsEndpoints();
-        app.MapCapturesEndpoints();
         app.MapComparisonEndpoints();
         app.MapFramesEndpoints();
         app.MapVersionEndpoints();

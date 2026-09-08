@@ -10,7 +10,6 @@
     import Hotspots from './routes/Hotspots.svelte';
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
-    import Captures from './routes/Captures.svelte';
     import Memory from './routes/Memory.svelte';
     import Metrics from './routes/Metrics.svelte';
     import Patches from './routes/Patches.svelte';
@@ -64,8 +63,6 @@
                     <Instrumentation />
                 {:else if route.id === 'flamegraph'}
                     <Flamegraph />
-                {:else if route.id === 'captures'}
-                    <Captures />
                 {:else if route.id === 'memory'}
                     <Memory />
                 {:else if route.id === 'metrics'}

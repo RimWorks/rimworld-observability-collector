@@ -11,7 +11,6 @@ export const routes: RouteDef[] = [
     { id: 'flamegraph', title: 'Flamegraph', icon: 'flame' },
     { id: 'hotspots', title: 'Hotspots', icon: 'flame' },
     { id: 'instrumentation', title: 'Instrumentation', icon: 'probe' },
-    { id: 'captures', title: 'Captures', icon: 'flame' },
     { id: 'memory', title: 'Memory', icon: 'memory' },
     { id: 'metrics', title: 'Metrics', icon: 'metric' },
     { id: 'patches', title: 'Patches', icon: 'patch' },
