@@ -5,6 +5,7 @@ export interface FrameNodes {
     parent_node_ids: number[];
     start_us: number[];
     dur_us: number[];
+    alloc_bytes?: number[];
 }
 
 export interface FrameData {
@@ -59,6 +60,8 @@ export interface TreeNode {
     startUs: number;
     durUs: number;
     endUs: number;
+    /** bytes allocated inside this scope. absent when the runtime has no allocation hook. */
+    allocBytes?: number;
     /** aggregated nodes stand in for many calls; a live frame node is one call. */
     calls?: number;
 }
@@ -148,10 +151,12 @@ interface DrawColumns {
     relStart: number[];
     relEnd: number[];
     dur_us: number[];
+    alloc_bytes: number[] | undefined;
 }
 
 function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
     const { order, parentWire, depth, section_ids, node_ids, relStart, relEnd, dur_us } = cols;
+    const alloc = cols.alloc_bytes;
     const nodes: TreeNode[] = [];
     const wireToOutput = new Array<number>(parentWire.length).fill(-1);
 
@@ -168,6 +173,7 @@ function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
                 startUs: relStart[i],
                 durUs: dur_us[i],
                 endUs: relEnd[i],
+                allocBytes: alloc?.[i] ?? 0,
             });
         }
         return wireToOutput[i];
@@ -182,7 +188,7 @@ function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
 export function buildFrameTree(frame: FrameData): FrameTree {
     // an imported bundle is a user-supplied zip, so nodes can be missing entirely.
     if (!frame.nodes) return { nodes: [], orphanCount: 0 };
-    const { section_ids, node_ids, parent_node_ids, start_us, dur_us } = frame.nodes;
+    const { section_ids, node_ids, parent_node_ids, start_us, dur_us, alloc_bytes } = frame.nodes;
     const n = Math.min(
         section_ids.length,
         node_ids.length,
@@ -218,6 +224,7 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         relStart,
         relEnd,
         dur_us,
+        alloc_bytes,
     });
 
     return { nodes, orphanCount };

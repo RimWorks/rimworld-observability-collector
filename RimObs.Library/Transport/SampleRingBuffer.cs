@@ -13,6 +13,7 @@ internal sealed class SampleRingBuffer {
         public int FrameOrdinal;
         public int NodeId;
         public int ParentNodeId;
+        public long AllocBytes;
         public long Sequence;
     }
 
@@ -33,7 +34,7 @@ internal sealed class SampleRingBuffer {
     public long Dropped => Interlocked.Read(ref _dropped);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal) {
+    public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
         long seq = Interlocked.Increment(ref _claim);
         long read = Volatile.Read(ref _read);
         if (seq - read > _slots.Length) {
@@ -48,6 +49,7 @@ internal sealed class SampleRingBuffer {
         _slots[idx].FrameOrdinal = frameOrdinal;
         _slots[idx].NodeId = nodeId;
         _slots[idx].ParentNodeId = parentNodeId;
+        _slots[idx].AllocBytes = allocBytes;
         Volatile.Write(ref _slots[idx].Sequence, seq);
         return true;
     }
@@ -67,6 +69,7 @@ internal sealed class SampleRingBuffer {
             batch.FrameOrdinals[n] = _slots[idx].FrameOrdinal;
             batch.NodeIds[n] = _slots[idx].NodeId;
             batch.ParentNodeIds[n] = _slots[idx].ParentNodeId;
+            batch.AllocBytes[n] = _slots[idx].AllocBytes;
             n++;
             expected++;
         }

@@ -268,6 +268,7 @@ public static class SessionsEndpoints {
             subsystem = node.Subsystem,
             call_count = node.CallCount,
             total_ns = node.TotalNs,
+            alloc_bytes = node.AllocBytes,
             is_other = node.IsOther,
             children = node.Children.Select(MapCallNode).ToArray(),
         };

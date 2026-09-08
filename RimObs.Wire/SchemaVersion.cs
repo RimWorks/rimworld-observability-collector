@@ -13,5 +13,7 @@ public static class SchemaVersion {
     //     live UDP: UdpReceiver drops any envelope whose version is not exactly Current.
     // v6: SectionBatch gains NodeIds + ParentNodeIds so a frame's tree can be rebuilt exactly.
     //     ParentIds holds section ids, which can't address repeated siblings (DoSingleTick emits 3 Tick nodes/tick).
-    public const int Current = 6;
+    // v7: SectionBatch gains AllocBytes, bytes allocated inside each timed scope. zero on a
+    //     runtime where the mono allocation hook could not be enabled.
+    public const int Current = 7;
 }

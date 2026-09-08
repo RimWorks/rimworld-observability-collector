@@ -298,3 +298,24 @@ describe('buildFrameTree', () => {
         });
     });
 });
+
+describe('buildFrameTree alloc bytes', () => {
+    it('carries alloc_bytes onto the node it belongs to', () => {
+        const f = frame([
+            [20, 2, 5, 10],
+            [10, -1, 0, 50],
+        ]);
+        f.nodes.alloc_bytes = [128, 4096];
+
+        const { nodes } = buildFrameTree(f);
+
+        // draw order puts the root first, so bytes have to follow the wire index, not the slot.
+        expect(nodes.find((n) => n.sectionId === 10)?.allocBytes).toBe(4096);
+        expect(nodes.find((n) => n.sectionId === 20)?.allocBytes).toBe(128);
+    });
+
+    it('reads zero when the producer sent no alloc_bytes', () => {
+        const { nodes } = buildFrameTree(frame([[7, -1, 0, 50]]));
+        expect(nodes[0].allocBytes).toBe(0);
+    });
+});

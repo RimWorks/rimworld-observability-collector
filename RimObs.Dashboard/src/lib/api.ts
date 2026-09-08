@@ -142,6 +142,7 @@ export interface CallNode {
     subsystem?: string | null;
     call_count: number;
     total_ns: number;
+    alloc_bytes?: number;
     is_other: boolean;
     children: CallNode[];
 }

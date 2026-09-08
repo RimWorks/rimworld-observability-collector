@@ -23,6 +23,7 @@ export function flattenCallNodes(roots: readonly CallNode[]): TreeNode[] {
             startUs,
             durUs,
             endUs: startUs + durUs,
+            allocBytes: node.alloc_bytes ?? 0,
             calls: node.call_count,
         });
 

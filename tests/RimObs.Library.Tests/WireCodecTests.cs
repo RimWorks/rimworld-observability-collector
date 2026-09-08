@@ -25,6 +25,7 @@ public sealed class WireCodecTests {
         FrameOrdinals = [4, 4, 5],
         NodeIds = [10, 11, 12],
         ParentNodeIds = [-1, 10, 10],
+        AllocBytes = [4096L, 0L, 128L],
     };
 
     private static MetricsBatch SampleMetrics() => new() {
@@ -357,7 +358,42 @@ public sealed class WireCodecTests {
         byte[] wireBytes = WireCodec.Serialize(original);
 
         MessagePackReader reader = new MessagePackReader(wireBytes);
-        reader.ReadArrayHeader().Should().Be(7);
+        reader.ReadArrayHeader().Should().Be(8);
+    }
+
+    [Fact]
+    public void SectionBatch_back_compat_v6_payload_has_empty_alloc_bytes() {
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(7);
+        writer.WriteArrayHeader(2);
+        writer.Write(1);
+        writer.Write(2);
+        writer.WriteArrayHeader(2);
+        writer.Write(100L);
+        writer.Write(200L);
+        writer.WriteArrayHeader(2);
+        writer.Write(10L);
+        writer.Write(20L);
+        writer.WriteArrayHeader(2);
+        writer.Write(-1);
+        writer.Write(1);
+        writer.WriteArrayHeader(2);
+        writer.Write(4);
+        writer.Write(4);
+        writer.WriteArrayHeader(2);
+        writer.Write(7);
+        writer.Write(8);
+        writer.WriteArrayHeader(2);
+        writer.Write(-1);
+        writer.Write(7);
+        writer.Flush();
+
+        SectionBatch decoded = WireCodec.Deserialize<SectionBatch>(buffer.WrittenSpan.ToArray());
+
+        decoded.SectionIds.Should().Equal(1, 2);
+        decoded.NodeIds.Should().Equal(7, 8);
+        decoded.AllocBytes.Should().BeEmpty();
     }
 
     [Fact]

@@ -104,7 +104,7 @@ public static class WireCodec {
 
     public static byte[] Serialize(SectionBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(7);
+        writer.WriteArrayHeader(8);
         WriteInt32Array(writer, value.SectionIds);
         WriteInt64Array(writer, value.ElapsedTicks);
         WriteInt64Array(writer, value.StartTimestamps);
@@ -112,6 +112,7 @@ public static class WireCodec {
         WriteInt32Array(writer, value.FrameOrdinals);
         WriteInt32Array(writer, value.NodeIds);
         WriteInt32Array(writer, value.ParentNodeIds);
+        WriteInt64Array(writer, value.AllocBytes);
         return writer.ToArray();
     }
 
@@ -345,6 +346,8 @@ public static class WireCodec {
             batch.NodeIds = ReadInt32Array(reader);
             batch.ParentNodeIds = ReadInt32Array(reader);
         }
+        if (fieldCount >= 8)
+            batch.AllocBytes = ReadInt64Array(reader);
         return batch;
     }
 

@@ -22,6 +22,11 @@ public static class SettingsWindow {
             "Open dashboard automatically when game starts",
             ref settings.AutoOpenDashboard,
             "When enabled, the collector opens the dashboard in your default browser on launch.");
+        listing.CheckboxLabeled(
+            "Track allocated bytes per section",
+            ref settings.AllocTracking,
+            "Adds a bytes column next to time in the call tree. Costs about 27ns per allocation "
+                + "and cannot be turned off again until you restart RimWorld. Takes effect on the next launch.");
         listing.Gap(4f);
         listing.GapLine();
 

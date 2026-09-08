@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     selfTimes,
+    selfAllocBytes,
     buildTreeRows,
     buildInvertedRows,
     keysToNode,
@@ -257,5 +258,81 @@ describe('search matches subsystem', () => {
         });
         expect(rows).toHaveLength(1);
         expect(rows[0].sectionId).toBe(1);
+    });
+});
+
+describe('alloc bytes', () => {
+    /** [sectionId, parentIndex, durUs, allocBytes] */
+    function allocTree(rows: [number, number, number, number][]): TreeNode[] {
+        return rows.map(([sectionId, parentIndex, durUs, allocBytes], i) => ({
+            sectionId,
+            nodeId: i + 1,
+            parentIndex,
+            depth: 0,
+            startUs: 0,
+            durUs,
+            endUs: durUs,
+            allocBytes,
+        }));
+    }
+
+    it('subtracts direct children the same way self time does', () => {
+        const nodes = allocTree([
+            [10, NO_PARENT, 1000, 4096],
+            [20, 0, 400, 1024],
+        ]);
+        expect(selfAllocBytes(nodes)).toEqual([3072, 1024]);
+    });
+
+    it('clamps a child that claims more bytes than its parent', () => {
+        const nodes = allocTree([
+            [10, NO_PARENT, 1000, 100],
+            [20, 0, 400, 500],
+        ]);
+        expect(selfAllocBytes(nodes)).toEqual([0, 500]);
+    });
+
+    it('treats a node with no allocBytes as zero', () => {
+        const nodes = tree([
+            [10, NO_PARENT, 0, 1000],
+            [20, 0, 0, 400],
+        ]);
+        expect(selfAllocBytes(nodes)).toEqual([0, 0]);
+    });
+
+    it('rolls total and self bytes into the row', () => {
+        const nodes = allocTree([
+            [10, NO_PARENT, 1000, 4096],
+            [20, 0, 400, 1024],
+        ]);
+        const rows = buildTreeRows(nodes, opts({ expanded: new Set([rowKey(ROOT_KEY, 10)]) }));
+
+        const root = rows.find((r) => r.sectionId === 10)!;
+        const child = rows.find((r) => r.sectionId === 20)!;
+        expect(root.allocBytes).toBe(4096);
+        expect(root.selfAllocBytes).toBe(3072);
+        expect(child.allocBytes).toBe(1024);
+        expect(child.selfAllocBytes).toBe(1024);
+    });
+
+    it('sorts rows by bytes, which is what the alloc tab asks for', () => {
+        const nodes = allocTree([
+            [10, NO_PARENT, 1000, 8],
+            [20, NO_PARENT, 10, 4096],
+        ]);
+        const rows = buildTreeRows(nodes, opts({ sortColumn: 'alloc' }));
+        expect(rows.map((r) => r.sectionId)).toEqual([20, 10]);
+    });
+
+    it('gives the inverted view self bytes as its total', () => {
+        const nodes = allocTree([
+            [10, NO_PARENT, 1000, 4096],
+            [20, 0, 400, 1024],
+        ]);
+        const rows = buildInvertedRows(nodes, opts({ sortColumn: 'alloc' }));
+        expect(rows.map((r) => [r.sectionId, r.allocBytes])).toEqual([
+            [10, 3072],
+            [20, 1024],
+        ]);
     });
 });

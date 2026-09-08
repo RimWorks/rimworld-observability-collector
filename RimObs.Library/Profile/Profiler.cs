@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using RimWorks.RimObs.Observers;
 
 namespace RimWorks.RimObs.Profile;
 
@@ -34,6 +35,9 @@ public static class Profiler {
     [ThreadStatic]
     private static int s_NextNodeId;
 
+    [ThreadStatic]
+    private static long[]? s_AllocStack;
+
     internal static void SetSink(ISampleSink? sink) => Sink = sink;
 
     internal static void SetEnabled(bool enabled) => Enabled = enabled;
@@ -64,9 +68,11 @@ public static class Profiler {
             nodes = s_NodeStack = new int[MaxStackDepth];
             s_ThreadBlock = (Interlocked.Increment(ref s_NextThreadBlock) & 0xFF) << 24;
         }
+        long[] allocs = s_AllocStack ??= new long[MaxStackDepth];
         if (depth < MaxStackDepth) {
             s_NextNodeId = (s_NextNodeId + 1) & NodeIdCounterMask;
             nodes[depth] = s_ThreadBlock | s_NextNodeId;
+            allocs[depth] = AllocationHook.t_Bytes;
         }
 
         return Stopwatch.GetTimestamp();
@@ -83,6 +89,7 @@ public static class Profiler {
         int parentId = NoParent;
         int nodeId = NoParent;
         int parentNodeId = NoParent;
+        long allocBytes = 0L;
         if (depth > 0) {
             depth--;
             s_Depth = depth;
@@ -96,10 +103,14 @@ public static class Profiler {
                 if (depth > 0)
                     parentNodeId = nodes[depth - 1];
             }
+
+            long[]? allocs = s_AllocStack;
+            if (allocs != null && depth < MaxStackDepth)
+                allocBytes = AllocationHook.t_Bytes - allocs[depth];
         }
 
         ISampleSink? sink = Sink;
         if (sink != null)
-            sink.RecordSection(sectionId, parentId, nodeId, parentNodeId, token, elapsed);
+            sink.RecordSection(sectionId, parentId, nodeId, parentNodeId, token, elapsed, allocBytes);
     }
 }

@@ -14,4 +14,6 @@ public sealed class SectionBatch {
     public int[] NodeIds { get; set; } = [];
 
     public int[] ParentNodeIds { get; set; } = [];
+
+    public long[] AllocBytes { get; set; } = [];
 }

@@ -179,7 +179,7 @@ public sealed class ObsRegistrationTests : IDisposable {
     private sealed class RecordingSink : ISampleSink {
         public int Count;
 
-        public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
+        public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, long allocBytes) {
             Count++;
         }
     }

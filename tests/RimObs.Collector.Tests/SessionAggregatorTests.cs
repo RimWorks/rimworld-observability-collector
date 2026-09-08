@@ -19,6 +19,72 @@ public sealed class SessionAggregatorTests {
     }
 
     [Fact]
+    public void OnSectionBatch_sums_alloc_bytes_into_section_and_edge_stats() {
+        SessionAggregator agg = new();
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [5, 5],
+            ElapsedTicks = [100L, 200L],
+            StartTimestamps = [10L, 20L],
+            ParentIds = [-1, -1],
+            FrameOrdinals = [1, 1],
+            NodeIds = [1, 2],
+            ParentNodeIds = [-1, -1],
+            AllocBytes = [64L, 128L],
+        });
+
+        agg.FindSection(5)!.TotalAllocBytes.Should().Be(192);
+        agg.SnapshotCallEdges().Single(e => e.SectionId == 5).TotalAllocBytes.Should().Be(192);
+    }
+
+    [Fact]
+    public void OnSectionBatch_from_a_producer_without_alloc_bytes_records_zero() {
+        SessionAggregator agg = new();
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [6],
+            ElapsedTicks = [100L],
+            StartTimestamps = [10L],
+            ParentIds = [-1],
+            FrameOrdinals = [1],
+            NodeIds = [1],
+            ParentNodeIds = [-1],
+        });
+
+        agg.FindSection(6)!.TotalAllocBytes.Should().Be(0);
+        agg.FindSection(6)!.TotalElapsedTicks.Should().Be(100);
+    }
+
+    [Fact]
+    public void OnSectionBatch_carries_alloc_bytes_onto_the_frame_node() {
+        SessionAggregator agg = new();
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [7],
+            ElapsedTicks = [100L],
+            StartTimestamps = [10L],
+            ParentIds = [-1],
+            FrameOrdinals = [1],
+            NodeIds = [1],
+            ParentNodeIds = [-1],
+            AllocBytes = [512L],
+        });
+        // a frame seals when the next ordinal arrives.
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [7],
+            ElapsedTicks = [100L],
+            StartTimestamps = [400L],
+            ParentIds = [-1],
+            FrameOrdinals = [2],
+            NodeIds = [2],
+            ParentNodeIds = [-1],
+            AllocBytes = [0L],
+        });
+
+        agg.Frames.FindByOrdinal(1)!.NodeAllocBytes.Should().Equal(512L);
+    }
+
+    [Fact]
     public void OnSessionMeta_stores_meta() {
         SessionAggregator agg = new();
         SessionMeta meta = new() {

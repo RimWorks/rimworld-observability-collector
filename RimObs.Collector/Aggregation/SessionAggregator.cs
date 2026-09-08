@@ -205,14 +205,17 @@ public sealed class SessionAggregator {
         int ordinalLen = batch.FrameOrdinals.Length;
         int nodeIdLen = batch.NodeIds.Length;
         int parentNodeIdLen = batch.ParentNodeIds.Length;
+        int allocLen = batch.AllocBytes.Length;
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
             long elapsed = batch.ElapsedTicks[i];
             long start = batch.StartTimestamps[i];
+            long allocBytes = i < allocLen ? batch.AllocBytes[i] : 0L;
             SectionStats stats = _sections.GetOrAdd(id, key => new SectionStats { SectionId = key });
             Interlocked.Increment(ref stats.SampleCount);
             Interlocked.Add(ref stats.TotalElapsedTicks, elapsed);
+            Interlocked.Add(ref stats.TotalAllocBytes, allocBytes);
             stats.LastStartTimestamp = start;
             UpdateMin(ref stats.MinElapsedTicks, elapsed);
             UpdateMax(ref stats.MaxElapsedTicks, elapsed);
@@ -223,9 +226,10 @@ public sealed class SessionAggregator {
             CallEdgeStats edge = _callEdges.GetOrAdd(edgeKey, _ => new CallEdgeStats { ParentId = parentId, SectionId = id });
             Interlocked.Increment(ref edge.CallCount);
             Interlocked.Add(ref edge.TotalElapsedTicks, elapsed);
+            Interlocked.Add(ref edge.TotalAllocBytes, allocBytes);
             int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
             int parentNodeId = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNodeId, start, elapsed);
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNodeId, start, elapsed, allocBytes);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);

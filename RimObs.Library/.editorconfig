@@ -38,3 +38,7 @@ dotnet_diagnostic.S2094.severity = none
 # specific workshop items, not configurable endpoints.
 [Patching/MissingBackendNotice.cs]
 dotnet_diagnostic.S1075.severity = none
+
+[Observers/AllocationHook.cs]
+# mono keeps the raw function pointer, so the delegate field has to outlive TryEnable.
+dotnet_diagnostic.S1450.severity = none

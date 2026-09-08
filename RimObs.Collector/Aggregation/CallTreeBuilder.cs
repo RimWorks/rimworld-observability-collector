@@ -79,6 +79,7 @@ public static class CallTreeBuilder {
                         : null,
                 CallCount = edge.CallCount,
                 TotalNs = (long)(edge.TotalElapsedTicks * ctx.NsPerTick),
+                AllocBytes = edge.TotalAllocBytes,
             };
 
             bool canDescend = depth + 1 < ctx.DepthCap && !path.Contains(edge.SectionId);
@@ -94,15 +95,18 @@ public static class CallTreeBuilder {
         if (ordered.Count > ctx.TopN) {
             long otherCalls = 0;
             long otherTicks = 0;
+            long otherBytes = 0;
             for (int i = ctx.TopN; i < ordered.Count; i++) {
                 otherCalls += ordered[i].CallCount;
                 otherTicks += ordered[i].TotalElapsedTicks;
+                otherBytes += ordered[i].TotalAllocBytes;
             }
             result.Add(new CallTreeNode {
                 SectionId = OtherSectionId,
                 Name = "(other)",
                 CallCount = otherCalls,
                 TotalNs = (long)(otherTicks * ctx.NsPerTick),
+                AllocBytes = otherBytes,
                 IsOther = true,
             });
         }

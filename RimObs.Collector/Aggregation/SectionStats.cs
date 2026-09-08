@@ -6,6 +6,7 @@ public sealed class SectionStats {
     public string? Subsystem { get; set; }
     public long SampleCount;
     public long TotalElapsedTicks;
+    public long TotalAllocBytes;
     public long MinElapsedTicks = long.MaxValue;
     public long MaxElapsedTicks;
     public long LastStartTimestamp;

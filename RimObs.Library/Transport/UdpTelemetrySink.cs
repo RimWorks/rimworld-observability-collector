@@ -84,8 +84,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks) {
-        _ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, FrameTickCounters.FrameOrdinal);
+    public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, long allocBytes) {
+        _ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, FrameTickCounters.FrameOrdinal, allocBytes);
     }
 
     public void RecordGcEvent(in GcEventSample sample) => _gcQueue.TryEnqueue(sample);
@@ -280,6 +280,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 FrameOrdinals = Slice(_batch.FrameOrdinals, n),
                 NodeIds = Slice(_batch.NodeIds, n),
                 ParentNodeIds = Slice(_batch.ParentNodeIds, n),
+                AllocBytes = Slice(_batch.AllocBytes, n),
             };
             SendBatch(BatchType.Sections, batch);
             Interlocked.Add(ref _sent, n);

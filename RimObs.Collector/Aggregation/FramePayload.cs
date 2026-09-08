@@ -26,6 +26,7 @@ public static class FramePayload {
                 parent_node_ids = frame.ParentNodeIds,
                 start_us = startUs,
                 dur_us = durUs,
+                alloc_bytes = frame.NodeAllocBytes,
             },
         };
     }

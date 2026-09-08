@@ -9,7 +9,7 @@
         type TableRow,
     } from '../frameTable';
     import type { TreeNode } from '../frameTree';
-    import { ns } from '../format';
+    import { ns, bytes } from '../format';
     import { api, type SectionTimeseriesResponse } from '../api';
     import LineChart from './LineChart.svelte';
     import { deltaSeverity } from '../frameCost';
@@ -132,6 +132,17 @@
         else expanded.add(row.key);
     }
 
+    // the alloc tab is the same tree, ordered by bytes. one table, one code path.
+    function selectTab(id: (typeof TABS)[number]['id']): void {
+        activeTab = id;
+        if (id === 'alloc') {
+            sortColumn = 'alloc';
+            ascending = false;
+        } else if (id === 'tree' && sortColumn === 'alloc') {
+            sortColumn = 'total';
+        }
+    }
+
     function sortBy(column: SortColumn): void {
         if (sortColumn === column) ascending = !ascending;
         else {
@@ -183,7 +194,7 @@
                 type="button"
                 class="tab"
                 class:on={activeTab === tab.id}
-                onclick={() => (activeTab = tab.id)}
+                onclick={() => selectTab(tab.id)}
                 data-testid="tab-{tab.id}">{t(tab.label)}</button
             >
         {/each}
@@ -233,7 +244,7 @@
                 }}
             />
         {/if}
-    {:else if activeTab !== 'tree'}
+    {:else if activeTab !== 'tree' && activeTab !== 'alloc'}
         <p class="empty" data-testid="tab-soon">{t('tree.soon')}</p>
     {:else if rows.length === 0}
         <p class="empty" data-testid="tree-empty">{t('tree.empty')}</p>
@@ -283,7 +294,15 @@
                         <th class="num">{t('tree.col.p95')}</th>
                         <th class="num">{t('tree.col.p99')}</th>
                     {/if}
-                    <th class="num">{t('tree.col.alloc')}</th>
+                    <th class="num">
+                        <button
+                            type="button"
+                            onclick={() => sortBy('alloc')}
+                            data-testid="sort-alloc"
+                        >
+                            {t('tree.col.alloc')}{arrow('alloc')}
+                        </button>
+                    </th>
                     <th class="name">
                         <button type="button" onclick={() => sortBy('label')}>
                             {t('tree.col.label')}{arrow('label')}
@@ -309,7 +328,9 @@
                             <td class="num">{p ? ns(p.p95Us * 1000) : ''}</td>
                             <td class="num">{p ? ns(p.p99Us * 1000) : ''}</td>
                         {/if}
-                        <td class="num dim">&mdash;</td>
+                        <td class="num" class:dim={row.allocBytes === 0} data-testid="tree-alloc">
+                            {row.allocBytes > 0 ? bytes(row.allocBytes) : '—'}
+                        </td>
                         <td class="name" style="padding-left:{row.depth * 14 + 4}px">
                             {#if row.hasChildren}
                                 <button

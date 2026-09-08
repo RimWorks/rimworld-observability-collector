@@ -12,7 +12,8 @@ public sealed record FrameSnapshot(
     int[] NodeIds,
     int[] ParentNodeIds,
     long[] NodeStartTicks,
-    long[] NodeElapsedTicks) {
+    long[] NodeElapsedTicks,
+    long[] NodeAllocBytes) {
     public int NodeCount => SectionIds.Length;
 
     public long DurationTicks => EndTicks - StartTicks;
@@ -44,6 +45,7 @@ public sealed class FrameRing {
     private readonly List<int> _openParentNodeIds = [];
     private readonly List<long> _openStartTicks = [];
     private readonly List<long> _openElapsedTicks = [];
+    private readonly List<long> _openAllocBytes = [];
     private int _next;
     private int _count;
     private int _openOrdinal = -1;
@@ -84,7 +86,7 @@ public sealed class FrameRing {
         }
     }
 
-    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks) {
+    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L) {
         lock (_gate) {
             if (frameOrdinal <= 0) {
                 _preFrameSamples++;
@@ -104,6 +106,7 @@ public sealed class FrameRing {
             _openParentNodeIds.Add(parentNodeId);
             _openStartTicks.Add(startTicks);
             _openElapsedTicks.Add(elapsedTicks);
+            _openAllocBytes.Add(allocBytes);
         }
     }
 
@@ -271,7 +274,8 @@ public sealed class FrameRing {
             [.. _openNodeIds],
             [.. _openParentNodeIds],
             [.. _openStartTicks],
-            [.. _openElapsedTicks]);
+            [.. _openElapsedTicks],
+            [.. _openAllocBytes]);
         _next = (_next + 1) % _buffer.Length;
         if (_count < _buffer.Length)
             _count++;
@@ -285,5 +289,6 @@ public sealed class FrameRing {
         _openParentNodeIds.Clear();
         _openStartTicks.Clear();
         _openElapsedTicks.Clear();
+        _openAllocBytes.Clear();
     }
 }

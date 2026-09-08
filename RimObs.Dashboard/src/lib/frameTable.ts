@@ -1,7 +1,7 @@
 import type { TreeNode } from './frameTree';
 import { NO_PARENT } from './frameTree';
 
-export type SortColumn = 'total' | 'self' | 'calls' | 'label';
+export type SortColumn = 'total' | 'self' | 'calls' | 'label' | 'alloc';
 
 export const ROOT_KEY = '';
 /** Neo shows the parent's own unattributed time as a row. Same idea, same name. */
@@ -13,6 +13,8 @@ export interface TableRow {
     depth: number;
     totalUs: number;
     selfUs: number;
+    allocBytes: number;
+    selfAllocBytes: number;
     calls: number;
     hasChildren: boolean;
     expanded: boolean;
@@ -41,16 +43,25 @@ export function labelFor(
     return names.get(sectionId)?.name ?? `section ${sectionId}`;
 }
 
-/** durUs minus everything its direct children accounted for. */
-export function selfTimes(nodes: readonly TreeNode[]): number[] {
-    const self = nodes.map((n) => n.durUs);
+function subtractChildren(nodes: readonly TreeNode[], of: (n: TreeNode) => number): number[] {
+    const self = nodes.map(of);
     for (let i = 0; i < nodes.length; i++) {
         const p = nodes[i].parentIndex;
-        if (p !== NO_PARENT && p >= 0 && p < self.length) self[p] -= nodes[i].durUs;
+        if (p !== NO_PARENT && p >= 0 && p < self.length) self[p] -= of(nodes[i]);
     }
     // clock skew between a parent and its children can push this a hair below zero.
     for (let i = 0; i < self.length; i++) if (self[i] < 0) self[i] = 0;
     return self;
+}
+
+/** durUs minus everything its direct children accounted for. */
+export function selfTimes(nodes: readonly TreeNode[]): number[] {
+    return subtractChildren(nodes, (n) => n.durUs);
+}
+
+/** the identical subtraction on bytes, so self alloc means what self time means. */
+export function selfAllocBytes(nodes: readonly TreeNode[]): number[] {
+    return subtractChildren(nodes, (n) => n.allocBytes ?? 0);
 }
 
 function childrenOf(nodes: readonly TreeNode[]): number[][] {
@@ -71,6 +82,7 @@ export function compareRows(
 ): number {
     let n: number;
     if (column === 'self') n = a.selfUs - b.selfUs;
+    else if (column === 'alloc') n = a.allocBytes - b.allocBytes;
     else if (column === 'calls') n = a.calls - b.calls;
     else if (column === 'label')
         n = labelFor(a.sectionId, names).localeCompare(labelFor(b.sectionId, names));
@@ -88,6 +100,8 @@ function newRow(key: string, sectionId: number, expanded: ReadonlySet<string>): 
         depth: 0,
         totalUs: 0,
         selfUs: 0,
+        allocBytes: 0,
+        selfAllocBytes: 0,
         calls: 0,
         hasChildren: false,
         expanded: expanded.has(key),
@@ -101,6 +115,7 @@ function aggregateLevel(
     nodes: readonly TreeNode[],
     kids: readonly number[][],
     self: readonly number[],
+    selfAlloc: readonly number[],
     parents: readonly number[],
     parentKey: string,
     parentSectionId: number,
@@ -109,6 +124,7 @@ function aggregateLevel(
     const fold = opts.foldRecursion ?? true;
     const bySection = new Map<number, TableRow>();
     let unattributed = 0;
+    let unattributedBytes = 0;
 
     const visit = (index: number, absorbing: boolean): void => {
         for (const child of kids[index]) {
@@ -117,6 +133,7 @@ function aggregateLevel(
                 const row = bySection.get(sectionId);
                 if (row) {
                     row.selfUs += self[child];
+                    row.selfAllocBytes += selfAlloc[child];
                     row.calls += nodes[child].calls ?? 1;
                     row.nodes.push(child);
                 }
@@ -130,11 +147,16 @@ function aggregateLevel(
             }
             row.totalUs += nodes[child].durUs;
             row.selfUs += self[child];
+            row.allocBytes += nodes[child].allocBytes ?? 0;
+            row.selfAllocBytes += selfAlloc[child];
             row.calls += nodes[child].calls ?? 1;
             row.nodes.push(child);
             if (kids[child].length > 0) row.hasChildren = true;
         }
-        if (!absorbing) unattributed += self[index];
+        if (!absorbing) {
+            unattributed += self[index];
+            unattributedBytes += selfAlloc[index];
+        }
     };
 
     for (const p of parents) visit(p, false);
@@ -144,6 +166,8 @@ function aggregateLevel(
         const row = newRow(rowKey(parentKey, UNPROFILED), UNPROFILED, opts.expanded);
         row.totalUs = unattributed;
         row.selfUs = unattributed;
+        row.allocBytes = unattributedBytes;
+        row.selfAllocBytes = unattributedBytes;
         row.expanded = false;
         rows.push(row);
     }
@@ -160,11 +184,21 @@ export function buildTreeRows(nodes: readonly TreeNode[], opts: TableOptions): T
     if (opts.search?.trim()) opts = { ...opts, expanded: allExpandableKeys(nodes) };
     const kids = childrenOf(nodes);
     const self = selfTimes(nodes);
+    const selfAlloc = selfAllocBytes(nodes);
 
     const out: TableRow[] = [];
     const walk = (parents: number[], parentKey: string, parentSectionId: number, depth: number) => {
         if (depth > 64) return;
-        const level = aggregateLevel(nodes, kids, self, parents, parentKey, parentSectionId, opts);
+        const level = aggregateLevel(
+            nodes,
+            kids,
+            self,
+            selfAlloc,
+            parents,
+            parentKey,
+            parentSectionId,
+            opts,
+        );
         for (const row of level) {
             row.depth = depth;
             out.push(row);
@@ -183,6 +217,8 @@ export function buildTreeRows(nodes: readonly TreeNode[], opts: TableOptions): T
         }
         row.totalUs += nodes[i].durUs;
         row.selfUs += self[i];
+        row.allocBytes += nodes[i].allocBytes ?? 0;
+        row.selfAllocBytes += selfAlloc[i];
         row.calls += nodes[i].calls ?? 1;
         row.nodes.push(i);
         if (kids[i].length > 0) row.hasChildren = true;
@@ -201,6 +237,7 @@ export function buildTreeRows(nodes: readonly TreeNode[], opts: TableOptions): T
 export function buildInvertedRows(nodes: readonly TreeNode[], opts: TableOptions): TableRow[] {
     if (nodes.length === 0) return [];
     const self = selfTimes(nodes);
+    const selfAlloc = selfAllocBytes(nodes);
     const bySection = new Map<number, TableRow>();
     for (let i = 0; i < nodes.length; i++) {
         if (self[i] <= 0) continue;
@@ -212,6 +249,8 @@ export function buildInvertedRows(nodes: readonly TreeNode[], opts: TableOptions
         }
         row.selfUs += self[i];
         row.totalUs += self[i];
+        row.allocBytes += selfAlloc[i];
+        row.selfAllocBytes += selfAlloc[i];
         row.calls += nodes[i].calls ?? 1;
         row.nodes.push(i);
         if (nodes[i].parentIndex !== NO_PARENT) row.hasChildren = true;

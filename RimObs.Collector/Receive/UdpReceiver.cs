@@ -14,6 +14,7 @@ public sealed class UdpReceiver : BackgroundService {
     private readonly ILogger<UdpReceiver> _log;
     private readonly int _port;
     private UdpClient? _client;
+    private int _mismatchedVersion;
 
     public UdpReceiver(SessionAggregator aggregator, SessionMetaRegistry registry, ILogger<UdpReceiver> log, int port = 17654) {
         _aggregator = aggregator;
@@ -71,7 +72,14 @@ public sealed class UdpReceiver : BackgroundService {
         }
 
         if (envelope.SchemaVersion != SchemaVersion.Current) {
-            _log.LogWarning("Dropping batch with schema_version={Version} (expected {Expected})", envelope.SchemaVersion, SchemaVersion.Current);
+            // every batch is dropped, so say it loudly once per version instead of 10x a second.
+            if (Interlocked.Exchange(ref _mismatchedVersion, envelope.SchemaVersion) != envelope.SchemaVersion) {
+                _log.LogError(
+                    "Dropping every batch: the game library speaks schema_version={Version}, this collector speaks {Expected}. "
+                        + "They ship together, so rebuild and redeploy both with `make build`.",
+                    envelope.SchemaVersion,
+                    SchemaVersion.Current);
+            }
             return null;
         }
 

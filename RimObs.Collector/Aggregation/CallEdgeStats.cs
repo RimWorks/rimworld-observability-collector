@@ -5,4 +5,5 @@ public sealed class CallEdgeStats {
     public int SectionId { get; init; }
     public long CallCount;
     public long TotalElapsedTicks;
+    public long TotalAllocBytes;
 }
