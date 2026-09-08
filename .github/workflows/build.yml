@@ -36,7 +36,8 @@ jobs:
           (Get-Content coverage\lcov.info) -replace '^SF:', 'SF:RimObs.Dashboard/' | Set-Content coverage\lcov.info
 
       # analyzer-severity stays off until the 25 S1481 warnings in the test projects are cleared.
-      - uses: RimWorks/mod-ci/.github/actions/dotnet-sonar@5698991b43ade4de809d49d9695ac88e0895b298 # v1.2.1
+      # The benchmarks read ~4x slow under coverlet, so ci.yml runs them in its own uninstrumented pass.
+      - uses: RimWorks/mod-ci/.github/actions/dotnet-sonar@2a8b2eb8444b7234f83da46d4c9c1cfe50ccea0f
         with:
           solution: RimObs.slnx
           project-key: RimWorks_rimworld-observability-collector
@@ -45,6 +46,7 @@ jobs:
             8.0.x
             10.0.x
           analyzer-severity: none
+          test-filter: Category!=Benchmark
           exclusions: RimObs.Dashboard/scripts/**,RimObs.Dashboard/dist/**
           coverage-exclusions: "**/*.test.*,**/*.spec.*,RimObs.Dashboard/src/report/**"
           extra-begin-args: /d:sonar.javascript.lcov.reportPaths=RimObs.Dashboard/coverage/lcov.info
