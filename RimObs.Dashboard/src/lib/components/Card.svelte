@@ -15,9 +15,8 @@
 <style>
     .card {
         background: var(--bg-surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--r-lg);
-        box-shadow: var(--shadow-card);
+        border-top: 1px solid var(--border-soft);
+        border-bottom: 1px solid var(--border-soft);
         overflow: hidden;
     }
     header {

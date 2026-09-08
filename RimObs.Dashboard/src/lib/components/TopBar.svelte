@@ -7,6 +7,7 @@
 
     let { status }: { status: StatusResponse | null } = $props();
 
+    let what = $derived(t(`nav.${router.current}.what`, ''));
     let online = $derived(status?.status === 'running');
     let connected = $derived(!!status?.session);
 </script>
@@ -14,6 +15,7 @@
 <header class="topbar">
     <div class="crumbs">
         <h1>{t(`nav.${router.current}`, router.route.title)}</h1>
+        {#if what}<p class="what">{what}</p>{/if}
     </div>
 
     <div class="right">
@@ -55,6 +57,21 @@
         position: sticky;
         top: 0;
         z-index: 5;
+    }
+    .crumbs {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+    }
+    .what {
+        margin: 0;
+        font-size: 0.76rem;
+        line-height: 1.3;
+        color: var(--text-faint);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     h1 {
         font-size: 1.15rem;

@@ -136,7 +136,8 @@
 
 <style>
     .hint {
-        margin: 0 0 var(--s-2);
+        margin: 0;
+        padding: var(--s-3) var(--rail) 0;
         font-size: 0.78rem;
         color: var(--text-faint);
     }
@@ -150,7 +151,7 @@
         grid-template-columns: minmax(0, 2.4fr) repeat(6, minmax(64px, 0.7fr));
         gap: var(--s-3);
         align-items: center;
-        padding: var(--s-2) var(--s-4);
+        padding: var(--s-2) var(--rail);
     }
     .head {
         font-size: 0.72rem;
@@ -227,7 +228,7 @@
         border-radius: 99px;
     }
     .trend {
-        padding: var(--s-3) var(--s-4) var(--s-4);
+        padding: var(--s-3) var(--rail) var(--s-4);
         border-bottom: 1px solid var(--border-soft);
         background: var(--bg-surface);
     }

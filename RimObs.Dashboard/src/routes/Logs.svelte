@@ -65,7 +65,7 @@
     .filters {
         display: flex;
         gap: var(--s-2);
-        margin-bottom: var(--s-3);
+        padding: var(--s-3) var(--rail);
     }
     .chip {
         background: var(--bg-surface);
@@ -96,7 +96,7 @@
         display: grid;
         grid-template-columns: 72px 90px 1fr;
         gap: var(--s-3);
-        padding: var(--s-2) var(--s-2);
+        padding: var(--s-2) var(--rail);
         border-bottom: 1px solid var(--border-soft);
         align-items: baseline;
     }

@@ -364,6 +364,7 @@
         display: flex;
         flex-direction: column;
         gap: var(--s-4);
+        padding: var(--s-5) var(--rail);
     }
     .picker {
         display: flex;

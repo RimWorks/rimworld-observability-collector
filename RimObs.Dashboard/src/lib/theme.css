@@ -61,6 +61,11 @@
     --s-6: 2rem;
     --s-7: 3rem;
 
+    /* the single left rail every page aligns to, matching the profiler comp's 12px rows */
+    --rail: 12px;
+    /* label/value and form surfaces cap here so a label stays coupled to its value */
+    --measure: 900px;
+
     --sb-w: 232px;
     --topbar-h: 58px;
     --sb-w-rail: 58px;

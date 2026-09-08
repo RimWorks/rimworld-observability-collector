@@ -104,12 +104,18 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
         gap: var(--s-4);
-        margin-bottom: var(--s-4);
+        padding: var(--s-4) var(--rail);
     }
     .row {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: var(--s-4);
+        padding: 0 var(--rail) var(--s-4);
+    }
+    .row :global(.card) {
+        border: 1px solid var(--border-soft);
+        border-radius: var(--r-lg);
+        box-shadow: var(--shadow-card);
     }
     dl {
         margin: 0;

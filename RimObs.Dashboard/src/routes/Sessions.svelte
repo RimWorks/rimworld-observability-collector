@@ -157,6 +157,9 @@
 </DataState>
 
 <style>
+    :global(.card) {
+        margin-top: var(--s-4);
+    }
     .grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -193,7 +196,7 @@
         grid-template-columns: minmax(0, 2fr) repeat(3, minmax(96px, 1fr)) auto;
         gap: var(--s-3);
         align-items: center;
-        padding: var(--s-2) var(--s-2);
+        padding: var(--s-2) var(--rail);
         min-width: 480px;
     }
     .head {

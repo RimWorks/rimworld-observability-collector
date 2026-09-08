@@ -188,7 +188,8 @@
         justify-content: space-between;
         align-items: flex-start;
         gap: var(--s-4);
-        margin-bottom: var(--s-4);
+        padding: var(--s-4) var(--rail) var(--s-3);
+        border-bottom: 1px solid var(--border-soft);
     }
     .bar-text h2 {
         margin: 0;
@@ -229,12 +230,14 @@
     .action-error {
         color: var(--bad);
         font-size: 0.82rem;
-        margin: 0 0 var(--s-3);
+        margin: 0;
+        padding: 0 var(--rail) var(--s-3);
     }
     .layout {
         display: grid;
-        grid-template-columns: minmax(220px, 320px) 1fr;
+        grid-template-columns: minmax(240px, 340px) 1fr;
         gap: var(--s-4);
+        padding: var(--s-4) var(--rail);
     }
     .list {
         list-style: none;

@@ -51,7 +51,11 @@
         flex-direction: column;
         align-items: center;
         gap: var(--s-2);
-        padding: var(--s-7) var(--s-4);
+        margin: var(--s-5) var(--rail);
+        padding: var(--s-6) var(--s-4);
+        max-width: var(--measure);
+        border: 1px solid var(--border-soft);
+        background: var(--bg-surface);
         color: var(--text-dim);
         text-align: center;
     }

@@ -104,6 +104,7 @@
     .tabs button {
         background: none;
         border: none;
+        border-radius: 0;
         padding: 0.5rem 1rem;
         cursor: pointer;
         border-bottom: 2px solid transparent;

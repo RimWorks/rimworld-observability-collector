@@ -274,6 +274,7 @@
     .page {
         display: grid;
         gap: var(--s-5);
+        padding: var(--s-5) var(--rail);
     }
     .intro h1 {
         font-size: 1.4rem;

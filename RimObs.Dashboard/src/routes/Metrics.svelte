@@ -55,6 +55,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: var(--s-4);
+        padding: var(--s-4) var(--rail);
     }
     .metric {
         border: 1px solid var(--border-soft);

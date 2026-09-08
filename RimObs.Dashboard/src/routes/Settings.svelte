@@ -116,6 +116,12 @@
 </Card>
 
 <style>
+    :global(.card) {
+        max-width: var(--measure);
+        margin: var(--s-4) var(--rail) 0;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--r-md);
+    }
     .rows {
         display: flex;
         flex-direction: column;

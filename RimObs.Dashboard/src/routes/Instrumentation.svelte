@@ -73,78 +73,120 @@
 {#if unavailable}
     <p class="unavailable">{t('instrumentation.unavailable')}</p>
 {:else}
-    <div class="search">
-        <input
-            type="search"
-            placeholder={t('instrumentation.search.placeholder')}
-            aria-label={t('instrumentation.search.placeholder')}
-            value={query}
-            oninput={onInput}
-        />
-        <span class="dim" role="status" aria-live="polite">
-            {#if searchLoading}…{/if}
-        </span>
+    <div class="work">
+        <section class="pane">
+            <header class="pane-head">
+                <h2>{t('instrumentation.search.title')}</h2>
+                <span class="dim" role="status" aria-live="polite">
+                    {#if searchLoading}{t('status.loading')}{/if}
+                </span>
+            </header>
+            <div class="search">
+                <input
+                    type="search"
+                    placeholder={t('instrumentation.search.placeholder')}
+                    aria-label={t('instrumentation.search.placeholder')}
+                    value={query}
+                    oninput={onInput}
+                />
+            </div>
+
+            {#if searchResults.length > 0}
+                <ul class="rows">
+                    {#each searchResults as m (m.signature + m.assemblyName)}
+                        <li>
+                            <span class="mono sig">{m.signature}</span>
+                            <span class="dim asm">{m.assemblyName}</span>
+                            <button onclick={() => instrument(m)}
+                                >{t('instrumentation.results.button')}</button
+                            >
+                        </li>
+                    {/each}
+                </ul>
+            {:else if query.trim() && !searchLoading}
+                <p class="blank">{t('instrumentation.search.noresults')}</p>
+            {:else if !query.trim()}
+                <p class="blank">{t('instrumentation.search.empty')}</p>
+            {/if}
+        </section>
+
+        <section class="pane">
+            <header class="pane-head">
+                <h2>{t('instrumentation.active.title')}</h2>
+                <span class="count mono">{active.length}</span>
+            </header>
+            {#if active.length === 0}
+                <p class="blank">{t('instrumentation.active.empty')}</p>
+            {:else}
+                <ul class="rows">
+                    {#each active as p (p.id)}
+                        <li>
+                            <span class="mono sig"
+                                >{p.typeFullName}.{p.methodName}({p.paramTypesJoined})</span
+                            >
+                            <Tooltip text={t(`tip.instrumentation.${p.lastStatus}`)}>
+                                <span class="pill pill-{p.lastStatus}"
+                                    >{t(`instrumentation.status.${p.lastStatus}`)}</span
+                                >
+                            </Tooltip>
+                            <button onclick={() => remove(p.id)}
+                                >{t('instrumentation.remove')}</button
+                            >
+                            {#if p.lastError}
+                                <span class="dim mono err">{p.lastError}</span>
+                            {/if}
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
+        </section>
     </div>
-
-    {#if !query.trim() && searchResults.length === 0}
-        <p class="empty dim">{t('instrumentation.search.empty')}</p>
-    {/if}
-
-    {#if query.trim() && searchResults.length === 0 && !searchLoading}
-        <p class="empty dim">{t('instrumentation.search.noresults')}</p>
-    {/if}
-
-    {#if searchResults.length > 0}
-        <ul class="results">
-            {#each searchResults as m (m.signature + m.assemblyName)}
-                <li>
-                    <span class="mono sig">{m.signature}</span>
-                    <span class="dim asm">{m.assemblyName}</span>
-                    <button onclick={() => instrument(m)}
-                        >{t('instrumentation.results.button')}</button
-                    >
-                </li>
-            {/each}
-        </ul>
-    {/if}
-
-    <h2>{t('instrumentation.active.title')}</h2>
-    {#if active.length === 0}
-        <p class="empty dim">{t('instrumentation.active.empty')}</p>
-    {:else}
-        <ul class="active">
-            {#each active as p (p.id)}
-                <li>
-                    <span class="mono sig"
-                        >{p.typeFullName}.{p.methodName}({p.paramTypesJoined})</span
-                    >
-                    <Tooltip text={t(`tip.instrumentation.${p.lastStatus}`)}>
-                        <span class="pill pill-{p.lastStatus}"
-                            >{t(`instrumentation.status.${p.lastStatus}`)}</span
-                        >
-                    </Tooltip>
-                    <button onclick={() => remove(p.id)}>{t('instrumentation.remove')}</button>
-                    {#if p.lastError}
-                        <span class="dim mono err">{p.lastError}</span>
-                    {/if}
-                </li>
-            {/each}
-        </ul>
-    {/if}
 {/if}
 
 <style>
-    .search {
+    .work {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        min-height: calc(100vh - var(--topbar-h));
+    }
+    .pane {
+        min-width: 0;
+    }
+    .pane + .pane {
+        border-left: 1px solid var(--border);
+    }
+    .pane-head {
         display: flex;
+        align-items: baseline;
         gap: var(--s-2);
-        align-items: center;
-        margin-bottom: var(--s-3);
+        padding: var(--s-3) var(--rail);
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-surface);
+    }
+    .pane-head h2 {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-dim);
+    }
+    .count {
+        margin-left: auto;
+        font-size: 0.78rem;
+        color: var(--text-faint);
+    }
+    .dim {
+        color: var(--text-faint);
+        font-size: 0.78rem;
+    }
+    .search {
+        padding: var(--s-2) var(--rail);
+        border-bottom: 1px solid var(--border-soft);
     }
     .search input {
-        flex: 1;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--r-md);
+        width: 100%;
+        background: var(--bg-void);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
         color: var(--text);
         font-family: var(--font-ui);
         font-size: 0.85rem;
@@ -154,100 +196,102 @@
     .search input::placeholder {
         color: var(--text-faint);
     }
-    .search input:hover {
-        border-color: var(--border);
+    .search input:hover,
+    .search input:focus {
+        border-color: var(--border-strong);
+    }
+    .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .rows li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--rail);
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .rows li:hover {
+        background: var(--bg-surface);
+    }
+    .sig {
+        font-size: 0.8rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .asm {
+        font-size: 0.72rem;
+        white-space: nowrap;
+    }
+    .err {
+        grid-column: 1 / -1;
+        font-size: 0.72rem;
+        color: var(--bad);
+    }
+    .blank {
+        margin: var(--s-4) var(--rail);
+        padding: var(--s-5) var(--s-4);
+        border: 1px solid var(--border-soft);
+        background: var(--bg-surface);
+        color: var(--text-faint);
+        font-size: 0.84rem;
+        text-align: center;
+    }
+    .unavailable {
+        margin: var(--s-5) var(--rail);
+        padding: var(--s-5) var(--s-4);
+        max-width: var(--measure);
+        border: 1px solid var(--border-soft);
+        background: var(--bg-surface);
+        color: var(--text-dim);
     }
     button {
         background: var(--bg-elev);
         color: var(--text);
         border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        padding: var(--s-1) var(--s-4);
+        border-radius: var(--r-sm);
+        padding: 3px 10px;
         font-family: var(--font-ui);
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         cursor: pointer;
         white-space: nowrap;
-        transition:
-            border-color var(--t-fast) var(--ease-out),
-            color var(--t-fast) var(--ease-out);
+        transition: border-color var(--t-fast) var(--ease-out);
     }
     button:hover {
         border-color: var(--cyan);
     }
-    .results button {
-        background: color-mix(in srgb, var(--cyan) 14%, var(--bg-elev));
-        border-color: var(--border-strong);
-        color: var(--cyan-soft);
-    }
-    .results button:hover {
-        border-color: var(--cyan);
-    }
-    .active button:hover {
-        border-color: var(--bad);
-        color: var(--bad);
-    }
-    .results,
-    .active {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-    }
-    .results li,
-    .active li {
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        gap: var(--s-2);
-        align-items: center;
-        padding: var(--s-2) var(--s-1);
-        border-bottom: 1px solid var(--border-soft);
-        animation: row-in var(--t-base) var(--ease-out);
-    }
-    h2 {
-        margin: var(--s-4) 0 var(--s-2);
-        font-size: 0.95rem;
-    }
-    .dim {
-        color: var(--text-dim);
-    }
     .pill {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
         padding: var(--s-0) var(--s-2);
         border-radius: 99px;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-soft);
-        align-self: center;
+        border: 1px solid var(--border);
+        white-space: nowrap;
     }
     .pill-active {
         color: var(--good);
-    }
-    .pill-stale {
-        color: var(--warn);
+        border-color: color-mix(in srgb, var(--good) 45%, transparent);
     }
     .pill-pending {
-        color: var(--text-faint);
+        color: var(--warn);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
     }
-    .empty {
-        padding: var(--s-2) 0;
-    }
-    .unavailable {
-        padding: var(--s-4);
-        color: var(--text-faint);
-    }
-    .active .err {
-        grid-column: 1 / -1;
+    .pill-stale {
         color: var(--bad);
-        font-size: 0.78rem;
-        overflow-wrap: anywhere;
+        border-color: color-mix(in srgb, var(--bad) 45%, transparent);
     }
-    @media (max-width: 820px) {
-        .results li,
-        .active li {
-            grid-template-columns: 1fr auto;
+
+    @media (max-width: 1000px) {
+        .work {
+            grid-template-columns: 1fr;
         }
-        .active li :global(.tip) {
-            grid-column: 1;
+        .pane + .pane {
+            border-left: 0;
+            border-top: 1px solid var(--border);
         }
     }
 </style>

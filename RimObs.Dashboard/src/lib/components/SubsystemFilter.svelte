@@ -82,6 +82,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: var(--s-2);
+        padding: var(--s-3) var(--rail);
     }
     .chip {
         padding: var(--s-1) var(--s-3);

@@ -9,8 +9,6 @@
     import Overview from './routes/Overview.svelte';
     import Hotspots from './routes/Hotspots.svelte';
     import Instrumentation from './routes/Instrumentation.svelte';
-    import Sections from './routes/Sections.svelte';
-    import CallTree from './routes/CallTree.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import Captures from './routes/Captures.svelte';
     import Memory from './routes/Memory.svelte';
@@ -64,10 +62,6 @@
                     <Hotspots />
                 {:else if route.id === 'instrumentation'}
                     <Instrumentation />
-                {:else if route.id === 'sections'}
-                    <Sections />
-                {:else if route.id === 'calltree'}
-                    <CallTree />
                 {:else if route.id === 'flamegraph'}
                     <Flamegraph />
                 {:else if route.id === 'captures'}
@@ -108,16 +102,5 @@
     .main {
         grid-area: main;
         overflow-y: auto;
-        padding: var(--s-5) var(--s-6) var(--s-7);
-    }
-    .view {
-        max-width: 1320px;
-        margin: 0 auto;
-    }
-
-    @media (max-width: 820px) {
-        .main {
-            padding: var(--s-4) var(--s-3) var(--s-6);
-        }
     }
 </style>

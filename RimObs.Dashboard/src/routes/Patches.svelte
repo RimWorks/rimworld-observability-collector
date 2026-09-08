@@ -80,7 +80,8 @@
     .intro {
         color: var(--text-dim);
         font-size: 0.85rem;
-        margin: 0 0 var(--s-4);
+        margin: 0;
+        padding: var(--s-4) var(--rail);
         max-width: 70ch;
         line-height: 1.5;
     }
@@ -90,8 +91,8 @@
         gap: var(--s-4);
     }
     .group {
-        border: 1px solid var(--border-soft);
-        border-radius: var(--r-lg);
+        border-top: 1px solid var(--border-soft);
+        border-bottom: 1px solid var(--border-soft);
         background: var(--bg-surface);
         overflow: hidden;
     }
@@ -100,7 +101,7 @@
         align-items: baseline;
         gap: var(--s-2);
         flex-wrap: wrap;
-        padding: var(--s-3) var(--s-4);
+        padding: var(--s-3) var(--rail);
         border-bottom: 1px solid var(--border-soft);
     }
     .label {
@@ -130,7 +131,7 @@
             );
         gap: var(--s-3);
         align-items: center;
-        padding: var(--s-2) var(--s-4);
+        padding: var(--s-2) var(--rail);
         min-width: 480px;
     }
     .head {

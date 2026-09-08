@@ -143,7 +143,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: var(--s-4);
-        margin-bottom: var(--s-4);
+        padding: var(--s-4) var(--rail);
     }
     :global(.card) {
         margin-bottom: var(--s-4);
@@ -153,6 +153,8 @@
         color: var(--text-faint);
         font-size: 0.85rem;
         margin: 0;
+        padding-inline: var(--rail);
+        max-width: var(--measure);
     }
     .note {
         margin-top: var(--s-4);
@@ -167,7 +169,7 @@
             minmax(150px, 1.4fr) minmax(80px, 0.8fr);
         gap: var(--s-3);
         align-items: center;
-        padding: var(--s-2) var(--s-1);
+        padding: var(--s-2) var(--rail);
     }
     .head {
         font-size: 0.72rem;
