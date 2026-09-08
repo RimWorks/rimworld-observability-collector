@@ -22,6 +22,7 @@
         baselineUs = new Map<number, number>(),
         onSelect,
         scope = $bindable('frame'),
+        percentiles = new Map<number, { p50Us: number; p95Us: number; p99Us: number }>(),
     }: {
         nodes: readonly TreeNode[];
         names: Map<number, { name: string; subsystem: string | null }>;
@@ -30,6 +31,8 @@
         baselineUs?: Map<number, number>;
         onSelect?: (nodeIndex: number) => void;
         scope?: 'frame' | 'session';
+        /** per-section percentiles over the whole session; empty in frame scope */
+        percentiles?: Map<number, { p50Us: number; p95Us: number; p99Us: number }>;
     } = $props();
 
     const SCOPES = [
@@ -176,6 +179,11 @@
                 <col class="c-self" />
                 <col class="c-delta" />
                 <col class="c-calls" />
+                {#if scope === 'session'}
+                    <col class="c-pctile" />
+                    <col class="c-pctile" />
+                    <col class="c-pctile" />
+                {/if}
                 <col class="c-alloc" />
                 <col />
             </colgroup>
@@ -203,6 +211,11 @@
                             {t('tree.col.calls')}{arrow('calls')}
                         </button>
                     </th>
+                    {#if scope === 'session'}
+                        <th class="num">{t('tree.col.p50')}</th>
+                        <th class="num">{t('tree.col.p95')}</th>
+                        <th class="num">{t('tree.col.p99')}</th>
+                    {/if}
                     <th class="num">{t('tree.col.alloc')}</th>
                     <th class="name">
                         <button type="button" onclick={() => sortBy('label')}>
@@ -222,6 +235,13 @@
                             >{deltaText(row)}</td
                         >
                         <td class="num">{row.calls || ''}</td>
+                        {#if scope === 'session'}
+                            {@const p = percentiles.get(row.sectionId)}
+                            <td class="num" data-testid="tree-p50">{p ? ns(p.p50Us * 1000) : ''}</td
+                            >
+                            <td class="num">{p ? ns(p.p95Us * 1000) : ''}</td>
+                            <td class="num">{p ? ns(p.p99Us * 1000) : ''}</td>
+                        {/if}
                         <td class="num dim">&mdash;</td>
                         <td class="name" style="padding-left:{row.depth * 14 + 4}px">
                             {#if row.hasChildren}
@@ -373,6 +393,9 @@
     .c-total,
     .c-self {
         width: 100px;
+    }
+    .c-pctile {
+        width: 80px;
     }
     thead th {
         position: sticky;

@@ -60,6 +60,25 @@ const FRAMES_BODY = {
 // section 10 is the frame's root, so a baseline for it makes the delta column render.
 const BASELINE_BODY = { frames: 128, median_us: { 10: 1000, 30: 100 } };
 
+const HOTSPOTS_BODY = {
+    schema_version: 6,
+    hotspots: [
+        {
+            id: 10,
+            name: 'root',
+            subsystem: 'tick',
+            sample_count: 5,
+            total_ns: 3_000_000,
+            mean_ns: 600_000,
+            min_ns: 1000,
+            max_ns: 900_000,
+            p50_ns: 2_000_000,
+            p95_ns: 2_500_000,
+            p99_ns: 2_900_000,
+        },
+    ],
+};
+
 const CALL_TREE_BODY = {
     schema_version: 6,
     roots: [
@@ -140,6 +159,7 @@ function mockFetch(
         if (/\/api\/v1\/frames\/\d+$/.test(url)) body = frameAtBody(url);
         else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
+        else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
         else if (url.includes('/api/v1/import/bundle')) {
@@ -636,6 +656,18 @@ describe('Flamegraph page', () => {
 
         await fireEvent.click(screen.getByTestId('pause'));
         await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+    });
+
+    // the frame ring cannot produce per-section percentiles, so session scope reads them from
+    // /hotspots. they are the one thing the cut Hotspots page had that the tree did not.
+    it('shows per-section percentiles only in session scope', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        expect(screen.queryByTestId('tree-p50')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('scope-session'));
+        await waitFor(() => expect(screen.getAllByTestId('tree-p50').length).toBeGreaterThan(0));
+        expect(screen.getAllByTestId('tree-p50')[0].textContent).toContain('ms');
     });
 
     // baselineUs is a per-frame median over 128 frames. against a session cumulative total it

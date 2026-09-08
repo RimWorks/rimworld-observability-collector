@@ -220,3 +220,42 @@ describe('keysToNode', () => {
         expect([...allExpandableKeys(nodes)].sort()).toEqual(['/10', '/10/20']);
     });
 });
+
+describe('search matches subsystem', () => {
+    const NAMES = new Map([
+        [1, { name: 'Verse.TickManager.DoSingleTick', subsystem: 'tick' }],
+        [2, { name: 'Verse.MapDrawer.DrawMapMesh', subsystem: 'render' }],
+    ]);
+    const NODES = [
+        { sectionId: 1, nodeId: 1, parentIndex: -1, depth: 0, startUs: 0, durUs: 100, endUs: 100 },
+        {
+            sectionId: 2,
+            nodeId: 2,
+            parentIndex: -1,
+            depth: 0,
+            startUs: 100,
+            durUs: 100,
+            endUs: 200,
+        },
+    ];
+
+    it('narrows to a subsystem the name never mentions', () => {
+        const rows = buildTreeRows(NODES, {
+            names: NAMES,
+            expanded: new Set<string>(),
+            search: 'render',
+        });
+        expect(rows).toHaveLength(1);
+        expect(rows[0].sectionId).toBe(2);
+    });
+
+    it('still matches on the name', () => {
+        const rows = buildTreeRows(NODES, {
+            names: NAMES,
+            expanded: new Set<string>(),
+            search: 'TickManager',
+        });
+        expect(rows).toHaveLength(1);
+        expect(rows[0].sectionId).toBe(1);
+    });
+});

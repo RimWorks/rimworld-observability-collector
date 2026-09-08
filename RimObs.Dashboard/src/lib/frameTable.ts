@@ -225,7 +225,11 @@ export function buildInvertedRows(nodes: readonly TreeNode[], opts: TableOptions
 function filterBySearch(rows: TableRow[], opts: TableOptions): TableRow[] {
     const q = opts.search?.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((r) => labelFor(r.sectionId, opts.names).toLowerCase().includes(q));
+    return rows.filter((r) => {
+        if (labelFor(r.sectionId, opts.names).toLowerCase().includes(q)) return true;
+        // matching the subsystem is how you narrow to render or ai work in one keystroke
+        return (opts.names.get(r.sectionId)?.subsystem ?? '').toLowerCase().includes(q);
+    });
 }
 
 /** Every key on the path down to `nodeIndex`, so selecting a bar can open the tree to it. */

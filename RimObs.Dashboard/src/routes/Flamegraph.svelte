@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { api, ApiError, type StatusResponse } from '../lib/api';
+    import { api, ApiError, type StatusResponse, type HotspotsResponse } from '../lib/api';
     import { Resource } from '../lib/poll.svelte';
     import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
@@ -172,6 +172,17 @@
     const statusRes = new Resource<StatusResponse>(() => api.status(), 1000);
     let tps = $derived(statusRes.data?.receive?.tps ?? null);
 
+    // per-section percentiles for the session-scope columns; the frame ring cannot produce them.
+    const hotspotsRes = new Resource<HotspotsResponse>(() => api.hotspots(200), 5000);
+    let percentiles = $derived(
+        new Map(
+            (hotspotsRes.data?.hotspots ?? []).map((h) => [
+                h.id,
+                { p50Us: h.p50_ns / 1000, p95Us: h.p95_ns / 1000, p99Us: h.p99_ns / 1000 },
+            ]),
+        ),
+    );
+
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     let treeScope = $state<'frame' | 'session'>('frame');
     // the session tree follows the same rate control as the frame poll, so it needs a fresh
@@ -185,11 +196,13 @@
     });
     onMount(() => {
         sectionsRes.start();
+        hotspotsRes.start();
         statusRes.start();
         baselineRes.start();
     });
     onDestroy(() => {
         sectionsRes.stop();
+        hotspotsRes.stop();
         statusRes.stop();
         baselineRes.stop();
     });
@@ -496,6 +509,7 @@
             nodes={treeNodes}
             {names}
             bind:scope={treeScope}
+            percentiles={treeScope === 'session' ? percentiles : undefined}
             selectedNode={treeScope === 'session' ? -1 : selectedNode}
             frameDurationUs={treeScope === 'session'
                 ? sessionTotalUs(sessionRoots)
