@@ -361,7 +361,7 @@ public sealed class SessionStoreSubsystemTests : IDisposable {
         SqliteConnection.ClearAllPools();
         if (Directory.Exists(_tempDir)) {
             try { Directory.Delete(_tempDir, recursive: true); }
-            catch (IOException) { }
+            catch (IOException) { /* a leaked handle must not fail the test */ }
         }
     }
 

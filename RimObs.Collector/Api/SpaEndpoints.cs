@@ -30,6 +30,7 @@ public static class SpaEndpoints {
     public static IEndpointRouteBuilder MapSpaEndpoints(this IEndpointRouteBuilder endpoints) {
         endpoints.MapGet("/", (CollectorToken token) => ServeIndexHtml(token));
         endpoints.MapGet("/assets/{**path}", (string path) => ServeFile("assets/" + path));
+        // matched before MapFallback, so a missing asset 404s instead of returning the shell.
         endpoints.MapFallback((HttpContext context, CollectorToken token) => {
             if (context.Request.Path.StartsWithSegments("/api")) {
                 return Results.NotFound();
