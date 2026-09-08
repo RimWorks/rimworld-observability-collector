@@ -70,6 +70,7 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
     }
 
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void EnabledSection_OverheadIsBounded() {
         int sectionId = InstallAndGetSectionId();
         SectionRegistry.SetActive(sectionId, true);
@@ -105,6 +106,7 @@ public sealed class ObservedSectionOverheadBench : IDisposable {
     // the disabled branch is a load plus a conditional, so the honest number is the delta
     // against an identical uninstrumented method, not the patched method's own wall time.
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void DisabledSection_OverheadOverPlainCall() {
         int sectionId = InstallAndGetSectionId();
         SectionRegistry.SetActive(sectionId, false);

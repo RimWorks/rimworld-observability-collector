@@ -17,9 +17,6 @@ public sealed class RingBufferTests {
         var parents = batch.ParentIds;
         var starts = batch.StartTimestamps;
         var elapsed = batch.ElapsedTicks;
-        var ordinals = batch.FrameOrdinals;
-        var nodeIds = batch.NodeIds;
-        var parentNodeIds = batch.ParentNodeIds;
         int n = ring.Drain(batch, 16);
 
         n.Should().Be(10);
@@ -38,11 +35,6 @@ public sealed class RingBufferTests {
         ring.TryWrite(2, 1, 101, 100, 0L, 0L, 1).Should().BeTrue();
 
         SampleBatch batch = new SampleBatch(16);
-        var ids = batch.SectionIds;
-        var parents = batch.ParentIds;
-        var starts = batch.StartTimestamps;
-        var elapsed = batch.ElapsedTicks;
-        var ordinals = batch.FrameOrdinals;
         var nodeIds = batch.NodeIds;
         var parentNodeIds = batch.ParentNodeIds;
         int n = ring.Drain(batch, 16);
@@ -61,11 +53,6 @@ public sealed class RingBufferTests {
             ring.TryWrite(i, -1, i * 10, i * 10 - 1, 0L, 0L, 1).Should().BeTrue();
 
         SampleBatch batch = new SampleBatch(16);
-        var ids = batch.SectionIds;
-        var parents = batch.ParentIds;
-        var starts = batch.StartTimestamps;
-        var elapsed = batch.ElapsedTicks;
-        var ordinals = batch.FrameOrdinals;
         var nodeIds = batch.NodeIds;
         var parentNodeIds = batch.ParentNodeIds;
         int n = ring.Drain(batch, 16);
@@ -92,12 +79,6 @@ public sealed class RingBufferTests {
         SampleRingBuffer ring = new(8);
         SampleBatch batch = new SampleBatch(8);
         var ids = batch.SectionIds;
-        var parents = batch.ParentIds;
-        var starts = batch.StartTimestamps;
-        var elapsed = batch.ElapsedTicks;
-        var ordinals = batch.FrameOrdinals;
-        var nodeIds = batch.NodeIds;
-        var parentNodeIds = batch.ParentNodeIds;
 
         ring.TryWrite(1, -1, 0, -1, 0, 0, 1);
         ring.TryWrite(2, -1, 0, -1, 0, 0, 1);
@@ -118,13 +99,7 @@ public sealed class RingBufferTests {
         ring.TryWrite(3, -1, 0, -1, 200L, 30L, 8).Should().BeTrue();
 
         SampleBatch batch = new SampleBatch(16);
-        var ids = batch.SectionIds;
-        var parents = batch.ParentIds;
-        var starts = batch.StartTimestamps;
-        var elapsed = batch.ElapsedTicks;
         var ordinals = batch.FrameOrdinals;
-        var nodeIds = batch.NodeIds;
-        var parentNodeIds = batch.ParentNodeIds;
         int n = ring.Drain(batch, 16);
 
         n.Should().Be(3);

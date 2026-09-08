@@ -81,6 +81,7 @@ public sealed class ProfilerOverheadTests {
     }
 
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void Disabled_section_overhead_under_5ns() {
         SectionHandle handle = SectionRegistry.Register("perf-test-disabled");
         SectionRegistry.SetActive(handle.Id, false);
@@ -116,6 +117,7 @@ public sealed class ProfilerOverheadTests {
     }
 
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void Enabled_section_overhead_under_100ns() {
         SectionHandle handle = SectionRegistry.Register("perf-test-enabled");
         SectionRegistry.SetActive(handle.Id, true);

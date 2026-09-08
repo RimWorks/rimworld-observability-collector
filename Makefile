@@ -4,6 +4,7 @@ CONFIG ?= Debug
 RIDS ?= win-x64 linux-x64 osx-arm64 osx-x64
 DASHBOARD_DIR := RimObs.Dashboard
 SLN := RimObs.slnx
+LIBRARY_TEST_PROJ := tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj
 
 # The collector must NOT live under Assemblies/: RimWorld's ModAssemblyHandler loads every
 # .dll under Assemblies/ recursively and Mono segfaults trying to read the net10 collector's
@@ -79,8 +80,12 @@ deploy-collector:
 		-o $(COLLECTOR_DEPLOY_DIR) --nologo
 	printf '{"schema_version":1,"version":"0.0.0-dev","library_schema_compat":{"min":1,"max":1}}\n' > $(COLLECTOR_DEPLOY_DIR)/Collector.version
 
+# coverlet's IL instrumentation inflates a timed hot path about tenfold, so the wall-clock
+# benchmarks run in a second pass with the collector switched off.
 test:
-	dotnet test $(SLN) -c $(CONFIG) --nologo --no-build
+	dotnet test $(SLN) -c $(CONFIG) --nologo --no-build --filter "Category!=Benchmark"
+	dotnet test $(LIBRARY_TEST_PROJ) -c $(CONFIG) --nologo --no-build \
+		-p:RunSettingsFilePath= --filter "Category=Benchmark"
 
 format:
 	dotnet format $(SLN)
