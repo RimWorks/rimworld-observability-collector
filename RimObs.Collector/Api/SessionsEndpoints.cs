@@ -224,8 +224,11 @@ public static class SessionsEndpoints {
         int depthCap = depth is int d && d > 0 ? Math.Min(d, MaxCallTreeDepth) : CallTreeBuilder.DefaultDepthCap;
         int topN = top is int t && t > 0 ? Math.Min(t, MaxCallTreeTopN) : CallTreeBuilder.DefaultTopN;
 
-        Dictionary<int, string> names = aggregator.SnapshotSections().ToDictionary(s => s.SectionId, s => s.Name);
-        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(aggregator.SnapshotCallEdges(), names, nsPerTick, depthCap, topN);
+        List<SectionStats> sections = [.. aggregator.SnapshotSections()];
+        Dictionary<int, string> names = sections.ToDictionary(s => s.SectionId, s => s.Name);
+        Dictionary<int, string?> subsystems = sections.ToDictionary(s => s.SectionId, s => s.Subsystem);
+        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(
+            aggregator.SnapshotCallEdges(), names, nsPerTick, depthCap, topN, subsystems);
 
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
@@ -262,6 +265,7 @@ public static class SessionsEndpoints {
         return new {
             id = node.SectionId,
             name = node.Name,
+            subsystem = node.Subsystem,
             call_count = node.CallCount,
             total_ns = node.TotalNs,
             is_other = node.IsOther,

@@ -14,7 +14,8 @@ public static class CallTreeBuilder {
         IReadOnlyDictionary<int, string> sectionNames,
         double nsPerTick,
         int depthCap = DefaultDepthCap,
-        int topN = DefaultTopN) {
+        int topN = DefaultTopN,
+        IReadOnlyDictionary<int, string?>? sectionSubsystems = null) {
         if (edges is null || edges.Count == 0)
             return [];
 
@@ -27,7 +28,7 @@ public static class CallTreeBuilder {
             list.Add(edge);
         }
 
-        Level ctx = new(childrenByParent, sectionNames, nsPerTick, depthCap, topN);
+        Level ctx = new(childrenByParent, sectionNames, nsPerTick, depthCap, topN, sectionSubsystems);
         return BuildLevel(
             childrenByParent.TryGetValue(NoParent, out List<CallEdgeStats>? roots) ? roots : [],
             ctx,
@@ -42,9 +43,11 @@ public static class CallTreeBuilder {
         IReadOnlyDictionary<int, string> sectionNames,
         double nsPerTick,
         int depthCap,
-        int topN) {
+        int topN,
+        IReadOnlyDictionary<int, string?>? sectionSubsystems) {
         public Dictionary<int, List<CallEdgeStats>> ChildrenByParent { get; } = childrenByParent;
         public IReadOnlyDictionary<int, string> SectionNames { get; } = sectionNames;
+        public IReadOnlyDictionary<int, string?>? SectionSubsystems { get; } = sectionSubsystems;
         public double NsPerTick { get; } = nsPerTick;
         public int DepthCap { get; } = depthCap;
         public int TopN { get; } = topN;
@@ -70,6 +73,10 @@ public static class CallTreeBuilder {
             CallTreeNode node = new() {
                 SectionId = edge.SectionId,
                 Name = ctx.SectionNames.TryGetValue(edge.SectionId, out string? name) ? name : string.Empty,
+                Subsystem = ctx.SectionSubsystems is not null
+                    && ctx.SectionSubsystems.TryGetValue(edge.SectionId, out string? sub)
+                        ? sub
+                        : null,
                 CallCount = edge.CallCount,
                 TotalNs = (long)(edge.TotalElapsedTicks * ctx.NsPerTick),
             };

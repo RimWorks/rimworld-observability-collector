@@ -40,6 +40,18 @@ public sealed class CallTreeBuilderTests {
     }
 
     [Fact]
+    public void Build_carries_the_subsystem_onto_every_node() {
+        List<CallEdgeStats> edges = [Edge(CallTreeBuilder.NoParent, 1, 1, 500), Edge(1, 2, 2, 200)];
+        Dictionary<int, string> names = new() { [1] = "root", [2] = "leaf" };
+        Dictionary<int, string?> subsystems = new() { [1] = "ticks", [2] = null };
+
+        IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(edges, names, 1.0, sectionSubsystems: subsystems);
+
+        roots[0].Subsystem.Should().Be("ticks");
+        roots[0].Children.Single().Subsystem.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_nests_children_under_parents() {
         List<CallEdgeStats> edges = [
             Edge(CallTreeBuilder.NoParent, 1, 1, 500),

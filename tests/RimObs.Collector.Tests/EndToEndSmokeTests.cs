@@ -448,6 +448,7 @@ public sealed class EndToEndSmokeTests {
             SendBatch(port, BatchType.SectionRegistrations, WireCodec.Serialize(new SectionRegistrationsBatch {
                 SectionIds = [10, 20],
                 Names = ["tree.root", "tree.child"],
+                Subsystems = ["ticks", null],
             }));
 
             SendBatch(port, BatchType.Sections, WireCodec.Serialize(new SectionBatch {
@@ -474,6 +475,7 @@ public sealed class EndToEndSmokeTests {
             root.GetProperty("id").GetInt32().Should().Be(10);
             root.GetProperty("name").GetString().Should().Be("tree.root");
             root.GetProperty("call_count").GetInt64().Should().Be(1);
+            root.GetProperty("subsystem").GetString().Should().Be("ticks");
 
             JsonElement children = root.GetProperty("children");
             children.GetArrayLength().Should().Be(1);
@@ -482,6 +484,7 @@ public sealed class EndToEndSmokeTests {
             child.GetProperty("name").GetString().Should().Be("tree.child");
             child.GetProperty("call_count").GetInt64().Should().Be(2);
             child.GetProperty("total_ns").GetInt64().Should().BeGreaterThan(0);
+            child.GetProperty("subsystem").ValueKind.Should().Be(JsonValueKind.Null);
         }
         finally {
             await app.StopAsync();
