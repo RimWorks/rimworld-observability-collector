@@ -8,7 +8,17 @@ const THEME: StripTheme = {
     over: '#over',
     selected: '#sel',
     line: '#line',
+    cut: '#cut',
 };
+
+interface Line {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    stroke: string;
+    dash: number[];
+}
 
 interface Rect {
     x: number;
@@ -20,7 +30,10 @@ interface Rect {
 
 function fakeCtx() {
     const rects: Rect[] = [];
+    const lines: Line[] = [];
     let fillStyle = '';
+    let from = { x: 0, y: 0 };
+    let dash: number[] = [];
     const ctx = {
         set fillStyle(v: string) {
             fillStyle = v;
@@ -33,19 +46,31 @@ function fakeCtx() {
         setTransform: () => {},
         fillRect: (x: number, y: number, w: number, h: number) =>
             rects.push({ x, y, w, h, fill: fillStyle }),
+        save: () => {},
+        restore: () => {
+            dash = [];
+        },
+        setLineDash: (d: number[]) => {
+            dash = d;
+        },
         beginPath: () => {},
-        moveTo: () => {},
-        lineTo: () => {},
+        moveTo: (x: number, y: number) => {
+            from = { x, y };
+        },
+        lineTo: (x: number, y: number) => {
+            lines.push({ x1: from.x, y1: from.y, x2: x, y2: y, stroke: ctx.strokeStyle, dash });
+        },
         stroke: () => {},
     };
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, rects };
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, lines };
 }
 
-const opts = (selectedOrdinal: number | null = null) => ({
+const opts = (selectedOrdinal: number | null = null, cutOrdinals: number[] = []) => ({
     widthPx: 100,
     heightPx: 40,
     dpr: 1,
     selectedOrdinal,
+    cutOrdinals,
     theme: THEME,
 });
 
@@ -59,7 +84,7 @@ describe('drawStrip', () => {
 
     it('colors an over-budget bar differently from an under-budget one', () => {
         const { ctx, rects } = fakeCtx();
-        drawStrip(ctx, buildBars([1, 2], [1000, 40_000]), opts());
+        drawStrip(ctx, buildBars([1, 2], [1000, 50_000]), opts());
         expect(rects[1].fill).toBe('#bar');
         expect(rects[2].fill).toBe('#over');
     });
@@ -100,5 +125,38 @@ describe('drawStrip', () => {
         const { ctx, rects } = fakeCtx();
         drawStrip(ctx, [], opts());
         expect(rects).toHaveLength(1);
+    });
+
+    it('draws a dashed rule where a pause cut the history', () => {
+        const { ctx, lines } = fakeCtx();
+        drawStrip(ctx, buildBars([1, 2, 3, 4], [1000, 1000, 1000, 1000]), opts(null, [2]));
+        const cut = lines.find((l) => l.stroke === '#cut');
+        expect(cut).toBeDefined();
+        expect(cut!.dash).toEqual([3, 3]);
+        // four bars across 100px, the cut sits on the leading edge of the second
+        expect(cut!.x1).toBeCloseTo(25.5);
+        expect(cut!.y1).toBe(0);
+        expect(cut!.y2).toBe(40);
+    });
+
+    it('draws no cut rule when nothing was paused', () => {
+        const { ctx, lines } = fakeCtx();
+        drawStrip(ctx, buildBars([1, 2], [1000, 2000]), opts());
+        expect(lines.some((l) => l.stroke === '#cut')).toBe(false);
+    });
+
+    it('ignores a cut ordinal that has aged out of the ring', () => {
+        const { ctx, lines } = fakeCtx();
+        drawStrip(ctx, buildBars([5, 6], [1000, 1000]), opts(null, [2]));
+        expect(lines.some((l) => l.stroke === '#cut')).toBe(false);
+    });
+
+    // the newest bar's trailing edge is the canvas border, where a rule cannot be seen.
+    it('keeps a cut on the newest bar inside the canvas', () => {
+        const { ctx, lines } = fakeCtx();
+        drawStrip(ctx, buildBars([1, 2], [1000, 1000]), opts(null, [2]));
+        const cut = lines.find((l) => l.stroke === '#cut');
+        expect(cut!.x1).toBeLessThan(100);
+        expect(cut!.x1).toBeGreaterThan(0);
     });
 });

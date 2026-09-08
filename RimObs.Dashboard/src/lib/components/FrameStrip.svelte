@@ -9,11 +9,13 @@
         ordinals,
         durationsUs,
         selectedOrdinal = null,
+        cutOrdinals = [],
         onSelect,
     }: {
         ordinals: readonly number[];
         durationsUs: readonly number[];
         selectedOrdinal?: number | null;
+        cutOrdinals?: readonly number[];
         onSelect?: (ordinal: number) => void;
     } = $props();
 
@@ -47,12 +49,14 @@
             heightPx,
             dpr,
             selectedOrdinal,
+            cutOrdinals,
             theme: {
                 background: read('--bg-surface', '#131925'),
                 bar: read('--sub-none', '#5c6b85'),
                 over: read('--warn', '#d9a441'),
                 selected: read('--text', '#d4dded'),
                 line: read('--border', '#28344a'),
+                cut: read('--text-faint', '#8a98b3'),
             },
         });
     }
@@ -60,6 +64,7 @@
     $effect(() => {
         void bars;
         void selectedOrdinal;
+        void cutOrdinals;
         void widthPx;
         void heightPx;
         void dpr;
@@ -137,10 +142,8 @@
 
 <style>
     .strip {
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        background: var(--bg-surface);
-        margin-bottom: var(--s-2);
+        overflow: hidden;
+        border-bottom: 1px solid var(--border-soft);
     }
     .head {
         display: flex;
@@ -161,7 +164,7 @@
         position: relative;
         display: grid;
         grid-template-columns: var(--gut, 112px) 1fr;
-        height: calc(132px * var(--f, 1.08));
+        height: 128px;
         background: var(--bg-void);
     }
     .axis {
@@ -174,11 +177,12 @@
         height: 0;
         border-top: 1px dashed var(--border);
     }
+    /* labels hang below their rule; at bottom they would escape the box and land on the header */
     .axis b,
     .axis em {
         position: absolute;
-        bottom: 2px;
-        font: 400 calc(10.5px * var(--f, 1.08)) / 1 var(--font-mono);
+        top: 1px;
+        font: 400 calc(10px * var(--f, 1.08)) / 1 var(--font-mono);
         font-style: normal;
         white-space: nowrap;
     }
@@ -188,7 +192,7 @@
         font-weight: 400;
     }
     .axis em {
-        right: 8px;
+        right: 6px;
         color: var(--border-strong);
     }
     .canvaswrap {
@@ -202,6 +206,7 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
+        z-index: 1;
         background: repeating-linear-gradient(
             to top,
             transparent 0 24.9%,
@@ -212,6 +217,8 @@
     }
     canvas {
         display: block;
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         cursor: pointer;

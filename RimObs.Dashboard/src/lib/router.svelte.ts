@@ -8,11 +8,9 @@ export interface RouteDef {
 
 export const routes: RouteDef[] = [
     { id: 'overview', title: 'Overview', icon: 'gauge' },
+    { id: 'flamegraph', title: 'Flamegraph', icon: 'flame' },
     { id: 'hotspots', title: 'Hotspots', icon: 'flame' },
     { id: 'instrumentation', title: 'Instrumentation', icon: 'probe' },
-    { id: 'sections', title: 'Sections', icon: 'sections' },
-    { id: 'calltree', title: 'Call Tree', icon: 'tree' },
-    { id: 'flamegraph', title: 'Flamegraph', icon: 'flame' },
     { id: 'captures', title: 'Captures', icon: 'flame' },
     { id: 'memory', title: 'Memory', icon: 'memory' },
     { id: 'metrics', title: 'Metrics', icon: 'metric' },

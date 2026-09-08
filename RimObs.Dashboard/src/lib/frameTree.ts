@@ -57,6 +57,8 @@ export interface TreeNode {
     startUs: number;
     durUs: number;
     endUs: number;
+    /** aggregated nodes stand in for many calls; a live frame node is one call. */
+    calls?: number;
 }
 
 export const NO_PARENT = -1;

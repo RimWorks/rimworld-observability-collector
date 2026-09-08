@@ -1,6 +1,6 @@
 import type { StripBar } from './frameStrip';
 import { budgetLine, barWidthPx } from './frameStrip';
-import { TICK_BUDGET_US } from './frameCost';
+import { FRAME_BUDGET_US } from './frameCost';
 
 export interface StripTheme {
     background: string;
@@ -8,6 +8,7 @@ export interface StripTheme {
     over: string;
     selected: string;
     line: string;
+    cut: string;
 }
 
 export interface StripDrawOptions {
@@ -15,6 +16,8 @@ export interface StripDrawOptions {
     heightPx: number;
     dpr: number;
     selectedOrdinal: number | null;
+    /** ordinals a pause cut the history at, drawn as a dashed rule */
+    cutOrdinals?: readonly number[];
     theme: StripTheme;
 }
 
@@ -44,8 +47,27 @@ export function drawStrip(
         ctx.fillRect(i * bw, h - barH, Math.max(1, bw - inset), barH);
     }
 
+    // a pause leaves a hole in the history; mark where it was so the jump is not read as data.
+    const cuts = opts.cutOrdinals ?? [];
+    if (cuts.length > 0) {
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = theme.cut;
+        ctx.lineWidth = 1;
+        for (const ordinal of cuts) {
+            const index = bars.findIndex((b) => b.ordinal === ordinal);
+            if (index < 0) continue;
+            const x = Math.min(Math.round(index * bw), w - 1) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     // budget line last, so it reads on top of the bars it is judging.
-    const lineY = h - budgetLine(TICK_BUDGET_US) * h;
+    const lineY = h - budgetLine(FRAME_BUDGET_US) * h;
     ctx.strokeStyle = theme.line;
     ctx.lineWidth = 1;
     ctx.beginPath();

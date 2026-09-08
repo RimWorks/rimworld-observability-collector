@@ -117,7 +117,7 @@ function aggregateLevel(
                 const row = bySection.get(sectionId);
                 if (row) {
                     row.selfUs += self[child];
-                    row.calls += 1;
+                    row.calls += nodes[child].calls ?? 1;
                     row.nodes.push(child);
                 }
                 visit(child, true);
@@ -130,7 +130,7 @@ function aggregateLevel(
             }
             row.totalUs += nodes[child].durUs;
             row.selfUs += self[child];
-            row.calls += 1;
+            row.calls += nodes[child].calls ?? 1;
             row.nodes.push(child);
             if (kids[child].length > 0) row.hasChildren = true;
         }
@@ -183,7 +183,7 @@ export function buildTreeRows(nodes: readonly TreeNode[], opts: TableOptions): T
         }
         row.totalUs += nodes[i].durUs;
         row.selfUs += self[i];
-        row.calls += 1;
+        row.calls += nodes[i].calls ?? 1;
         row.nodes.push(i);
         if (kids[i].length > 0) row.hasChildren = true;
     }
@@ -212,7 +212,7 @@ export function buildInvertedRows(nodes: readonly TreeNode[], opts: TableOptions
         }
         row.selfUs += self[i];
         row.totalUs += self[i];
-        row.calls += 1;
+        row.calls += nodes[i].calls ?? 1;
         row.nodes.push(i);
         if (nodes[i].parentIndex !== NO_PARENT) row.hasChildren = true;
     }

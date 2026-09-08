@@ -21,6 +21,7 @@
         frameDurationUs = 0,
         baselineUs = new Map<number, number>(),
         onSelect,
+        scope = $bindable('frame'),
     }: {
         nodes: readonly TreeNode[];
         names: Map<number, { name: string; subsystem: string | null }>;
@@ -28,7 +29,13 @@
         frameDurationUs?: number;
         baselineUs?: Map<number, number>;
         onSelect?: (nodeIndex: number) => void;
+        scope?: 'frame' | 'session';
     } = $props();
+
+    const SCOPES = [
+        { id: 'frame', label: 'tree.scope.frame' },
+        { id: 'session', label: 'tree.scope.session' },
+    ] as const;
 
     let expanded = $state(new SvelteSet<string>());
     let sortColumn = $state<SortColumn>('total');
@@ -122,10 +129,23 @@
                 data-testid="tab-{tab.id}">{t(tab.label)}</button
             >
         {/each}
-        <span class="chip"><i></i>MainThread</span>
+        <span class="chip" data-testid="thread-chip">
+            <i></i>MainThread
+            <b class="mono">{ns(frameDurationUs * 1000)}</b>
+        </span>
     </div>
 
     <div class="bar">
+        <span class="seg" role="group" aria-label={t('tree.scope')}>
+            {#each SCOPES as s (s.id)}
+                <button
+                    type="button"
+                    class:on={scope === s.id}
+                    onclick={() => (scope = s.id)}
+                    data-testid="scope-{s.id}">{t(s.label)}</button
+                >
+            {/each}
+        </span>
         <input
             type="search"
             bind:value={search}
@@ -149,6 +169,16 @@
         <p class="empty" data-testid="tree-empty">{t('tree.empty')}</p>
     {:else}
         <table>
+            <colgroup>
+                <col class="c-bar" />
+                <col class="c-pct" />
+                <col class="c-total" />
+                <col class="c-self" />
+                <col class="c-delta" />
+                <col class="c-calls" />
+                <col class="c-alloc" />
+                <col />
+            </colgroup>
             <thead>
                 <tr>
                     <th class="pct" aria-label="share"></th>
@@ -222,9 +252,6 @@
 
 <style>
     .panel {
-        margin-top: var(--s-2);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
         background: var(--bg-base);
         overflow: hidden;
     }
@@ -242,6 +269,7 @@
         color: var(--text-dim);
         background: none;
         border: 0;
+        border-radius: 0;
         border-bottom: 2px solid transparent;
         padding: 8px 13px;
         cursor: pointer;
@@ -262,6 +290,10 @@
         border-radius: 99px;
         padding: 2px 10px;
     }
+    .chip b {
+        color: var(--text);
+        font-weight: 500;
+    }
     .chip i {
         width: 7px;
         height: 7px;
@@ -276,6 +308,24 @@
         border-bottom: 1px solid var(--border);
         font-size: var(--f-ui, 12px);
         background: var(--bg-surface);
+    }
+    .seg {
+        display: flex;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        background: var(--bg-surface-2);
+    }
+    .seg button {
+        border: 0;
+        border-radius: 0;
+        background: none;
+        color: var(--text-faint);
+        padding: 3px 10px;
+    }
+    .seg button.on {
+        background: color-mix(in srgb, var(--cyan) 20%, var(--bg-elev));
+        color: var(--cyan-soft);
+        font-weight: 500;
     }
     .bar input[type='search'] {
         flex: 1;
@@ -295,7 +345,7 @@
         color: var(--text-dim);
         white-space: nowrap;
     }
-    .bar button {
+    .bar > button {
         font: inherit;
         font-size: var(--f-ui, 12px);
         color: var(--text);
@@ -307,8 +357,22 @@
     }
     table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
         font-size: var(--f-small, 12px);
+    }
+    .c-bar {
+        width: 54px;
+    }
+    .c-pct,
+    .c-delta,
+    .c-calls,
+    .c-alloc {
+        width: 75px;
+    }
+    .c-total,
+    .c-self {
+        width: 100px;
     }
     thead th {
         position: sticky;
@@ -345,17 +409,14 @@
         font-family: var(--font-mono);
     }
     td.name {
-        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     td.dim {
         color: var(--text-faint);
     }
     td.pct {
-        width: 54px;
         padding-right: 0;
-    }
-    th.pct {
-        width: 54px;
     }
     td.pct i {
         display: block;
@@ -364,7 +425,6 @@
         background: var(--sub-none);
     }
     td.num.pct {
-        width: 44px;
         padding-right: 6px;
         color: var(--text-dim);
     }
