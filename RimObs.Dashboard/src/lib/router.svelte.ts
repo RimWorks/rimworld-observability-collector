@@ -12,8 +12,6 @@ export const routes: RouteDef[] = [
     { id: 'hotspots', title: 'Hotspots', icon: 'flame' },
     { id: 'instrumentation', title: 'Instrumentation', icon: 'probe' },
     { id: 'memory', title: 'Memory', icon: 'memory' },
-    { id: 'metrics', title: 'Metrics', icon: 'metric' },
-    { id: 'patches', title: 'Patches', icon: 'patch' },
     { id: 'sessions', title: 'Sessions', icon: 'stack' },
     { id: 'bundle', title: 'Bundle', icon: 'archive' },
     { id: 'logs', title: 'Logs', icon: 'logs' },

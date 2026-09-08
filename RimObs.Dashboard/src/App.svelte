@@ -11,8 +11,6 @@
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import Memory from './routes/Memory.svelte';
-    import Metrics from './routes/Metrics.svelte';
-    import Patches from './routes/Patches.svelte';
     import Sessions from './routes/Sessions.svelte';
     import Bundle from './routes/Bundle.svelte';
     import Comparison from './routes/Comparison.svelte';
@@ -65,10 +63,6 @@
                     <Flamegraph />
                 {:else if route.id === 'memory'}
                     <Memory />
-                {:else if route.id === 'metrics'}
-                    <Metrics />
-                {:else if route.id === 'patches'}
-                    <Patches />
                 {:else if route.id === 'sessions'}
                     <Sessions />
                 {:else if route.id === 'bundle'}
