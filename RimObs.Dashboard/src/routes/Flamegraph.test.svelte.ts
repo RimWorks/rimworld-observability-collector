@@ -111,6 +111,29 @@ const SECTIONS_BODY = {
     ],
 };
 
+const PATCHES_BODY = {
+    schema_version: 6,
+    conflicts_known: true,
+    conflicts: [
+        {
+            section: 'Verse.Root_Play.Update',
+            target_method: 'Verse.Root_Play.Update',
+            other_owner: 'RocketMan',
+            patch_type: 1,
+            priority: 0,
+            patch_method: 'RocketMan.Patch',
+        },
+        {
+            section: 'Verse.Root_Play.Update',
+            target_method: 'Verse.Root_Play.Update',
+            other_owner: 'Dubs',
+            patch_type: 1,
+            priority: 0,
+            patch_method: 'Dubs.Patch',
+        },
+    ],
+};
+
 const BUNDLE_FRAMES_BODY = {
     schema_version: 6,
     session_id: 'sess-imported',
@@ -170,6 +193,7 @@ function mockFetch(
         else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
+        else if (url.includes('/sessions/current/patches')) body = PATCHES_BODY;
         else if (url.includes('/timeseries')) body = TIMESERIES_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
@@ -800,6 +824,17 @@ describe('Flamegraph page', () => {
         const rate = screen.getByLabelText(/rate/i);
         await fireEvent.keyDown(rate, { key: ' ' });
         expect(screen.queryByTestId('paused-badge')).toBeNull();
+    });
+
+    it('badges a tree row with the number of other mods patching it', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+
+        const badges = await screen.findAllByTestId('patch-badge');
+        expect(badges).toHaveLength(1);
+        expect(badges[0].textContent?.trim()).toBe('2');
+        expect(badges[0].closest('tr')?.textContent).toContain('Verse.Root_Play.Update');
     });
 
     it('hides the strip and transport for an imported bundle', async () => {

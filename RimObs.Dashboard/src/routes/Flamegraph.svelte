@@ -6,8 +6,10 @@
         type StatusResponse,
         type HotspotsResponse,
         type GcResponse,
+        type PatchesResponse,
     } from '../lib/api';
     import { summarize } from '../lib/gc';
+    import { buildPatchIndex } from '../lib/patchIndex';
     import { Resource } from '../lib/poll.svelte';
     import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
@@ -201,6 +203,11 @@
     const gcRes = new Resource<GcResponse>(() => api.gc(200), 4000);
     let peakAllocRate = $derived(summarize(gcRes.data?.events ?? []).peakAllocRate);
 
+    // which other mods patch each instrumented method. the set only changes when mods load,
+    // so this polls slowly and just feeds a badge.
+    const patchesRes = new Resource<PatchesResponse>(() => api.patches(), 15000);
+    let patchOwners = $derived(buildPatchIndex(patchesRes.data?.conflicts ?? []));
+
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     let treeScope = $state<'frame' | 'session'>('frame');
     // the session tree follows the same rate control as the frame poll, so it needs a fresh
@@ -213,6 +220,7 @@
         return () => res.stop();
     });
     onMount(() => {
+        patchesRes.start();
         sectionsRes.start();
         hotspotsRes.start();
         gcRes.start();
@@ -220,6 +228,7 @@
         baselineRes.start();
     });
     onDestroy(() => {
+        patchesRes.stop();
         sectionsRes.stop();
         hotspotsRes.stop();
         gcRes.stop();
@@ -540,6 +549,7 @@
             {names}
             bind:scope={treeScope}
             percentiles={treeScope === 'session' ? percentiles : undefined}
+            {patchOwners}
             selectedNode={treeScope === 'session' ? -1 : selectedNode}
             frameDurationUs={treeScope === 'session'
                 ? sessionTotalUs(sessionRoots)

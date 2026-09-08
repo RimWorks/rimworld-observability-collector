@@ -15,6 +15,8 @@
     import { deltaSeverity } from '../frameCost';
     import { t } from '../i18n';
     import { SvelteSet } from 'svelte/reactivity';
+    import Tooltip from './Tooltip.svelte';
+    import Icon from './Icon.svelte';
 
     let {
         nodes,
@@ -25,6 +27,7 @@
         onSelect,
         scope = $bindable('frame'),
         percentiles = new Map<number, { p50Us: number; p95Us: number; p99Us: number }>(),
+        patchOwners = new Map<string, string[]>(),
     }: {
         nodes: readonly TreeNode[];
         names: Map<number, { name: string; subsystem: string | null }>;
@@ -35,7 +38,14 @@
         scope?: 'frame' | 'session';
         /** per-section percentiles over the whole session; empty in frame scope */
         percentiles?: Map<number, { p50Us: number; p95Us: number; p99Us: number }>;
+        /** other mods patching each section's target method, keyed by section name */
+        patchOwners?: Map<string, string[]>;
     } = $props();
+
+    function ownersFor(sectionId: number): string[] {
+        const name = names.get(sectionId)?.name;
+        return (name && patchOwners.get(name)) || [];
+    }
 
     const SCOPES = [
         { id: 'frame', label: 'tree.scope.frame' },
@@ -301,6 +311,16 @@
                                 onclick={() => row.nodes.length > 0 && onSelect?.(row.nodes[0])}
                                 >{labelFor(row.sectionId, names)}</button
                             >
+                            {#if ownersFor(row.sectionId).length > 0}
+                                <Tooltip
+                                    text={`${t('tip.tree.patched')} ${ownersFor(row.sectionId).join(', ')}`}
+                                >
+                                    <span class="patched" data-testid="patch-badge">
+                                        <Icon name="probe" size={11} />
+                                        {ownersFor(row.sectionId).length}
+                                    </span>
+                                </Tooltip>
+                            {/if}
                             {#if scope === 'session'}
                                 <button
                                     type="button"
@@ -463,6 +483,18 @@
     }
     .c-pctile {
         width: 80px;
+    }
+    .patched {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin-left: var(--s-2);
+        padding: 0 5px;
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        font-size: 0.68rem;
+        line-height: 1.5;
+        color: var(--text-faint);
     }
     .trend-toggle {
         margin-left: var(--s-2);

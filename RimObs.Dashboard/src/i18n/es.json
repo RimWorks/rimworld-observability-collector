@@ -150,5 +150,6 @@
     "flamegraph.overhead": "sobrecarga",
     "flamegraph.overhead.offrame": "del fotograma",
     "flamegraph.timerres": "resolución del temporizador",
-    "flamegraph.overhead.hint": "Una estimación, no una medición: el número de ámbitos multiplicado por un costo de referencia de 73.4 ns por ámbito, suavizado y actualizado una vez por segundo. Cronometrar el generador de perfiles consigo mismo cambiaría el número que reporta."
+    "flamegraph.overhead.hint": "Una estimación, no una medición: el número de ámbitos multiplicado por un costo de referencia de 73.4 ns por ámbito, suavizado y actualizado una vez por segundo. Cronometrar el generador de perfiles consigo mismo cambiaría el número que reporta.",
+    "tip.tree.patched": "Otros mods también parchean este método. Sus tiempos se incluyen en esta sección. Parcheado por:"
 }
