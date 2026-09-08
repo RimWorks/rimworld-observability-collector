@@ -10,7 +10,6 @@
     import Instrumentation from './routes/Instrumentation.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import Comparison from './routes/Comparison.svelte';
-    import Settings from './routes/Settings.svelte';
 
     const status = new Resource<StatusResponse>(() => api.status(), 2000);
     const DISCONNECT_THRESHOLD = 3;
@@ -56,8 +55,6 @@
                     <Flamegraph />
                 {:else if route.id === 'comparison'}
                     <Comparison />
-                {:else if route.id === 'settings'}
-                    <Settings />
                 {/if}
             </div>
         {/key}

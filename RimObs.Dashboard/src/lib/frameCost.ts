@@ -19,7 +19,7 @@ export const TICK_MULTIPLIERS = [1, 3, 6, 12, 15, 18, 150] as const;
  */
 export function speedMultiplier(tps: number | null | undefined): number {
     if (tps == null || !Number.isFinite(tps) || tps <= 0) return 1;
-    let best = TICK_MULTIPLIERS[0];
+    let best: number = TICK_MULTIPLIERS[0];
     let bestDistance = Infinity;
     for (const multiplier of TICK_MULTIPLIERS) {
         const distance = Math.abs(Math.log(tps / (multiplier * BASE_TPS)));

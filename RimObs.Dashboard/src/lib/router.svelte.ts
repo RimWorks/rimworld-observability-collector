@@ -11,7 +11,6 @@ export const routes: RouteDef[] = [
     { id: 'flamegraph', title: 'Flamegraph', icon: 'flame' },
     { id: 'instrumentation', title: 'Instrumentation', icon: 'probe' },
     { id: 'comparison', title: 'Comparison', icon: 'compare' },
-    { id: 'settings', title: 'Settings', icon: 'cog' },
 ];
 
 const DEFAULT_ROUTE = 'overview';

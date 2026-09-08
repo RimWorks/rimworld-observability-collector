@@ -4,6 +4,7 @@
     import { t } from '../i18n';
     import { relativeTime } from '../format';
     import Icon from './Icon.svelte';
+    import SettingsPopover from './SettingsPopover.svelte';
 
     let { status }: { status: StatusResponse | null } = $props();
 
@@ -41,6 +42,8 @@
             <span class="dot"></span>
             {online ? t('status.running') : t('status.offline')}
         </div>
+
+        <SettingsPopover {status} />
     </div>
 </header>
 
