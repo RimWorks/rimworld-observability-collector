@@ -1,12 +1,38 @@
 <script lang="ts">
-    import type { StatusResponse } from '../lib/api';
+    import { api, type StatusResponse } from '../lib/api';
     import StatCard from '../lib/components/StatCard.svelte';
     import Card from '../lib/components/Card.svelte';
+    import BundleExportForm from '../lib/components/BundleExportForm.svelte';
     import { count, bytes, rate, relativeTime } from '../lib/format';
     import { t } from '../lib/i18n';
 
     let { status }: { status: StatusResponse | null } = $props();
     let r = $derived(status?.receive);
+
+    let exporting = $state(false);
+    let exportError = $state<string | null>(null);
+
+    // only the current session can be exported, so the form needs no session picker.
+    async function handleExport(p: { sessionId: string; includes: string[]; force: boolean }) {
+        exportError = null;
+        const result = await api.exportBundle(p);
+        if (result.kind === 'over_cap') {
+            const est = (result.estimatedBytes / 1_048_576).toFixed(1);
+            const cap = (result.capBytes / 1_048_576).toFixed(1);
+            exportError = `Bundle would be ${est} MB (cap ${cap} MB). Tick "${t('bundle.export.force')}" to override.`;
+            return;
+        }
+        if (result.kind === 'error') {
+            exportError = result.message;
+            return;
+        }
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${p.sessionId}.rimobs.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
 </script>
 
 {#if r}
@@ -78,6 +104,21 @@
                     <dt>{t('overview.kv.lastBatch')}</dt>
                     <dd>{relativeTime(r.last_batch_utc)}</dd>
                 </dl>
+
+                <div class="export">
+                    {#if exporting}
+                        <BundleExportForm sessionId={status.session.id} onExport={handleExport} />
+                        {#if exportError}
+                            <p class="export-error" role="alert">{exportError}</p>
+                        {/if}
+                    {:else}
+                        <button
+                            type="button"
+                            onclick={() => (exporting = true)}
+                            data-testid="open-export">{t('bundle.export.title')}</button
+                        >
+                    {/if}
+                </div>
             {:else}
                 <p class="none">{t('overview.noSession')}</p>
             {/if}
@@ -137,6 +178,16 @@
     .none {
         color: var(--text-faint);
         margin: 0;
+    }
+    .export {
+        margin-top: var(--s-4);
+        padding-top: var(--s-4);
+        border-top: 1px solid var(--border-soft);
+    }
+    .export-error {
+        margin: var(--s-2) 0 0;
+        color: var(--bad);
+        font-size: 0.82rem;
     }
 
     @media (max-width: 820px) {

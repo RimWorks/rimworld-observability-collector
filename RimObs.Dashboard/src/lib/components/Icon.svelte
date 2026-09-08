@@ -16,7 +16,6 @@
         probe: 'M9 3h6v4l2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9l2-2V3Zm3 11v.01M12 10v3',
         download: 'M12 4v11m0 0 4-4m-4 4-4-4M5 19h14',
         upload: 'M12 20V9m0 0 4 4m-4-4-4 4M5 5h14',
-        archive: 'M4 7h16v3H4zM5 10h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zM9 14h6',
     } satisfies Record<string, string>;
     export type IconName = keyof typeof PATHS;
     export { PATHS };
