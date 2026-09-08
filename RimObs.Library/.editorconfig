@@ -1,4 +1,4 @@
-# RimObs.Library targets net48 (Unity Mono). Its private static fields use an s_ prefix, the
+# RimObs.Library targets net472 (Unity Mono). Its private static fields use an s_ prefix, the
 # Roslyn/Unity house style, which overrides the repo-root bare-PascalCase convention for this
 # project only. Re-points the inherited private_static_fields rule to the s_ prefixed style.
 [*.cs]
@@ -8,7 +8,7 @@ dotnet_naming_style.s_pascal_case.capitalization = pascal_case
 dotnet_naming_style.s_pascal_case.required_prefix = s_
 
 # these sources also compile under net10 in RimObs.Library.Tests, so the modern analyzers offer
-# APIs net48 does not have: Contains(StringComparison), EndsWith(char), ThrowIfNull,
+# APIs net472 does not have: Contains(StringComparison), EndsWith(char), ThrowIfNull,
 # ThrowIfLessThan.
 dotnet_diagnostic.CA2249.severity = none
 dotnet_diagnostic.CA1866.severity = none

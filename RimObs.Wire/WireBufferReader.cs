@@ -5,7 +5,7 @@ namespace RimWorks.RimObs.Wire;
 
 // Hand-rolled MessagePack-format decoder, the read counterpart to WireBufferWriter. Accepts the
 // canonical compact MessagePack layout so it round-trips this codec's own output and any standard
-// MessagePack producer. Depends only on the BCL; see WireBufferWriter for why the net48 side cannot
+// MessagePack producer. Depends only on the BCL; see WireBufferWriter for why the net472 side cannot
 // reference the MessagePack package.
 internal sealed class WireBufferReader {
     private readonly byte[] _data;

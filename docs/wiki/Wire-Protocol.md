@@ -22,7 +22,7 @@ Every batch begins with a `TelemetryBatch` envelope. The `SchemaVersion` field i
 
 ## Encoding
 
-The wire format is **MessagePack**, encoded as an array of fields in declaration order (field 0 is element 0 in the array, and so on). There is no compression (PRD §35.40). The library ships its own dependency-free codec (`WireCodec`). The `net48` Mono environment cannot load the standard MessagePack NuGet package without crashing the game's assembly loader. The output is byte-for-byte compatible with any standard MessagePack reader on the collector side.
+The wire format is **MessagePack**, encoded as an array of fields in declaration order (field 0 is element 0 in the array, and so on). There is no compression (PRD §35.40). The library ships its own dependency-free codec (`WireCodec`). The `net472` Mono environment cannot load the standard MessagePack NuGet package without crashing the game's assembly loader. The output is byte-for-byte compatible with any standard MessagePack reader on the collector side.
 
 ## Types
 

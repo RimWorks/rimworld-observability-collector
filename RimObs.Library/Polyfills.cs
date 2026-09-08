@@ -8,7 +8,7 @@ namespace System.Diagnostics.CodeAnalysis {
 }
 
 namespace System.Runtime.CompilerServices {
-    // Marker the compiler needs to emit init-only setters. net48 has no such type.
+    // Marker the compiler needs to emit init-only setters. net472 has no such type.
     internal static class IsExternalInit { }
 }
 #endif

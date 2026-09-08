@@ -5,7 +5,7 @@ This page takes you from zero to a visible section in the dashboard in about fiv
 ## Prerequisites
 
 - RimWorld 1.6 or later
-- .NET SDK 4.8 (the library targets `net48` to run inside RimWorld's Unity Mono, see [Architecture](Architecture))
+- .NET SDK 4.8 (the library targets `net472` to run inside RimWorld's Unity Mono, see [Architecture](Architecture))
 - The RimObs mod installed by the player at runtime (distributed via Steam Workshop)
 
 ## Add the package

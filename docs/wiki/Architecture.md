@@ -4,20 +4,20 @@ RimObs spans three separate runtimes because each piece runs in a fundamentally 
 
 ## Summary
 
-The system has three runtimes. A `net48` instrumentation library runs inside RimWorld's Unity Mono process. A `netstandard2.0` shared wire-type library serves both sides. A `net10` collector daemon runs out of process. A MessagePack-framed UDP and HTTP protocol carries telemetry to the collector. The collector stores it in SQLite and serves it through an embedded Svelte 5 SPA.
+The system has three runtimes. A `net472` instrumentation library runs inside RimWorld's Unity Mono process. A `netstandard2.0` shared wire-type library serves both sides. A `net10` collector daemon runs out of process. A MessagePack-framed UDP and HTTP protocol carries telemetry to the collector. The collector stores it in SQLite and serves it through an embedded Svelte 5 SPA.
 
 ## The three runtimes
 
 | Project | Target | Where it runs |
 | --- | --- | --- |
-| `RimObs.Library/` | net48 | Inside RimWorld's Unity Mono. Patches game code via Harmony. |
+| `RimObs.Library/` | net472 | Inside RimWorld's Unity Mono. Patches game code via Harmony. |
 | `RimObs.Wire/` | netstandard2.0 | Shared MessagePack types. Linked from both Library and Collector. |
 | `RimObs.Collector/` | net10.0 | Standalone daemon + CLI. Single self-contained binary per RID. |
 | `RimObs.Dashboard/` | Svelte 5 + Vite | Static SPA. Built once, embedded as resource in `Collector.exe`. |
 
-### `RimObs.Library/` (net48)
+### `RimObs.Library/` (net472)
 
-Runs inside RimWorld's Unity Mono. The target is `net48` because that is what RimWorld's bundled Mono runtime supports, no other target is viable here.
+Runs inside RimWorld's Unity Mono. The target is `net472` because that is what RimWorld's bundled Mono runtime supports, no other target is viable here.
 
 The library's job is to be as invisible as possible. It applies Harmony IL transpilers to game methods at startup and writes measurements into a pre-allocated ring buffer. A background sender thread drains that buffer. At bootstrap the library scans upward from port `25950` for the first port free on both TCP and UDP. It then launches the collector child process with `--port <P>`, so both processes agree on the port.
 
@@ -25,7 +25,7 @@ Hot-path discipline is mandatory: zero allocation on the steady path, no locks, 
 
 ### `RimObs.Wire/` (netstandard2.0)
 
-A shared project that carries only MessagePack message types, no logic, no runtime dependencies beyond the MessagePack library itself. The `netstandard2.0` target is necessary because the same assembly is consumed from `net48` (the library) and `net10` (the collector). It also ships as its own NuGet package. Third-party tool authors can encode and decode RimObs wire messages without depending on the full library or collector.
+A shared project that carries only MessagePack message types, no logic, no runtime dependencies beyond the MessagePack library itself. The `netstandard2.0` target is necessary because the same assembly is consumed from `net472` (the library) and `net10` (the collector). It also ships as its own NuGet package. Third-party tool authors can encode and decode RimObs wire messages without depending on the full library or collector.
 
 ### `RimObs.Collector/` (net10.0)
 
@@ -79,7 +79,7 @@ RimWorld's `ModAssemblyHandler.ReloadAll` walks the `Assemblies/` directory recu
 
 This overrides PRD §35.24 and §35.27, which document the older `Assemblies/Collector/<rid>/` layout. The `.claude/rules/project-overview.md` is the authoritative source for the current deployment layout.
 
-The library itself (`RimObs.dll`) and `RimObs.Wire.dll` are both `net48` and deploy to `Assemblies/` as normal.
+`RimObs.dll` builds as `net472` and `RimObs.Wire.dll` as `netstandard2.0`. Both load in Unity Mono and deploy to `Assemblies/` as normal.
 
 ## Wire protocol
 

@@ -18,7 +18,7 @@ Agents: if the user commits by hand, remind them to add the trailer.
 
 RimObs profiles a running RimWorld colony and records where every tick goes: timed sections,
 counters, gauges, histograms, GC events, allocation samples, and Harmony patch conflicts. It
-spans three runtimes. A `net48` library runs inside the game, an out-of-process `net10`
+spans three runtimes. A `net472` library runs inside the game, an out-of-process `net10`
 collector aggregates the data and owns SQLite storage, and a Svelte dashboard is embedded in
 the collector and served from `/`. Mod authors register their own named sections and metrics,
 which land in the same dashboard as the game's. The full documentation is in the
@@ -26,7 +26,7 @@ which land in the same dashboard as the game's. The full documentation is in the
 
 ## Project structure
 
-- `RimObs.Library/` - `net48`, runs inside RimWorld's Unity Mono. Instruments game code with
+- `RimObs.Library/` - `net472`, runs inside RimWorld's Unity Mono. Instruments game code with
   Harmony IL transpilers. Builds to `Assemblies/RimObs.dll`
 - `RimObs.Collector/` - `net10.0` daemon and CLI. HTTP and UDP API, SQLite session storage,
   serves the embedded SPA
@@ -67,7 +67,7 @@ make lint                                                          # dotnet form
 - Formatter: `dotnet format` and prettier, via `make format`. Linter: `make lint` runs
   `dotnet format --verify-no-changes` plus eslint over the dashboard. Run them; do not
   hand-format.
-- Library code targets `net48` and must not allocate in the hot path.
+- Library code targets `net472` and must not allocate in the hot path.
 - Follow the patterns already in neighboring files.
 - Do not add comments that restate the code.
 - Do not reformat code you are not otherwise changing.

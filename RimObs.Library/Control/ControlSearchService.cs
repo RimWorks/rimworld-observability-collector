@@ -54,7 +54,7 @@ internal static class ControlSearchService {
         return true;
     }
 
-    // net48 has no string.Contains(string, StringComparison), so IndexOf stays.
+    // net472 has no string.Contains(string, StringComparison), so IndexOf stays.
     private static bool Matches(string needle, string typeFullName, string methodName) =>
         typeFullName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0
         || methodName.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;

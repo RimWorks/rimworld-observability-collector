@@ -19,7 +19,7 @@ internal static class FrameTickCounters {
     public static void RecordFrame() => Interlocked.Increment(ref s_Frames);
 
     // separate from s_Frames because the sample path reads this once per sample, and
-    // Interlocked.Read on a long is a lock-prefixed cmpxchg on net48.
+    // Interlocked.Read on a long is a lock-prefixed cmpxchg on net472.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void BeginFrame() => s_FrameOrdinal++;
 

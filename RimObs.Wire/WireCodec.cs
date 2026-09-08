@@ -4,7 +4,7 @@ using RimWorks.RimObs.Wire.Control;
 
 namespace RimWorks.RimObs.Wire;
 
-// Dependency-free MessagePack codec. The net48 library cannot ship MessagePack.dll: its dynamic
+// Dependency-free MessagePack codec. The net472 library cannot ship MessagePack.dll: its dynamic
 // codegen references System.Reflection.Emit split facades that fail to bind under Unity Mono.
 // Encodes the same array-of-fields layout MessagePack's generated formatters produce, so it
 // stays interoperable with any standard reader on the collector side.

@@ -3,8 +3,8 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <RunSettingsFilePath>$(MSBuildProjectDirectory)/coverlet.runsettings</RunSettingsFilePath>
-        <!-- NU1701: compiles net48 library sources under net10, so RimLogging and its
-             transitive Krafs.Rimworld.Ref restore as net48. -->
+        <!-- NU1701: compiles net472 library sources under net10, so RimLogging and its
+             transitive Krafs.Rimworld.Ref restore as net472. -->
         <NoWarn>$(NoWarn);NU1701</NoWarn>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
