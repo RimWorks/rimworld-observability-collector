@@ -11,4 +11,7 @@ internal sealed class MetricLabelEntry {
     internal long GaugeValue;
     internal long HistogramObservationCount;
     internal long HistogramSum;
+
+    internal long FlushedValue;
+    internal long FlushedCount;
 }

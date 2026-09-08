@@ -31,4 +31,8 @@ internal sealed class MetricDescriptor {
     internal long HistogramObservationCount;
     internal long HistogramSum;
     internal long CardinalityIncidentCount;
+
+    // sender thread only: what the last flush put on the wire, so quiet metrics send nothing.
+    internal long FlushedValue;
+    internal long FlushedCount;
 }

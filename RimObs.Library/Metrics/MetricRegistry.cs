@@ -14,6 +14,8 @@ internal static class MetricRegistry {
     private static readonly object s_Lock = new();
     private static int s_Count;
 
+    private static readonly List<int> s_PendingRegistrations = [];
+
     public static int Count {
         get {
             lock (s_Lock) {
@@ -49,6 +51,7 @@ internal static class MetricRegistry {
             MetricDescriptor descriptor = new(id, fullName, ownerPackageId, kind, subsystem, unit, cardinalityLimit);
             s_Descriptors[id] = descriptor;
             s_Lookup[fullName] = id;
+            s_PendingRegistrations.Add(id);
             return descriptor;
         }
     }
@@ -57,11 +60,27 @@ internal static class MetricRegistry {
     public static MetricDescriptor? Get(int id) =>
         (uint)id < (uint)s_Count ? s_Descriptors[id] : null;
 
+    public static int DrainPendingRegistrations(int[] ids, string[] names, byte[] kinds, string[] units) {
+        lock (s_Lock) {
+            int n = Math.Min(s_PendingRegistrations.Count, Math.Min(ids.Length, Math.Min(names.Length, Math.Min(kinds.Length, units.Length))));
+            for (int i = 0; i < n; i++) {
+                MetricDescriptor descriptor = s_Descriptors[s_PendingRegistrations[i]]!;
+                ids[i] = descriptor.Id;
+                names[i] = descriptor.FullName;
+                kinds[i] = (byte)descriptor.Kind;
+                units[i] = descriptor.Unit ?? string.Empty;
+            }
+            s_PendingRegistrations.RemoveRange(0, n);
+            return n;
+        }
+    }
+
     public static void Clear() {
         lock (s_Lock) {
             for (int i = 0; i < s_Count; i++)
                 s_Descriptors[i] = null;
             s_Lookup.Clear();
+            s_PendingRegistrations.Clear();
             s_Count = 0;
         }
     }

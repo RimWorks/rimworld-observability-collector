@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Metrics;
 using RimWorks.RimObs.Observers;
 using RimWorks.RimObs.Profile;
 using RimWorks.RimObs.Wire;
@@ -31,6 +33,18 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private readonly int[] _registrationIds = new int[64];
     private readonly string[] _registrationNames = new string[64];
     private readonly string?[] _registrationSubsystems = new string?[64];
+
+    private readonly int[] _metricRegistrationIds = new int[64];
+    private readonly string[] _metricRegistrationNames = new string[64];
+    private readonly byte[] _metricRegistrationKinds = new byte[64];
+    private readonly string[] _metricRegistrationUnits = new string[64];
+
+    private readonly int[] _metricIds = new int[BatchSize];
+    private readonly string[] _metricCanonicals = new string[BatchSize];
+    private readonly byte[] _metricKinds = new byte[BatchSize];
+    private readonly long[] _metricValues = new long[BatchSize];
+    private readonly long[] _metricSampleCounts = new long[BatchSize];
+    private int _metricStaged;
 
     private const int ObserverQueueCapacity = 256;
     private readonly BoundedSampleQueue<GcEventSample> _gcQueue = new(ObserverQueueCapacity);
@@ -100,6 +114,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 }
 
                 FlushRegistrations();
+                FlushMetricRegistrations();
+                FlushMetrics();
                 FlushSamples();
                 FlushGcEvents();
                 FlushAllocations();
@@ -150,6 +166,104 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             Subsystems = Slice(_registrationSubsystems, n),
         };
         SendBatch(BatchType.SectionRegistrations, batch);
+    }
+
+    private void FlushMetricRegistrations() {
+        int n = MetricRegistry.DrainPendingRegistrations(_metricRegistrationIds, _metricRegistrationNames, _metricRegistrationKinds, _metricRegistrationUnits);
+        if (n == 0)
+            return;
+        MetricRegistrationsBatch batch = new() {
+            MetricIds = Slice(_metricRegistrationIds, n),
+            Names = Slice(_metricRegistrationNames, n),
+            Kinds = Slice(_metricRegistrationKinds, n),
+            Units = Slice(_metricRegistrationUnits, n),
+        };
+        SendBatch(BatchType.MetricRegistrations, batch);
+    }
+
+    private void FlushMetrics() {
+        int count = MetricRegistry.Count;
+        for (int id = 0; id < count; id++) {
+            MetricDescriptor? descriptor = MetricRegistry.Get(id);
+            if (descriptor == null)
+                continue;
+
+            StageMetric(
+                descriptor,
+                string.Empty,
+                Interlocked.Read(ref descriptor.CounterTotal),
+                Interlocked.Read(ref descriptor.GaugeValue),
+                Interlocked.Read(ref descriptor.HistogramSum),
+                Interlocked.Read(ref descriptor.HistogramObservationCount),
+                ref descriptor.FlushedValue,
+                ref descriptor.FlushedCount
+            );
+
+            foreach (KeyValuePair<string, MetricLabelEntry> pair in descriptor.LabeledEntries) {
+                MetricLabelEntry entry = pair.Value;
+                StageMetric(
+                    descriptor,
+                    pair.Key,
+                    Interlocked.Read(ref entry.CounterTotal),
+                    Interlocked.Read(ref entry.GaugeValue),
+                    Interlocked.Read(ref entry.HistogramSum),
+                    Interlocked.Read(ref entry.HistogramObservationCount),
+                    ref entry.FlushedValue,
+                    ref entry.FlushedCount
+                );
+            }
+        }
+        SendStagedMetrics();
+    }
+
+    private void StageMetric(MetricDescriptor descriptor, string canonical, long counterTotal, long gaugeValue, long histogramSum, long histogramCount, ref long flushedValue, ref long flushedCount) {
+        long value;
+        long samples;
+        switch (descriptor.Kind) {
+            case MetricKind.Counter:
+                value = counterTotal;
+                samples = counterTotal - flushedValue;
+                break;
+            case MetricKind.Gauge:
+                value = gaugeValue;
+                samples = gaugeValue == flushedValue ? 0 : 1;
+                break;
+            default:
+                value = histogramSum;
+                samples = histogramCount - flushedCount;
+                break;
+        }
+
+        if (samples == 0 && value == flushedValue)
+            return;
+
+        flushedValue = value;
+        flushedCount = histogramCount;
+
+        _metricIds[_metricStaged] = descriptor.Id;
+        _metricCanonicals[_metricStaged] = canonical;
+        _metricKinds[_metricStaged] = (byte)descriptor.Kind;
+        _metricValues[_metricStaged] = value;
+        _metricSampleCounts[_metricStaged] = samples;
+        _metricStaged++;
+
+        if (_metricStaged == BatchSize)
+            SendStagedMetrics();
+    }
+
+    private void SendStagedMetrics() {
+        int n = _metricStaged;
+        if (n == 0)
+            return;
+        _metricStaged = 0;
+        MetricsBatch batch = new() {
+            MetricIds = Slice(_metricIds, n),
+            LabelCanonicals = Slice(_metricCanonicals, n),
+            Kinds = Slice(_metricKinds, n),
+            Values = Slice(_metricValues, n),
+            SampleCounts = Slice(_metricSampleCounts, n),
+        };
+        SendBatch(BatchType.Metrics, batch);
     }
 
     private void FlushSamples() {
