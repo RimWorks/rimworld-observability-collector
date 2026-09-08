@@ -12,6 +12,9 @@ public sealed class DynamicPatchReplayer {
     }
 
     public async Task ReplayAsync(ControlClient client) {
+        // a new session renumbers every patch, so last session's ids are meaningless now.
+        _store.ClearLivePatchIds();
+
         foreach (DynamicPatchRow row in _store.List()) {
             string[] paramTypes = row.ParamTypesJoined.Length == 0
                 ? []
@@ -23,10 +26,13 @@ public sealed class DynamicPatchReplayer {
                     MethodName = row.MethodName,
                     ParamTypeFullNames = paramTypes,
                 });
-                if (res.Status == PatchStatus.Active)
+                if (res.Status == PatchStatus.Active) {
                     _store.UpdateStatus(row.Id, PatchStatus.Active, null);
-                else
+                    _store.UpdateLivePatchId(row.Id, res.PatchId);
+                }
+                else {
                     _store.UpdateStatus(row.Id, PatchStatus.Stale, res.ErrorReason);
+                }
             }
             catch (System.Exception ex) {
                 _store.UpdateStatus(row.Id, PatchStatus.Stale, ex.Message);

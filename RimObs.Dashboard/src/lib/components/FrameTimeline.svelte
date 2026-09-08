@@ -22,11 +22,13 @@
         names,
         orphanCount = $bindable(0),
         selectedNode = $bindable(-1),
+        onContext,
     }: {
         frame: FrameData | null;
         names: Map<number, { name: string; subsystem: string | null }>;
         orphanCount?: number;
         selectedNode?: number;
+        onContext?: (p: { sectionId: number; x: number; y: number }) => void;
     } = $props();
 
     const ANIM_MS = 180;
@@ -310,6 +312,15 @@
         if (idx >= 0) zoomToNode(tree.nodes[idx]);
     }
 
+    function handleContextMenu(event: MouseEvent): void {
+        if (!frame || !canvasEl || !onContext) return;
+        const { depth, atUs } = posToView(event.clientX, event.clientY);
+        const idx = hitTest(tree.nodes, depth, atUs);
+        if (idx < 0) return;
+        event.preventDefault();
+        onContext({ sectionId: tree.nodes[idx].sectionId, x: event.clientX, y: event.clientY });
+    }
+
     function handlePointerLeave(): void {
         hoverAt = null;
     }
@@ -405,6 +416,7 @@
             height={heightPx * dpr}
             style="width: {widthPx}px; height: {heightPx}px;"
             onkeydown={handleKeydown}
+            oncontextmenu={handleContextMenu}
             onwheel={handleWheel}
             onpointerdown={handlePointerDown}
             onpointermove={handlePointerMove}

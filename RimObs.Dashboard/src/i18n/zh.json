@@ -35,7 +35,6 @@
     "overview.kv.update": "更新",
     "overview.upToDate": "已是最新",
     "instrumentation.search.placeholder": "按类型或方法名搜索",
-    "instrumentation.search.empty": "输入查询以搜索已加载的程序集",
     "instrumentation.search.noresults": "没有匹配的方法",
     "instrumentation.results.button": "插桩",
     "instrumentation.active.title": "活跃补丁",

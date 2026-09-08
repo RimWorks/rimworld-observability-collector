@@ -134,6 +134,23 @@ const PATCHES_BODY = {
     ],
 };
 
+const INSTRUMENTATION_BODY = {
+    schema_version: 6,
+    persisted: [
+        {
+            id: 3,
+            typeFullName: 'Verse.TickList',
+            methodName: 'Tick',
+            paramTypesJoined: '',
+            createdUtc: '',
+            lastStatus: 'active',
+            lastError: null,
+            livePatchId: 5,
+        },
+    ],
+    live: [{ patchId: 5, sectionId: 30, signature: 'Verse.TickList:Tick()', status: 'active' }],
+};
+
 const BUNDLE_FRAMES_BODY = {
     schema_version: 6,
     session_id: 'sess-imported',
@@ -194,6 +211,7 @@ function mockFetch(
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
         else if (url.includes('/sessions/current/patches')) body = PATCHES_BODY;
+        else if (url.includes('/instrumentation/patches')) body = INSTRUMENTATION_BODY;
         else if (url.includes('/timeseries')) body = TIMESERIES_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
@@ -835,6 +853,26 @@ describe('Flamegraph page', () => {
         expect(badges).toHaveLength(1);
         expect(badges[0].textContent?.trim()).toBe('2');
         expect(badges[0].closest('tr')?.textContent).toContain('Verse.Root_Play.Update');
+    });
+
+    // the canvas right-click path itself needs real geometry, which jsdom does not give a
+    // canvas. liveSectionIds covers the lookup; this covers the panel being wired in at all.
+    it('carries the instrumentation panel and its active patches', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('instrumentation-panel')).toBeTruthy());
+
+        const rows = await screen.findAllByTestId('active-patches');
+        expect(rows[0].textContent).toContain('Verse.TickList.Tick');
+        expect(await screen.findByTestId('patch-status')).toHaveTextContent(/active/i);
+    });
+
+    it('shows no context menu until a bar is right-clicked', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('instrumentation-panel')).toBeTruthy());
+
+        expect(screen.queryByTestId('flame-context')).toBeNull();
     });
 
     it('hides the strip and transport for an imported bundle', async () => {

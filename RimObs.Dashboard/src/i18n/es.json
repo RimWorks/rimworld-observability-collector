@@ -35,7 +35,6 @@
     "overview.kv.update": "actualización",
     "overview.upToDate": "actualizado",
     "instrumentation.search.placeholder": "Buscar por tipo o nombre de método",
-    "instrumentation.search.empty": "Escribe una consulta para buscar en los ensamblados cargados",
     "instrumentation.search.noresults": "Ningún método coincide",
     "instrumentation.results.button": "Instrumentar",
     "instrumentation.active.title": "Parches activos",

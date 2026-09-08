@@ -35,7 +35,6 @@
     "overview.kv.update": "Update",
     "overview.upToDate": "aktuell",
     "instrumentation.search.placeholder": "Nach Typ- oder Methodennamen suchen",
-    "instrumentation.search.empty": "Gib eine Suche ein, um geladene Assemblies zu durchsuchen",
     "instrumentation.search.noresults": "Keine Methoden gefunden",
     "instrumentation.results.button": "Instrumentieren",
     "instrumentation.active.title": "Aktive Patches",

@@ -235,12 +235,21 @@ export interface InstrumentationPatchEntry {
     createdUtc: string;
     lastStatus: 'pending' | 'active' | 'stale';
     lastError: string | null;
+    /** the id the library gave this patch this session, null until it has been applied */
+    livePatchId: number | null;
+}
+
+export interface LivePatchEntry {
+    patchId: number;
+    signature: string;
+    sectionId: number;
+    status: string;
 }
 
 export interface InstrumentationPatchesResponse {
     schema_version: number;
     persisted: InstrumentationPatchEntry[];
-    live?: { patchId: number; signature: string; sectionId: number; status: string }[];
+    live?: LivePatchEntry[];
 }
 
 export interface InstrumentationPatchResult {

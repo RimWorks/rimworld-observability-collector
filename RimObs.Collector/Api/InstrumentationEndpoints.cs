@@ -32,8 +32,10 @@ public static class InstrumentationEndpoints {
                 return error;
             ControlClient client = new(registry.ControlPort, registry.ControlSecret);
             ControlPatchResponse res = await client.PatchAsync(req!);
-            if (res.Status == PatchStatus.Active)
-                store.Insert(req!.TypeFullName, req.MethodName, string.Join(";", req.ParamTypeFullNames));
+            if (res.Status == PatchStatus.Active) {
+                long rowId = store.Insert(req!.TypeFullName, req.MethodName, string.Join(";", req.ParamTypeFullNames));
+                store.UpdateLivePatchId(rowId, res.PatchId);
+            }
             return Results.Ok(new {
                 schema_version = SchemaVersion.Current,
                 patch = res,
@@ -55,9 +57,12 @@ public static class InstrumentationEndpoints {
         });
 
         endpoints.MapDelete("/api/v1/instrumentation/patches/{id:long}", async (SessionMetaRegistry registry, DynamicPatchStore store, long id) => {
-            if (registry.IsAvailable) {
+            // the library renumbers its patch ids from 1 every launch, so the row id is not a
+            // valid handle for it. only the recorded live id is.
+            int? livePatchId = store.Find(id)?.LivePatchId;
+            if (registry.IsAvailable && livePatchId is not null) {
                 ControlClient client = new(registry.ControlPort, registry.ControlSecret);
-                await client.UnpatchAsync(id);
+                await client.UnpatchAsync(livePatchId.Value);
             }
             store.Delete(id);
             return Results.NoContent();

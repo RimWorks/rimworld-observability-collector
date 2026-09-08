@@ -44,6 +44,43 @@ public class DynamicPatchStoreTests {
         row.LastError.Should().Be("mod uninstalled");
     }
 
+    [Fact]
+    public void Live_patch_id_starts_null_and_round_trips() {
+        using DynamicPatchStore store = Open();
+        long id = store.Insert("A", "B", "");
+        store.List()[0].LivePatchId.Should().BeNull();
+
+        store.UpdateLivePatchId(id, 7);
+
+        store.List()[0].LivePatchId.Should().Be(7);
+    }
+
+    // the library restarts its patch ids at 1 every launch, so carrying last session's ids
+    // into a replay would point the unpatch endpoint at the wrong method.
+    [Fact]
+    public void Clear_live_patch_ids_wipes_every_row() {
+        using DynamicPatchStore store = Open();
+        long first = store.Insert("A", "B", "");
+        long second = store.Insert("C", "D", "");
+        store.UpdateLivePatchId(first, 1);
+        store.UpdateLivePatchId(second, 2);
+
+        store.ClearLivePatchIds();
+
+        store.List().Should().OnlyContain(r => r.LivePatchId == null);
+    }
+
+    [Fact]
+    public void Find_returns_the_row_with_its_live_id() {
+        using DynamicPatchStore store = Open();
+        store.Insert("A", "B", "");
+        long wanted = store.Insert("C", "D", "");
+        store.UpdateLivePatchId(wanted, 42);
+
+        store.Find(wanted)!.LivePatchId.Should().Be(42);
+        store.Find(9999).Should().BeNull();
+    }
+
     [Theory]
     [InlineData(PatchStatus.Pending)]
     [InlineData(PatchStatus.Active)]

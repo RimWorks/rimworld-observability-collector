@@ -49,6 +49,20 @@ public sealed class DynamicPatchStore : IDisposable {
             );
             """;
         cmd.ExecuteNonQuery();
+        AddLivePatchIdColumn();
+    }
+
+    // stores written before the live-id fix have no such column, and sqlite has no
+    // ADD COLUMN IF NOT EXISTS.
+    private void AddLivePatchIdColumn() {
+        using SqliteCommand check = _conn.CreateCommand();
+        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('dynamic_patches') WHERE name='live_patch_id';";
+        if ((long)check.ExecuteScalar()! > 0)
+            return;
+
+        using SqliteCommand add = _conn.CreateCommand();
+        add.CommandText = "ALTER TABLE dynamic_patches ADD COLUMN live_patch_id INTEGER;";
+        add.ExecuteNonQuery();
     }
 
     public long Insert(string typeFullName, string methodName, string paramTypesJoined) {
@@ -69,14 +83,39 @@ public sealed class DynamicPatchStore : IDisposable {
     public IReadOnlyList<DynamicPatchRow> List() {
         List<DynamicPatchRow> rows = new();
         using SqliteCommand cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT id, type_full_name, method_name, param_types_joined, created_utc, last_status, last_error FROM dynamic_patches ORDER BY id;";
+        cmd.CommandText = "SELECT id, type_full_name, method_name, param_types_joined, created_utc, last_status, last_error, live_patch_id FROM dynamic_patches ORDER BY id;";
         using SqliteDataReader r = cmd.ExecuteReader();
         while (r.Read()) {
             rows.Add(new DynamicPatchRow(
                 r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3),
-                r.GetString(4), ParseStatus(r.GetString(5)), r.IsDBNull(6) ? null : r.GetString(6)));
+                r.GetString(4), ParseStatus(r.GetString(5)), r.IsDBNull(6) ? null : r.GetString(6),
+                r.IsDBNull(7) ? null : r.GetInt32(7)));
         }
         return rows;
+    }
+
+    public DynamicPatchRow? Find(long id) {
+        foreach (DynamicPatchRow row in List()) {
+            if (row.Id == id)
+                return row;
+        }
+        return null;
+    }
+
+    /// <summary>Records the id the library handed back, so an unpatch can target the right one.</summary>
+    public void UpdateLivePatchId(long id, int? livePatchId) {
+        using SqliteCommand cmd = _conn.CreateCommand();
+        cmd.CommandText = "UPDATE dynamic_patches SET live_patch_id=$live WHERE id=$id";
+        cmd.Parameters.AddWithValue("$live", (object?)livePatchId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Clears every live id, because a new game session renumbers them all from 1.</summary>
+    public void ClearLivePatchIds() {
+        using SqliteCommand cmd = _conn.CreateCommand();
+        cmd.CommandText = "UPDATE dynamic_patches SET live_patch_id=NULL;";
+        cmd.ExecuteNonQuery();
     }
 
     public void UpdateStatus(long id, PatchStatus status, string? error) {

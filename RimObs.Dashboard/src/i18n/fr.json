@@ -35,7 +35,6 @@
     "overview.kv.update": "mise à jour",
     "overview.upToDate": "à jour",
     "instrumentation.search.placeholder": "Rechercher par nom de type ou de méthode",
-    "instrumentation.search.empty": "Saisissez une requête pour rechercher dans les assemblages chargés",
     "instrumentation.search.noresults": "Aucune méthode ne correspond",
     "instrumentation.results.button": "Instrumenter",
     "instrumentation.active.title": "Patchs actifs",
