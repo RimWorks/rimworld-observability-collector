@@ -53,6 +53,7 @@ public class DynamicPatchReplayerTests {
         using DynamicPatchStore store = DynamicPatchStore.OpenInMemory();
         long rowId = store.Insert("X.Y", "Gone", "");
         store.UpdateLivePatchId(rowId, 4);
+        new DynamicPatchReplayer(store).ForgetLiveIds();
         using StubControlServer stub = new("s");
         stub.OnPatch = _ => new ControlPatchResponse {
             Status = PatchStatus.Stale,

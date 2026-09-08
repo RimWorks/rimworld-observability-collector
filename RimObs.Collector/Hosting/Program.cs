@@ -132,6 +132,7 @@ public static class Program {
             ));
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Receive.UdpReceiver>());
         if (hasPersister) {
+            builder.Services.AddHostedService<Instrumentation.DynamicPatchReplayService>();
             builder.Services.AddHostedService<Storage.PersistenceFlusher>();
         }
         if (serveOptions != null && serveOptions.ParentPid > 0) {

@@ -11,11 +11,23 @@ public sealed class DynamicPatchReplayer {
         _store = store;
     }
 
-    public async Task ReplayAsync(ControlClient client) {
-        // a new session renumbers every patch, so last session's ids are meaningless now.
-        _store.ClearLivePatchIds();
-
+    /// <summary>Rows still worth another attempt, because the game may not have been ready yet.</summary>
+    public bool HasPendingRows() {
         foreach (DynamicPatchRow row in _store.List()) {
+            if (row.LastStatus == PatchStatus.Pending)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Call once per session: the game renumbers every patch id when it restarts.</summary>
+    public void ForgetLiveIds() => _store.ClearLivePatchIds();
+
+    public async Task ReplayAsync(ControlClient client) {
+        foreach (DynamicPatchRow row in _store.List()) {
+            if (row.LastStatus == PatchStatus.Active && row.LivePatchId is not null)
+                continue;
+
             string[] paramTypes = row.ParamTypesJoined.Length == 0
                 ? []
                 : row.ParamTypesJoined.Split(';');
@@ -33,6 +45,11 @@ public sealed class DynamicPatchReplayer {
                 else {
                     _store.UpdateStatus(row.Id, PatchStatus.Stale, res.ErrorReason);
                 }
+            }
+            catch (ControlClientException ex) when (ex.Status == 504) {
+                // the game has not drained its queue yet, usually because no map is loaded.
+                // leave the row pending so the next sweep tries again.
+                _store.UpdateStatus(row.Id, PatchStatus.Pending, ex.Message);
             }
             catch (System.Exception ex) {
                 _store.UpdateStatus(row.Id, PatchStatus.Stale, ex.Message);
