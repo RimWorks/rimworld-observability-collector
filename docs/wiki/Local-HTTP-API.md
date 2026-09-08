@@ -12,7 +12,7 @@ Every piece of data shown in the dashboard comes from this API. Third-party tool
 http://localhost:<port>
 ```
 
-In standalone mode the port is always `17654`. When launched from the game the library picks an ephemeral port, writes it to a discovery file, and passes it to the collector via `--port`. The library writes the discovery files to:
+In standalone mode the port is always `17654`. When launched from the game the library picks the first free port at or above `25950`, writes it to a discovery file, and passes it to the collector via `--port`. The library writes the discovery files to:
 
 - Windows: `%LOCALAPPDATA%\RimWorks.RimObs\`
 - Linux/macOS: `~/.local/share/RimWorks.RimObs/` (or `$XDG_DATA_HOME`)

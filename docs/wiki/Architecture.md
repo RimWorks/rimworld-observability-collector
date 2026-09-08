@@ -19,7 +19,7 @@ The system has three runtimes. A `net48` instrumentation library runs inside Rim
 
 Runs inside RimWorld's Unity Mono. The target is `net48` because that is what RimWorld's bundled Mono runtime supports, no other target is viable here.
 
-The library's job is to be as invisible as possible. It applies Harmony IL transpilers to game methods at startup and writes measurements into a pre-allocated ring buffer. A background sender thread drains that buffer. The library allocates a fresh ephemeral port at bootstrap. It then launches the collector child process with `--port <P>`, so both processes agree on the port.
+The library's job is to be as invisible as possible. It applies Harmony IL transpilers to game methods at startup and writes measurements into a pre-allocated ring buffer. A background sender thread drains that buffer. At bootstrap the library scans upward from port `25950` for the first port free on both TCP and UDP. It then launches the collector child process with `--port <P>`, so both processes agree on the port.
 
 Hot-path discipline is mandatory: zero allocation on the steady path, no locks, no `Task`/`async`, no string concatenation (PRD §11.6). Sections are registered by bare name; the library auto-prefixes each name with the mod's `packageId` (PRD §35.69).
 
@@ -56,7 +56,7 @@ The behavior depends on how the collector was launched.
 
 **In-game (library-managed) launch:**
 
-1. The library allocates a fresh ephemeral port at bootstrap.
+1. The library scans upward from port `25950` for the first free port.
 2. It spawns the collector binary with `--port <P> --parent-pid <RimWorldPID>`.
 3. HTTP and UDP both bind to that port.
 4. The collector PID-watches the RimWorld process and self-exits when the game closes.
@@ -67,7 +67,7 @@ The behavior depends on how the collector was launched.
 
 Running `collector serve` without `--port` or `--parent-pid` uses the fixed port `17654` and runs until killed. This is the mode for CI, scripting, or loading saved session data outside of a running game.
 
-This model supersedes PRD §35.71, which described a fixed-port + daemon-reuse approach. The ephemeral-port model avoids port conflicts when multiple RimWorld instances run simultaneously and gives the library full ownership of the collector's lifetime.
+This model supersedes PRD §35.71, which described a fixed-port + daemon-reuse approach. Scanning for a free port avoids conflicts when several RimWorld instances run at once, and gives the library full ownership of the collector's lifetime.
 
 Time is measured via `Stopwatch.GetTimestamp()` with a session-start UTC anchor captured once at collector startup. All timestamps in the wire protocol and database are relative to that anchor and converted to wall-clock time on read (PRD §35.67).
 

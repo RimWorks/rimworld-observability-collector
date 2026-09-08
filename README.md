@@ -109,8 +109,8 @@ make publish-collector  # self-contained binaries for win/linux/osx
   [Hot-path discipline](https://github.com/RimWorks/rimworld-observability-collector/wiki/Hot-Path-Discipline)
   for the full rules.
 - Wire protocol is MessagePack with per-batch `schema_version`. Default
-  port `17654` for HTTP and UDP in standalone mode; ephemeral when launched
-  from the game. See
+  port `17654` for HTTP and UDP in standalone mode; the first free port at or
+  above `25950` when launched from the game. See
   [Wire protocol](https://github.com/RimWorks/rimworld-observability-collector/wiki/Wire-Protocol).
 
 ## More modding tools from RimWorks

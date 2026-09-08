@@ -72,8 +72,8 @@ scrape_configs:
       - targets: ['127.0.0.1:17654']
 ```
 
-Use the actual collector port (the library allocates an ephemeral port per session;
-`serve` mode uses the fixed `17654`). Reload Prometheus and confirm the `rimworld` target
+Use the actual collector port (the library picks the first free port at or above
+`25950`; `serve` mode uses the fixed `17654`). Reload Prometheus and confirm the `rimworld` target
 is `UP` under **Status -> Targets**.
 
 ## Wire up Grafana

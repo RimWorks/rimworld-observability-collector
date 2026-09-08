@@ -96,7 +96,7 @@ public sealed class RimObsMod : Mod {
             SessionAnchor.Initialize(Guid.NewGuid().ToString("N"));
             string ownerId = ResolveOwnerId(content);
 
-            int port = EphemeralPort.Allocate();
+            int port = CollectorPort.Allocate();
             int parentPid = Process.GetCurrentProcess().Id;
 
             ControlServices.StartServer(ownerId);

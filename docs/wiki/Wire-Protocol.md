@@ -8,7 +8,7 @@ The collector exposes an HTTP API for querying stored data after the fact (see [
 
 ## Transport
 
-Two channels share the same port number. In standalone mode that port is `17654`. When the library launches the collector automatically, it allocates an ephemeral port and passes it as a command-line argument. The library also writes a discovery file, so tools can read the active port without hard-coding it. The discovery mechanism lives in `RimObs.Library/Transport/CollectorScanner.cs`.
+Two channels share the same port number. In standalone mode that port is `17654`. When the library launches the collector automatically, it picks the first free port at or above `25950` and passes it as a command-line argument. The library also writes a discovery file, so tools can read the active port without hard-coding it. The discovery mechanism lives in `RimObs.Library/Transport/CollectorScanner.cs`.
 
 **UDP** - best-effort, unreliable, no acknowledgment. Used for high-frequency telemetry batches (section timings, metrics, GC events, allocations, TPS/FPS). Dropping individual datagrams is acceptable; the ring buffer on the library side maintains sequence numbers so gaps are detectable.
 

@@ -4,7 +4,7 @@ The collector is the out-of-process daemon that receives telemetry from RimWorld
 
 ## Opening the Dashboard
 
-When RimWorld starts, the RimObs library picks an ephemeral port and launches the collector with it. The collector then opens the dashboard in your default browser. HTTP and UDP both share the chosen port. The port changes each session, so bookmark the "open dashboard" link in the mod settings widget rather than a fixed URL.
+When RimWorld starts, the RimObs library picks the first free port at or above `25950` and launches the collector with it. The collector then opens the dashboard in your default browser. HTTP and UDP both share the chosen port. A second instance takes the next port up, so bookmark the "open dashboard" link in the mod settings widget rather than a fixed URL.
 
 ## The Mod Settings Widget
 
