@@ -139,7 +139,7 @@ public static class WireCodec {
 
     public static byte[] Serialize(GcEventsBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(7);
+        writer.WriteArrayHeader(8);
         writer.WriteBinary(value.Generations);
         writer.WriteBinary(value.PauseTypes);
         WriteInt64Array(writer, value.HeapBefore);
@@ -147,6 +147,7 @@ public static class WireCodec {
         WriteInt64Array(writer, value.DurationMicros);
         WriteInt64Array(writer, value.Ticks);
         WriteInt64Array(writer, value.AllocationRateBytesPerMinute);
+        WriteInt32Array(writer, value.FrameOrdinals);
         return writer.ToArray();
     }
 
@@ -376,8 +377,8 @@ public static class WireCodec {
 
     private static GcEventsBatch ReadGcEventsBatch(byte[] data) {
         WireBufferReader reader = new WireBufferReader(data);
-        reader.ReadArrayHeader();
-        return new GcEventsBatch {
+        int fieldCount = reader.ReadArrayHeader();
+        GcEventsBatch batch = new GcEventsBatch {
             Generations = reader.ReadBinary() ?? Array.Empty<byte>(),
             PauseTypes = reader.ReadBinary() ?? Array.Empty<byte>(),
             HeapBefore = ReadInt64Array(reader),
@@ -386,6 +387,9 @@ public static class WireCodec {
             Ticks = ReadInt64Array(reader),
             AllocationRateBytesPerMinute = ReadInt64Array(reader),
         };
+        if (fieldCount >= 8)
+            batch.FrameOrdinals = ReadInt32Array(reader);
+        return batch;
     }
 
     private static AllocationsBatch ReadAllocationsBatch(byte[] data) {

@@ -1,4 +1,6 @@
+using System;
 using System.Reflection;
+using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Observers;
 
@@ -53,7 +55,11 @@ internal static class FrameTickPatches {
     private static void FrameBeginPrefix() {
         FrameTickCounters.BeginFrame();
         ControlServices.Queue.Drain();
+        AutoInstrumentRunner.Pump();
     }
 
-    private static void FramePostfix() => FrameTickCounters.RecordFrame();
+    private static void FramePostfix() {
+        FrameTickCounters.RecordFrame();
+        FrameTickCounters.NoteCollections(GC.CollectionCount(0));
+    }
 }

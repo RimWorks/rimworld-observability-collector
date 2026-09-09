@@ -182,6 +182,7 @@ public static class SessionsEndpoints {
                 duration_micros = e.DurationMicros,
                 ticks = e.Ticks,
                 allocation_rate_bpm = e.AllocationRateBytesPerMinute,
+                frame_ordinal = e.FrameOrdinal,
             }).ToArray(),
         });
     }

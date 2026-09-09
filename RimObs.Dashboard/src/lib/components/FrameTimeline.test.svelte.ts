@@ -4,6 +4,7 @@ import FrameTimeline from './FrameTimeline.svelte';
 import { layoutFrame, quadIndexForNode } from '../frameLayout';
 import { fitView } from '../frameView';
 import { buildFrameTree, type FrameData } from '../frameTree';
+import { buildSeries, EMPTY_SERIES } from '../frameSeries';
 import { drawTimeline } from '../frameDraw';
 import { ns } from '../format';
 
@@ -126,13 +127,13 @@ const STAGGERED_FRAME: FrameData = {
 
 describe('FrameTimeline', () => {
     it('shows an empty state before the first frame', () => {
-        render(FrameTimeline, { frame: null, names: NAMES });
+        render(FrameTimeline, { series: EMPTY_SERIES, names: NAMES });
         expect(screen.queryByRole('application')).toBeNull();
         expect(screen.getByTestId('frame-empty')).toBeInTheDocument();
     });
 
     it('exposes the canvas as a focusable application widget', () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         expect(canvas.tagName).toBe('CANVAS');
         expect(canvas).toHaveAttribute('tabindex', '0');
@@ -141,14 +142,16 @@ describe('FrameTimeline', () => {
 
     // the label used to interpolate ordinal/duration/count, re-announcing at 4Hz.
     it('has a stable aria-label that does not change with the frame, while focus still announces', async () => {
-        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const { rerender } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const label = canvas.getAttribute('aria-label') ?? '';
-        expect(label).toBe('current frame');
+        expect(label).toBe('frame timeline');
         expect(screen.getByRole('status')).toHaveTextContent('');
 
         await rerender({
-            frame: { ...FRAME, capture_ordinal: 9999, duration_us: 33000, node_count: 7 },
+            series: buildSeries([
+                { ...FRAME, capture_ordinal: 9999, duration_us: 33000, node_count: 7 },
+            ]),
             names: NAMES,
         });
         expect(canvas.getAttribute('aria-label')).toBe(label);
@@ -157,18 +160,18 @@ describe('FrameTimeline', () => {
         expect(screen.getByRole('status')).toHaveTextContent('Verse.TickList.Tick');
     });
 
-    it('reports the orphan count back to its parent', async () => {
+    it('carries the orphan count on the series it renders', async () => {
         const orphaned: FrameData = {
             ...FRAME,
             nodes: { ...FRAME.nodes, parent_node_ids: [1, 99, -1] },
         };
-        const props = $state({ frame: orphaned, names: NAMES, orphanCount: 0 });
-        render(FrameTimeline, props);
-        expect(props.orphanCount).toBe(1);
+        const series = buildSeries([orphaned]);
+        render(FrameTimeline, { series, names: NAMES });
+        expect(series.orphanCount).toBe(1);
     });
 
     it('announces the focused node in a polite live region', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         expect(screen.getByRole('status')).toHaveTextContent('Verse.TickList.Tick');
@@ -177,7 +180,7 @@ describe('FrameTimeline', () => {
     // the two siblings share a name and a parent, so only their durations tell them apart.
     // that is the whole point: the array cannot address them, the intervals can.
     it('steps between the repeated siblings with the arrow keys', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         expect(screen.getByRole('status')).toHaveTextContent('400');
@@ -203,7 +206,7 @@ describe('FrameTimeline', () => {
                 dur_us: [1000, 0, 0, 100],
             },
         };
-        render(FrameTimeline, { frame: zeroDur, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([zeroDur]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         expect(screen.getByRole('status')).toHaveTextContent('section 40');
@@ -216,16 +219,19 @@ describe('FrameTimeline', () => {
     });
 
     it('keeps the zoom when a later frame arrives', async () => {
-        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const { rerender } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: '+' });
         const zoomed = screen.getByTestId('frame-range').textContent;
-        await rerender({ frame: { ...FRAME, capture_ordinal: 1235 }, names: NAMES });
+        await rerender({
+            series: buildSeries([{ ...FRAME, capture_ordinal: 1235 }]),
+            names: NAMES,
+        });
         expect(screen.getByTestId('frame-range').textContent).toBe(zoomed);
     });
 
     it('restores the full frame on Escape', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const fitted = screen.getByTestId('frame-range').textContent;
         await fireEvent.keyDown(canvas, { key: '+' });
@@ -235,9 +241,11 @@ describe('FrameTimeline', () => {
     });
 
     it('refits when a new frame arrives and the user has not zoomed', async () => {
-        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const { rerender } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         await rerender({
-            frame: { ...FRAME, capture_ordinal: 1235, duration_us: 8000 },
+            series: buildSeries([
+                { ...FRAME, capture_ordinal: 1235, end_us: 9000, duration_us: 8000 },
+            ]),
             names: NAMES,
         });
         expect(screen.getByTestId('frame-range').textContent).toContain('8');
@@ -262,7 +270,7 @@ describe('FrameTimeline', () => {
             },
         };
         const { nodes } = buildFrameTree(narrow);
-        const view = fitView(narrow.duration_us);
+        const view = fitView({ startUs: 0, endUs: narrow.duration_us });
         const quads = layoutFrame(nodes, {
             viewStartUs: view.startUs,
             viewEndUs: view.endUs,
@@ -283,7 +291,7 @@ describe('FrameTimeline', () => {
     });
 
     it('clamps the view so it never extends past the frame after repeated zoom-out', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         for (let i = 0; i < 20; i++) {
             await fireEvent.keyDown(canvas, { key: '-' });
@@ -294,7 +302,7 @@ describe('FrameTimeline', () => {
 
     // focusIndex must be the QUAD index handed to drawTimeline, not the tree index.
     it('passes the run quad index, not the tree index, as focusIndex', async () => {
-        render(FrameTimeline, { frame: NARROW_FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([NARROW_FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         await fireEvent.keyDown(canvas, { key: 'ArrowRight' });
@@ -308,7 +316,7 @@ describe('FrameTimeline', () => {
 
     // same trap, via hoverIndex.
     it('passes the run quad index, not the tree index, as hoverIndex', async () => {
-        render(FrameTimeline, { frame: NARROW_FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([NARROW_FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         // 300, not the component's own widthPx of 600: a mapping that reads widthPx
         // instead of the measured rect lands 6.7us short and misses the run entirely.
@@ -323,7 +331,7 @@ describe('FrameTimeline', () => {
     // rerender re-runs the dirty effect whichever props move, so this pins the label
     // callback reading the current names map, not that names alone schedules a repaint.
     it('labels quads from the latest names map', async () => {
-        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const { rerender } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         await waitForFrame();
         vi.mocked(drawTimeline).mockClear();
         const renamed = new Map(NAMES);
@@ -340,7 +348,7 @@ describe('FrameTimeline', () => {
         const original = window.devicePixelRatio;
         Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true });
         try {
-            render(FrameTimeline, { frame: FRAME, names: NAMES });
+            render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
             const canvas = screen.getByRole('application') as HTMLCanvasElement;
             expect(canvas.width).toBe(1200);
             expect(canvas.style.width).toBe('600px');
@@ -357,7 +365,7 @@ describe('FrameTimeline', () => {
 
     // nothing changed between ticks, so the dirty gate must skip the redraw.
     it('stops redrawing once nothing is dirty', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         await waitForFrame();
         vi.mocked(drawTimeline).mockClear();
         await waitForFrame();
@@ -371,7 +379,9 @@ describe('FrameTimeline', () => {
         const original = HTMLCanvasElement.prototype.getContext;
         HTMLCanvasElement.prototype.getContext = (() => null) as never;
         try {
-            expect(() => render(FrameTimeline, { frame: FRAME, names: NAMES })).not.toThrow();
+            expect(() =>
+                render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES }),
+            ).not.toThrow();
             await waitForFrame();
             expect(drawTimeline).not.toHaveBeenCalled();
         } finally {
@@ -395,11 +405,13 @@ describe('FrameTimeline', () => {
                 dur_us: [],
             },
         };
-        expect(() => render(FrameTimeline, { frame: empty, names: NAMES })).not.toThrow();
+        expect(() =>
+            render(FrameTimeline, { series: buildSeries([empty]), names: NAMES }),
+        ).not.toThrow();
     });
 
     it('changes the live region text between two different focused nodes', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         const first = screen.getByRole('status').textContent;
@@ -409,7 +421,7 @@ describe('FrameTimeline', () => {
     });
 
     it('zooms to the focused node on Enter', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const fitted = screen.getByTestId('frame-range').textContent;
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
@@ -418,7 +430,7 @@ describe('FrameTimeline', () => {
     });
 
     it('refits on Home as well as Escape', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const fitted = screen.getByTestId('frame-range').textContent;
         await fireEvent.keyDown(canvas, { key: '+' });
@@ -446,7 +458,7 @@ describe('FrameTimeline', () => {
         };
 
         try {
-            render(FrameTimeline, { frame: STAGGERED_FRAME, names: NAMES });
+            render(FrameTimeline, { series: buildSeries([STAGGERED_FRAME]), names: NAMES });
             const canvas = screen.getByRole('application');
             runTick(); // consume the initial mount draw
 
@@ -491,7 +503,7 @@ describe('FrameTimeline', () => {
                 dur_us: [20000, 11000, 5],
             },
         };
-        render(FrameTimeline, { frame: deep, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([deep]), names: NAMES });
         const canvas = screen.getByRole('application');
         const before = canvas.getAttribute('height');
         for (let i = 0; i < 7; i++) {
@@ -517,7 +529,7 @@ describe('FrameTimeline', () => {
                 dur_us: [1000, 1500],
             },
         };
-        render(FrameTimeline, { frame: overrun, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([overrun]), names: NAMES });
         const canvas = screen.getByRole('application');
         const fitted = screen.getByTestId('frame-range').textContent;
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
@@ -528,13 +540,15 @@ describe('FrameTimeline', () => {
     // a view held over from a longer frame culls every node in a shorter one, so the scrubber
     // lands on a blank canvas that only Escape recovers. the span shrinks to the new frame.
     it('clamps the view into a shorter frame that arrives while zoomed into the tail', async () => {
-        const { rerender } = render(FrameTimeline, { frame: FRAME, names: NAMES });
+        const { rerender } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         await fireEvent.keyDown(canvas, { key: 'Enter' });
         const zoomed = screen.getByTestId('frame-range').textContent;
         await rerender({
-            frame: { ...FRAME, capture_ordinal: 1235, duration_us: 300 },
+            series: buildSeries([
+                { ...FRAME, capture_ordinal: 1235, end_us: 1300, duration_us: 300 },
+            ]),
             names: NAMES,
         });
         expect(screen.getByTestId('frame-range').textContent).not.toBe(zoomed);
@@ -548,14 +562,14 @@ describe('FrameTimeline', () => {
         globalThis.matchMedia = ((query: string) =>
             ({ matches: true, media: query }) as MediaQueryList) as typeof matchMedia;
         try {
-            render(FrameTimeline, { frame: FRAME, names: NAMES });
+            render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
             const canvas = screen.getByRole('application');
             await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
             vi.mocked(drawTimeline).mockClear();
             await fireEvent.keyDown(canvas, { key: 'Enter' });
             await waitForFrame();
             const [, , opts] = vi.mocked(drawTimeline).mock.calls[0];
-            expect(opts.view).toEqual({ startUs: 100, endUs: 500 });
+            expect(opts.view).toEqual({ startUs: 1100, endUs: 1500 });
         } finally {
             globalThis.matchMedia = original;
         }
@@ -572,7 +586,7 @@ describe('FrameTimeline', () => {
         const swallowExpectedThrow = (e: ErrorEvent) => e.preventDefault();
         window.addEventListener('error', swallowExpectedThrow);
         try {
-            render(FrameTimeline, { frame: FRAME, names: NAMES });
+            render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
             const canvas = screen.getByRole('application');
             const event = new Event('pointerdown', { bubbles: true, cancelable: true });
             Object.assign(event, { clientX: 0, clientY: 0, pointerId: 1 });
@@ -593,7 +607,7 @@ describe('FrameTimeline', () => {
     });
 
     it('shows both frame and budget percentages on hover, and they differ', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         stubRect(canvas, 600);
         // depth 1, atUs ~324us: inside node0's [100, 500) span (dur_us 400 of a 16200us frame).
@@ -607,7 +621,7 @@ describe('FrameTimeline', () => {
     });
 
     it('shows the same two percentages in the selected-node readout', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         const readout = screen.getByTestId('frame-selected');
@@ -632,7 +646,7 @@ describe('FrameTimeline', () => {
                 dur_us: [109_090.8, 54_545.4],
             },
         };
-        render(FrameTimeline, { frame: overBudget, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([overBudget]), names: NAMES });
         const canvas = screen.getByRole('application');
         await fireEvent.keyDown(canvas, { key: 'ArrowDown' });
         const readout = screen.getByTestId('frame-selected');
@@ -642,7 +656,7 @@ describe('FrameTimeline', () => {
 
     // nothing stops the arrow keys (or wheel-equivalent +/-) from also scrolling the page.
     it('prevents the default action for every handled key', async () => {
-        render(FrameTimeline, { frame: FRAME, names: NAMES });
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const keys = [
             'ArrowLeft',

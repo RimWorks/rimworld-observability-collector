@@ -13,13 +13,24 @@
     import InstrumentationPanel from '../lib/components/InstrumentationPanel.svelte';
     import { liveSectionIds, type MergedPatch } from '../lib/livePatches';
     import { Resource } from '../lib/poll.svelte';
-    import type { FrameResponse, FrameStripData, BundleFramesResponse } from '../lib/frameTree';
+    import type {
+        FrameData,
+        FrameResponse,
+        FrameStripData,
+        BundleFramesResponse,
+    } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
     import Tooltip from '../lib/components/Tooltip.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
     import CallTreePanel from '../lib/components/CallTreePanel.svelte';
     import { buildFrameTree } from '../lib/frameTree';
+    import {
+        buildSeries,
+        pushFrame,
+        MAX_WINDOW_FRAMES,
+        type SeriesCacheEntry,
+    } from '../lib/frameSeries';
     import { flattenCallNodes, sessionTotalUs } from '../lib/sessionTree';
     import type { CallTreeResponse } from '../lib/api';
     import { buildBars, stepOrdinal } from '../lib/frameStrip';
@@ -133,14 +144,22 @@
         pinnedOrdinal = ordinal;
         if (ordinal === null) {
             pinnedRes = null;
+            pinnedWindow = [];
             return;
         }
         try {
-            pinnedRes = await api.frameAt(ordinal);
+            // one request for the whole window ending at the pin, so the flame keeps its
+            // context instead of collapsing to the single frame under the cursor.
+            const range = await api.frameRange(ordinal - MAX_WINDOW_FRAMES + 1);
+            const at = range.frames.find((f) => f.capture_ordinal === ordinal);
+            if (!at) throw new Error('evicted');
+            pinnedWindow = range.frames.filter((f) => f.capture_ordinal <= ordinal);
+            pinnedRes = { ...range, frame: at };
         } catch {
             // the ring evicted it between the click and the fetch. fall back to live.
             pinnedOrdinal = null;
             pinnedRes = null;
+            pinnedWindow = [];
         }
     }
 
@@ -204,6 +223,7 @@
 
     const gcRes = new Resource<GcResponse>(() => api.gc(200), 4000);
     let peakAllocRate = $derived(summarize(gcRes.data?.events ?? []).peakAllocRate);
+    let gcOrdinals = $derived((gcRes.data?.events ?? []).map((e) => e.frame_ordinal));
 
     // which other mods patch each instrumented method. the set only changes when mods load,
     // so this polls slowly and just feeds a badge.
@@ -256,6 +276,12 @@
         return () => res.stop();
     });
     onMount(() => {
+        // one backfill so the window starts full instead of growing a frame per poll.
+        api.frameRange()
+            .then((r) => {
+                if (liveWindow.length === 0) liveWindow = r.frames ?? [];
+            })
+            .catch(() => undefined);
         patchesRes.start();
         sectionsRes.start();
         hotspotsRes.start();
@@ -313,7 +339,6 @@
         }
     }
 
-    let orphanCount = $state(0);
     let selectedNode = $state(-1);
     let timeline = $state<{ focusNode: (i: number) => void } | null>(null);
     // while pinned the page reads a specific ordinal instead of whatever the poller last saw.
@@ -323,6 +348,44 @@
     let liveOrdinal = $derived(framesRes?.data?.frame?.capture_ordinal ?? null);
     let frame = $derived(
         live ? (liveRes?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
+    );
+
+    // the live poll still carries one frame; the window is accumulated here so the timeline
+    // spans many without a second request per tick.
+    let liveWindow = $state<FrameData[]>([]);
+    let pinnedWindow = $state<FrameData[]>([]);
+    $effect(() => {
+        if (!live || pinned) return;
+        liveWindow = pushFrame(liveWindow, framesRes?.data?.frame ?? null);
+    });
+    let bundleWindow = $derived(
+        importedFrames
+            ? importedFrames.frames.slice(
+                  Math.max(0, frameIndex - MAX_WINDOW_FRAMES + 1),
+                  frameIndex + 1,
+              )
+            : [],
+    );
+    let windowFrames = $derived(live ? (pinned ? pinnedWindow : liveWindow) : bundleWindow);
+
+    // keyed by capture ordinal, so a frame is only turned into a tree once no matter how
+    // many polls it stays in the window.
+    const treeCache = new Map<number, SeriesCacheEntry>();
+    let series = $derived.by(() => {
+        if (treeCache.size > 4 * MAX_WINDOW_FRAMES) treeCache.clear();
+        return buildSeries(windowFrames, treeCache);
+    });
+    // the call tree stays on one frame, so its row indices need rebasing onto the window.
+    let currentEntry = $derived(
+        series.entries.find((e) => e.ordinal === frame?.capture_ordinal) ?? null,
+    );
+    let orphanCount = $derived(currentEntry?.orphanCount ?? 0);
+    let treeSelection = $derived(
+        currentEntry &&
+            selectedNode >= currentEntry.nodeStart &&
+            selectedNode < currentEntry.nodeEnd
+            ? selectedNode - currentEntry.nodeStart
+            : -1,
     );
     let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
     let dropped = $derived((live ? liveRes?.dropped : importedFrames?.dropped) ?? NO_DROPS);
@@ -506,6 +569,7 @@
             ordinals={strip.ordinals}
             durationsUs={strip.durations_us}
             cutOrdinals={shownCuts}
+            {gcOrdinals}
             selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
             onSelect={(o) => pauseAt(o)}
         />
@@ -572,9 +636,8 @@
             <div class="canvas">
                 <FrameTimeline
                     bind:this={timeline}
-                    {frame}
+                    {series}
                     {names}
-                    bind:orphanCount
                     bind:selectedNode
                     onContext={openContext}
                 />
@@ -587,15 +650,14 @@
             bind:scope={treeScope}
             percentiles={treeScope === 'session' ? percentiles : undefined}
             {patchOwners}
-            selectedNode={treeScope === 'session' ? -1 : selectedNode}
+            selectedNode={treeScope === 'session' ? -1 : treeSelection}
             frameDurationUs={treeScope === 'session'
                 ? sessionTotalUs(sessionRoots)
                 : (frame?.duration_us ?? 0)}
             baselineUs={treeScope === 'session' ? NO_BASELINE : baselineUs}
             onSelect={(i) => {
-                if (treeScope === 'session') return;
-                selectedNode = i;
-                timeline?.focusNode(i);
+                if (treeScope === 'session' || !currentEntry) return;
+                timeline?.focusNode(currentEntry.nodeStart + i);
             }}
         />
 

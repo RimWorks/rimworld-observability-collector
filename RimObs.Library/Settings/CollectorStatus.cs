@@ -34,6 +34,11 @@ public sealed class CollectorStatus {
     }
 
     public int PatchBackendPriority { get; init; }
+    public int AutoMatched { get; init; }
+    public int AutoInstrumented { get; init; }
+    public int AutoMuted { get; init; }
+    public int AutoSkippedTrivial { get; init; }
+    public int AutoPending { get; init; }
     public bool GcObserverRunning { get; init; }
     public bool TpsFpsObserverRunning { get; init; }
     public bool AllocationSamplerRunning { get; init; }
@@ -59,6 +64,7 @@ public sealed class CollectorStatus {
         lines.Add(BuildPatchBackendLine());
         lines.Add(BuildCoreSectionsLine());
         lines.Add(BuildDeclaredSectionsLine());
+        lines.Add(BuildAutoSectionsLine());
 
         lines.Add(new StatusLine("Profiler", ProfilerEnabled ? "enabled" : "disabled", ProfilerEnabled));
         lines.Add(new StatusLine("Owners registered", OwnerCount.ToString(), OwnerCount > 0));
@@ -112,5 +118,16 @@ public sealed class CollectorStatus {
             ? "none"
             : $"{DeclaredInstalled}/{DeclaredTotal} from profiling.xml";
         return new StatusLine("Declared sections", declaredValue, declaredHealthy);
+    }
+
+    // matched is the number the filter is judged by. a filter that matches nothing is the one
+    // failure mode a user cannot see any other way.
+    private StatusLine BuildAutoSectionsLine() {
+        if (AutoMatched == 0)
+            return new StatusLine("Auto sections", "off", true);
+
+        string value = $"{AutoInstrumented}/{AutoMatched} matched instrumented "
+            + $"({AutoSkippedTrivial} trivial, {AutoMuted} muted, {AutoPending} pending)";
+        return new StatusLine("Auto sections", value, AutoInstrumented > 0);
     }
 }

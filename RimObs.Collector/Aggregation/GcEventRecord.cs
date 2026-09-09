@@ -10,7 +10,8 @@ public readonly struct GcEventRecord {
         long heapAfter,
         long durationMicros,
         long ticks,
-        long allocationRateBytesPerMinute
+        long allocationRateBytesPerMinute,
+        int frameOrdinal
     ) {
         Generation = generation;
         PauseType = pauseType;
@@ -19,6 +20,7 @@ public readonly struct GcEventRecord {
         DurationMicros = durationMicros;
         Ticks = ticks;
         AllocationRateBytesPerMinute = allocationRateBytesPerMinute;
+        FrameOrdinal = frameOrdinal;
     }
 
     public byte Generation { get; }
@@ -28,4 +30,5 @@ public readonly struct GcEventRecord {
     public long DurationMicros { get; }
     public long Ticks { get; }
     public long AllocationRateBytesPerMinute { get; }
+    public int FrameOrdinal { get; }
 }

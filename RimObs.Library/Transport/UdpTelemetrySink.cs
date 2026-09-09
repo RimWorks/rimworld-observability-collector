@@ -300,6 +300,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             DurationMicros = new long[n],
             Ticks = new long[n],
             AllocationRateBytesPerMinute = new long[n],
+            FrameOrdinals = new int[n],
         };
         for (int i = 0; i < n; i++) {
             GcEventSample s = _gcSnapshot[i];
@@ -310,6 +311,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             batch.DurationMicros[i] = s.DurationMicros;
             batch.Ticks[i] = s.Tick;
             batch.AllocationRateBytesPerMinute[i] = s.AllocationRateBytesPerMinute;
+            batch.FrameOrdinals[i] = s.FrameOrdinal;
         }
         SendBatch(BatchType.GcEvents, batch);
     }

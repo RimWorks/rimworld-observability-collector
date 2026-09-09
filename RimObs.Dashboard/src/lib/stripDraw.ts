@@ -1,5 +1,5 @@
 import type { StripBar } from './frameStrip';
-import { budgetLine, barWidthPx } from './frameStrip';
+import { budgetLine, barWidthPx, GC_BAND_PX, gcMarkIndices } from './frameStrip';
 import { FRAME_BUDGET_US } from './frameCost';
 
 export interface StripTheme {
@@ -9,6 +9,7 @@ export interface StripTheme {
     selected: string;
     line: string;
     cut: string;
+    gc: string;
 }
 
 export interface StripDrawOptions {
@@ -18,6 +19,8 @@ export interface StripDrawOptions {
     selectedOrdinal: number | null;
     /** ordinals a pause cut the history at, drawn as a dashed rule */
     cutOrdinals?: readonly number[];
+    /** frame ordinals a GC fired in, drawn as ticks hanging below the baseline */
+    gcOrdinals?: readonly number[];
     theme: StripTheme;
 }
 
@@ -31,20 +34,22 @@ export function drawStrip(
     ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, w, h);
 
+    // the bottom band is reserved for GC ticks, so bars share the rest of the height.
+    const barAreaHeight = h - GC_BAND_PX;
     const bw = barWidthPx(w, bars.length);
     // a sub-pixel gap would swallow the bar, so only inset once bars are wide enough to spare it.
     const inset = bw > 3 ? 1 : 0;
     for (let i = 0; i < bars.length; i++) {
         const bar = bars[i];
         if (bar.height <= 0) continue;
-        const barH = Math.max(1, bar.height * h);
+        const barH = Math.max(1, bar.height * barAreaHeight);
         ctx.fillStyle =
             bar.ordinal === selectedOrdinal
                 ? theme.selected
                 : bar.overBudget
                   ? theme.over
                   : theme.bar;
-        ctx.fillRect(i * bw, h - barH, Math.max(1, bw - inset), barH);
+        ctx.fillRect(i * bw, barAreaHeight - barH, Math.max(1, bw - inset), barH);
     }
 
     // a pause leaves a hole in the history; mark where it was so the jump is not read as data.
@@ -67,11 +72,21 @@ export function drawStrip(
     }
 
     // budget line last, so it reads on top of the bars it is judging.
-    const lineY = h - budgetLine(FRAME_BUDGET_US) * h;
+    const lineY = barAreaHeight - budgetLine(FRAME_BUDGET_US) * barAreaHeight;
     ctx.strokeStyle = theme.line;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, lineY + 0.5);
     ctx.lineTo(w, lineY + 0.5);
     ctx.stroke();
+
+    // one fixed-height mark per frame that collected; Boehm always reports generation 0,
+    // so there is nothing else on the sample worth encoding as color or height.
+    const gcOrdinals = opts.gcOrdinals ?? [];
+    if (gcOrdinals.length > 0) {
+        ctx.fillStyle = theme.gc;
+        for (const index of gcMarkIndices(bars, gcOrdinals)) {
+            ctx.fillRect(index * bw, barAreaHeight, Math.max(1, bw - inset), GC_BAND_PX);
+        }
+    }
 }

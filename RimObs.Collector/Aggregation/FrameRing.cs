@@ -170,6 +170,43 @@ public sealed class FrameRing {
         }
     }
 
+    // first index whose ordinal is >= target. caller holds _gate.
+    private int LowerBound(int start, int target) {
+        int lo = 0;
+        int hi = _count;
+        while (lo < hi) {
+            int mid = lo + ((hi - lo) / 2);
+            if (_buffer[(start + mid) % _buffer.Length].CaptureOrdinal < target)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        return lo;
+    }
+
+    /// <summary>
+    /// Frames from <paramref name="fromOrdinal"/> forward, ascending, at most
+    /// <paramref name="count"/>. A negative from means the newest <paramref name="count"/>.
+    /// </summary>
+    public FrameSnapshot[] Range(int fromOrdinal, int count) {
+        lock (_gate) {
+            int take = Math.Min(count <= 0 ? _count : count, _count);
+            if (take == 0)
+                return [];
+            int start = _count < _buffer.Length ? 0 : _next;
+            // an evicted `from` lands on the oldest frame still held, so the run is clipped
+            // rather than empty; holes inside the run just stay missing.
+            int first = fromOrdinal < 0 ? Math.Max(0, _count - take) : LowerBound(start, fromOrdinal);
+            int n = Math.Min(take, _count - first);
+            if (n <= 0)
+                return [];
+            FrameSnapshot[] frames = new FrameSnapshot[n];
+            for (int i = 0; i < n; i++)
+                frames[i] = _buffer[(start + first + i) % _buffer.Length];
+            return frames;
+        }
+    }
+
     /// <summary>
     /// Median total ticks per section over the newest <paramref name="frames"/> frames, which
     /// is what the call tree compares a row against.

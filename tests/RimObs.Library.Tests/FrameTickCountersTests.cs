@@ -10,6 +10,39 @@ public sealed class FrameTickCountersTests {
         FrameTickCounters.Reset();
     }
 
+    // the gc poller wakes once a second, so it cannot name the frame a collection landed in.
+    // sampling the count every frame is the only thing that can.
+    [Fact]
+    public void Notes_the_frame_a_collection_landed_in() {
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.NoteCollections(0);
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.NoteCollections(1);
+
+        int collected = FrameTickCounters.FrameOrdinal;
+
+        for (int i = 0; i < 60; i++) {
+            FrameTickCounters.BeginFrame();
+            FrameTickCounters.NoteCollections(1);
+        }
+
+        FrameTickCounters.LastGcFrameOrdinal.Should().Be(collected);
+        FrameTickCounters.FrameOrdinal.Should().Be(collected + 60);
+    }
+
+    [Fact]
+    public void An_unchanged_collection_count_never_moves_the_gc_frame() {
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.NoteCollections(4);
+        int first = FrameTickCounters.LastGcFrameOrdinal;
+
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.NoteCollections(4);
+
+        FrameTickCounters.LastGcFrameOrdinal.Should().Be(first);
+    }
+
     [Fact]
     public void Reset_zeroes_both_counters() {
         FrameTickCounters.RecordTick();

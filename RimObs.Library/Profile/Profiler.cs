@@ -38,6 +38,9 @@ public static class Profiler {
     [ThreadStatic]
     private static long[]? s_AllocStack;
 
+    [ThreadStatic]
+    private static long[]? s_ChildTicks;
+
     internal static void SetSink(ISampleSink? sink) => Sink = sink;
 
     internal static void SetEnabled(bool enabled) => Enabled = enabled;
@@ -109,8 +112,27 @@ public static class Profiler {
                 allocBytes = AllocationHook.t_Bytes - allocs[depth];
         }
 
+        if (AutoMute.Armed)
+            FoldSelfTime(sectionId, depth, elapsed);
+
         ISampleSink? sink = Sink;
         if (sink != null)
             sink.RecordSection(sectionId, parentId, nodeId, parentNodeId, token, elapsed, allocBytes);
+    }
+
+    // self time needs the children's total, which only auto-mute wants. arming is one-way, so
+    // the accumulators can never be read stale.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void FoldSelfTime(int sectionId, int depth, long elapsed) {
+        long[] child = s_ChildTicks ??= new long[MaxStackDepth];
+        if ((uint)depth >= (uint)MaxStackDepth)
+            return;
+
+        long self = elapsed - child[depth];
+        child[depth] = 0;
+        if (depth > 0)
+            child[depth - 1] += elapsed;
+
+        AutoMute.Observe(sectionId, self);
     }
 }

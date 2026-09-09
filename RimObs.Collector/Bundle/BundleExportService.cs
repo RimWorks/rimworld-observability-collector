@@ -288,6 +288,7 @@ public sealed class BundleExportService {
                 heap_after = e.HeapAfter,
                 duration_micros = e.DurationMicros,
                 ticks = e.Ticks,
+                frame_ordinal = e.FrameOrdinal,
             }).ToArray(),
         };
     }

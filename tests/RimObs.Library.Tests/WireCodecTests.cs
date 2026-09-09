@@ -44,6 +44,7 @@ public sealed class WireCodecTests {
         DurationMicros = [50L, 60L, 70L],
         Ticks = [11L, 22L, 33L],
         AllocationRateBytesPerMinute = [4096L, 8192L, 0L],
+        FrameOrdinals = [100, 200, 300],
     };
 
     [Fact]
@@ -234,6 +235,38 @@ public sealed class WireCodecTests {
     }
 
     [Fact]
+    public void GcEventsBatch_back_compat_v6_payload_has_empty_frame_ordinals() {
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(7);
+        writer.Write(new byte[] { 0, 1 });
+        writer.Write(new byte[] { 0, 0 });
+        writer.WriteArrayHeader(2);
+        writer.Write(1000L);
+        writer.Write(2000L);
+        writer.WriteArrayHeader(2);
+        writer.Write(900L);
+        writer.Write(1800L);
+        writer.WriteArrayHeader(2);
+        writer.Write(50L);
+        writer.Write(60L);
+        writer.WriteArrayHeader(2);
+        writer.Write(11L);
+        writer.Write(22L);
+        writer.WriteArrayHeader(2);
+        writer.Write(4096L);
+        writer.Write(8192L);
+        writer.Flush();
+        byte[] v6Bytes = buffer.WrittenSpan.ToArray();
+
+        GcEventsBatch decoded = WireCodec.Deserialize<GcEventsBatch>(v6Bytes);
+
+        decoded.Generations.Should().Equal(0, 1);
+        decoded.Ticks.Should().Equal(11, 22);
+        decoded.FrameOrdinals.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AllocationsBatch_round_trips() {
         AllocationsBatch original = new() {
             WindowStartTimestamps = [1L, 2L],
@@ -343,7 +376,7 @@ public sealed class WireCodecTests {
         byte[] wireBytes = WireCodec.Serialize(original);
 
         MessagePackReader reader = new MessagePackReader(wireBytes);
-        reader.ReadArrayHeader().Should().Be(7);
+        reader.ReadArrayHeader().Should().Be(8);
         reader.ReadBytes()!.Value.ToArray().Should().Equal(original.Generations);
         reader.ReadBytes()!.Value.ToArray().Should().Equal(original.PauseTypes);
         int heapBeforeCount = reader.ReadArrayHeader();

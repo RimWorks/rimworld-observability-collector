@@ -599,7 +599,8 @@ Return recent GC events for the current session.
       "heap_after": 52428800,
       "duration_micros": 1200,
       "ticks": 123456789,
-      "allocation_rate_bpm": 2097152
+      "allocation_rate_bpm": 2097152,
+      "frame_ordinal": 4821
     }
   ]
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -204,6 +205,109 @@ public sealed class FramesEndpointsTests {
             using JsonDocument doc = JsonDocument.Parse(body);
 
             doc.RootElement.GetProperty("stopwatch_frequency").GetInt64().Should().Be(0L);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    private static void SeedFiveFrames(WebApplication app, string sessionId) {
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = sessionId,
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 10, 10, 10, 10, 10],
+            ParentIds = [-1, -1, -1, -1, -1, -1],
+            StartTimestamps = [100L, 1100L, 2100L, 3100L, 4100L, 5100L],
+            ElapsedTicks = [500L, 500L, 500L, 500L, 500L, 500L],
+            FrameOrdinals = [1, 2, 3, 4, 5, 6],
+        });
+    }
+
+    private static int[] Ordinals(JsonDocument doc) {
+        return [.. doc.RootElement.GetProperty("frames").EnumerateArray()
+            .Select(f => f.GetProperty("capture_ordinal").GetInt32())];
+    }
+
+    [Fact]
+    public async Task Range_returns_a_run_of_frames_from_the_asked_ordinal() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-range-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SeedFiveFrames(app, "frames-range");
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames?from=2&count=3");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            Ordinals(doc).Should().Equal(2, 3, 4);
+            doc.RootElement.GetProperty("frames")[0].GetProperty("nodes")
+                .GetProperty("section_ids").GetArrayLength().Should().Be(1);
+            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(5);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Range_without_a_from_returns_the_newest_frames() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-range-newest-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SeedFiveFrames(app, "frames-range-newest");
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames?count=2");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            Ordinals(doc).Should().Equal(4, 5);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Range_clips_instead_of_failing_when_the_asked_ordinal_was_evicted() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-range-evicted-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SeedFiveFrames(app, "frames-range-evicted");
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames?from=-40&count=10");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            Ordinals(doc).Should().Equal(1, 2, 3, 4, 5);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Range_is_empty_before_any_frame_seals() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-range-empty-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("frames").GetArrayLength().Should().Be(0);
         }
         finally {
             await app.StopAsync();

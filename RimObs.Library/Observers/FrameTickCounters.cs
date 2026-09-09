@@ -11,6 +11,8 @@ internal static class FrameTickCounters {
     private static long s_Ticks;
     private static long s_Frames;
     private static volatile int s_FrameOrdinal;
+    private static volatile int s_LastGcFrameOrdinal;
+    private static int s_LastCollectionCount;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void RecordTick() => Interlocked.Increment(ref s_Ticks);
@@ -25,6 +27,18 @@ internal static class FrameTickCounters {
 
     public static int FrameOrdinal => s_FrameOrdinal;
 
+    // the gc poller only wakes once a second, so it cannot say which frame a collection landed
+    // in. this is sampled every frame instead, which is the only place that can.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void NoteCollections(int collectionCount) {
+        if (collectionCount == s_LastCollectionCount)
+            return;
+        s_LastCollectionCount = collectionCount;
+        s_LastGcFrameOrdinal = s_FrameOrdinal;
+    }
+
+    public static int LastGcFrameOrdinal => s_LastGcFrameOrdinal;
+
     public static long Ticks => Interlocked.Read(ref s_Ticks);
 
     public static long Frames => Interlocked.Read(ref s_Frames);
@@ -33,5 +47,7 @@ internal static class FrameTickCounters {
         Interlocked.Exchange(ref s_Ticks, 0);
         Interlocked.Exchange(ref s_Frames, 0);
         s_FrameOrdinal = 0;
+        s_LastGcFrameOrdinal = 0;
+        s_LastCollectionCount = 0;
     }
 }

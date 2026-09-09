@@ -14,4 +14,6 @@ public sealed class GcEventsBatch {
     public long[] Ticks { get; set; } = [];
 
     public long[] AllocationRateBytesPerMinute { get; set; } = [];
+
+    public int[] FrameOrdinals { get; set; } = [];
 }

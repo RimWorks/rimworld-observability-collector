@@ -124,6 +124,37 @@ function quad(over: Partial<Quad> = {}): Quad {
     };
 }
 
+describe('capture gap bands', () => {
+    const band = (calls: Call[]) =>
+        calls.filter((c) => c.op === 'fillRect' && c.args[1] === 0 && c.args[3] === 400);
+
+    it('bands a gap the ordinals say dropped frames', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ gaps: [{ startUs: 200, endUs: 400, missing: 3 }] }));
+        expect(band(calls).map((c) => c.args)).toEqual([[200, 0, 200, 400]]);
+    });
+
+    it('leaves idle time between two consecutive frames bare', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ gaps: [{ startUs: 200, endUs: 400, missing: 0 }] }));
+        expect(band(calls)).toHaveLength(0);
+    });
+
+    it('clips a band that runs off the edge of the canvas', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ gaps: [{ startUs: -500, endUs: 5000, missing: 1 }] }));
+        expect(band(calls).map((c) => c.args)).toEqual([[0, 0, 1000, 400]]);
+    });
+
+    it('paints the band under the quads, not over them', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad()], opts({ gaps: [{ startUs: 600, endUs: 800, missing: 1 }] }));
+        const rects = calls.filter((c) => c.op === 'fillRect');
+        expect(rects[0].args[1]).toBe(0);
+        expect(rects[0].args[3]).toBe(400);
+    });
+});
+
 describe('drawTimeline', () => {
     it('clears before it paints', () => {
         const { ctx, calls } = recorder();

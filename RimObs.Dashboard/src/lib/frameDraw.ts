@@ -12,6 +12,7 @@ const INK_THRESHOLD = 0.16;
 const MIN_LABEL_CHARS = 10;
 const ELLIPSIS = '\u2026';
 const FOCUS_RING_PX = 2;
+const GAP_ALPHA = 0.55;
 
 const SUBSYSTEM_TOKENS = ['--sub-tick', '--sub-ai', '--sub-render', '--sub-ui'];
 const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui'];
@@ -36,6 +37,8 @@ export interface DrawOptions {
     subsystem: (q: Quad) => string | null;
     hoverIndex: number;
     focusIndex: number;
+    /** only gaps the ordinals say are missing frames get a band; idle time reads as empty. */
+    gaps?: { startUs: number; endUs: number; missing: number }[];
 }
 
 export function readTheme(el: Element): DrawTheme {
@@ -91,6 +94,20 @@ function inkOn(fill: string, theme: DrawTheme): string {
     return luminance(fill) > INK_THRESHOLD ? theme.inkDark : theme.inkLight;
 }
 
+function drawGapBands(ctx: CanvasRenderingContext2D, opts: DrawOptions, pxPerUs: number): void {
+    if (!opts.gaps?.length) return;
+    ctx.save();
+    ctx.fillStyle = opts.theme.collapsed;
+    ctx.globalAlpha = GAP_ALPHA;
+    for (const g of opts.gaps) {
+        if (g.missing <= 0) continue;
+        const x = Math.max((g.startUs - opts.view.startUs) * pxPerUs, 0);
+        const right = Math.min((g.endUs - opts.view.startUs) * pxPerUs, opts.widthPx);
+        if (right > x) ctx.fillRect(x, 0, Math.max(right - x, MIN_QUAD_PX), opts.heightPx);
+    }
+    ctx.restore();
+}
+
 export function drawTimeline(
     ctx: CanvasRenderingContext2D,
     quads: Quad[],
@@ -108,10 +125,12 @@ export function drawTimeline(
         return;
     }
 
+    const pxPerUs = widthPx / span;
+    drawGapBands(ctx, opts, pxPerUs);
+
     ctx.font = theme.font;
     ctx.textBaseline = 'middle';
 
-    const pxPerUs = widthPx / span;
     // the flame font is monospace, so one measurement fits every label.
     const charPx = ctx.measureText('.').width;
     const minLabelPx = charPx * MIN_LABEL_CHARS;

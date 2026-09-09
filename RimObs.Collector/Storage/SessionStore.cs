@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class SessionStore : IDisposable {
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
     private const string SchemaVersionPragma = "user_version";
 
     private readonly SqliteConnection _connection;
@@ -248,8 +248,8 @@ ON CONFLICT(metric_id, canonical) DO UPDATE SET
             using SqliteCommand insert = _connection.CreateCommand();
             insert.Transaction = tx;
             insert.CommandText = @"
-INSERT INTO gc_events (generation, pause_type, heap_before, heap_after, duration_micros, ticks, allocation_rate_bpm)
-VALUES ($gen, $pause, $hb, $ha, $dur, $ticks, $rate);
+INSERT INTO gc_events (generation, pause_type, heap_before, heap_after, duration_micros, ticks, allocation_rate_bpm, frame_ordinal)
+VALUES ($gen, $pause, $hb, $ha, $dur, $ticks, $rate, $frame);
 ";
             SqliteParameter pGen = insert.Parameters.Add("$gen", SqliteType.Integer);
             SqliteParameter pPause = insert.Parameters.Add("$pause", SqliteType.Integer);
@@ -258,6 +258,7 @@ VALUES ($gen, $pause, $hb, $ha, $dur, $ticks, $rate);
             SqliteParameter pDur = insert.Parameters.Add("$dur", SqliteType.Integer);
             SqliteParameter pTicks = insert.Parameters.Add("$ticks", SqliteType.Integer);
             SqliteParameter pRate = insert.Parameters.Add("$rate", SqliteType.Integer);
+            SqliteParameter pFrame = insert.Parameters.Add("$frame", SqliteType.Integer);
 
             foreach (GcEventRecord e in events) {
                 pGen.Value = e.Generation;
@@ -267,6 +268,7 @@ VALUES ($gen, $pause, $hb, $ha, $dur, $ticks, $rate);
                 pDur.Value = e.DurationMicros;
                 pTicks.Value = e.Ticks;
                 pRate.Value = e.AllocationRateBytesPerMinute;
+                pFrame.Value = e.FrameOrdinal;
                 insert.ExecuteNonQuery();
             }
         }
@@ -498,7 +500,8 @@ CREATE TABLE gc_events (
     heap_after INTEGER NOT NULL,
     duration_micros INTEGER NOT NULL,
     ticks INTEGER NOT NULL,
-    allocation_rate_bpm INTEGER NOT NULL
+    allocation_rate_bpm INTEGER NOT NULL,
+    frame_ordinal INTEGER NOT NULL
 );
 
 CREATE TABLE call_tree_edges (

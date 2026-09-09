@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RimWorks.RimObs.Auto;
 using UnityEngine;
 using Verse;
 
@@ -47,6 +48,8 @@ public static class SettingsWindow {
         }
 
         listing.GapLine();
+        DrawInstrumentation(listing, settings);
+        listing.GapLine();
 
         IReadOnlyList<StatusLine> lines = status.BuildLines();
         for (int i = 0; i < lines.Count; i++) {
@@ -59,5 +62,29 @@ public static class SettingsWindow {
         }
 
         listing.End();
+    }
+
+    private static void DrawInstrumentation(Listing_Standard listing, RimObsSettings settings) {
+        listing.CheckboxLabeled(
+            "Auto-instrumentation",
+            ref settings.AutoInstrumentEnabled,
+            "Adds a scope to every method a filter matches. Patching drips in over the first few seconds.");
+
+        listing.Label("Filters, one per line: Assembly!Type.Full.Name::Method, * and ? wildcards");
+        settings.AutoInstrumentFilters = listing.TextEntry(settings.AutoInstrumentFilters, 4);
+
+        listing.CheckboxLabeled(
+            "Auto-mute trivial scopes",
+            ref settings.AutoMuteTrivial,
+            "Drops instrumented scopes whose measured self time never beats the cost of measuring them.");
+
+        if (listing.ButtonText("Apply filters")) {
+            AutoInstrumentRunner.ApplyFilters(
+                settings.AutoInstrumentEnabled ? settings.AutoInstrumentFilters : string.Empty,
+                settings.AutoMuteTrivial,
+                CollectorRuntimeInfo.OwnerId);
+        }
+
+        listing.Label($"Auto-instrumentation: {AutoInstrumentRunner.BuildSummary()}");
     }
 }

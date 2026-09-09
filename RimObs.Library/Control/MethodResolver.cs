@@ -45,7 +45,7 @@ internal static class MethodResolver {
         return MethodResolveResult.Accept(target, BuildSignature(target));
     }
 
-    private static bool IsBlocklisted(string typeFullName) {
+    internal static bool IsBlocklisted(string typeFullName) {
         for (int i = 0; i < s_BlocklistedNamespaces.Length; i++) {
             if (typeFullName.StartsWith(s_BlocklistedNamespaces[i], StringComparison.Ordinal))
                 return true;

@@ -272,8 +272,8 @@ public sealed class SessionStoreTests : IDisposable {
 
     [Fact]
     public void ReplaceGcEventsSnapshot_truncates_then_inserts_in_order() {
-        GcEventRecord a = new(generation: 0, pauseType: GcPauseType.Background, heapBefore: 1000, heapAfter: 800, durationMicros: 50, ticks: 100, allocationRateBytesPerMinute: 5000);
-        GcEventRecord b = new(generation: 2, pauseType: GcPauseType.Foreground, heapBefore: 5000, heapAfter: 4500, durationMicros: 200, ticks: 200, allocationRateBytesPerMinute: 7500);
+        GcEventRecord a = new(generation: 0, pauseType: GcPauseType.Background, heapBefore: 1000, heapAfter: 800, durationMicros: 50, ticks: 100, allocationRateBytesPerMinute: 5000, frameOrdinal: 7);
+        GcEventRecord b = new(generation: 2, pauseType: GcPauseType.Foreground, heapBefore: 5000, heapAfter: 4500, durationMicros: 200, ticks: 200, allocationRateBytesPerMinute: 7500, frameOrdinal: 9);
 
         using SessionStore store = SessionStore.Open(_dbPath);
         store.ReplaceGcEventsSnapshot([a, b]);
@@ -285,7 +285,7 @@ public sealed class SessionStoreTests : IDisposable {
         using SqliteConnection probe = new($"Data Source={_dbPath}");
         probe.Open();
         using SqliteCommand cmd = probe.CreateCommand();
-        cmd.CommandText = "SELECT generation, pause_type, heap_before, heap_after, duration_micros, ticks, allocation_rate_bpm FROM gc_events;";
+        cmd.CommandText = "SELECT generation, pause_type, heap_before, heap_after, duration_micros, ticks, allocation_rate_bpm, frame_ordinal FROM gc_events;";
         using SqliteDataReader reader = cmd.ExecuteReader();
         reader.Read().Should().BeTrue();
         reader.GetInt32(0).Should().Be(2);
@@ -295,12 +295,13 @@ public sealed class SessionStoreTests : IDisposable {
         reader.GetInt64(4).Should().Be(200);
         reader.GetInt64(5).Should().Be(200);
         reader.GetInt64(6).Should().Be(7500);
+        reader.GetInt32(7).Should().Be(9);
     }
 
     [Fact]
     public void ReplaceGcEventsSnapshot_with_empty_array_clears_table() {
         using SessionStore store = SessionStore.Open(_dbPath);
-        store.ReplaceGcEventsSnapshot([new GcEventRecord(0, GcPauseType.Foreground, 0, 0, 0, 0, 0)]);
+        store.ReplaceGcEventsSnapshot([new GcEventRecord(0, GcPauseType.Foreground, 0, 0, 0, 0, 0, 0)]);
         store.CountGcEvents().Should().Be(1);
         store.ReplaceGcEventsSnapshot([]);
         store.CountGcEvents().Should().Be(0);

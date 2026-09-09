@@ -1,14 +1,26 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { buildFrameTree, type FrameData, type TreeNode } from '../frameTree';
-    import { layoutFrame, quadIndexForNode } from '../frameLayout';
+    import type { TreeNode } from '../frameTree';
+    import { quadIndexForNode } from '../frameLayout';
+    import {
+        EMPTY_SERIES,
+        layoutSeries,
+        hitTestSeries,
+        resolveFocusIndex,
+        entryOfNode,
+        visibleEntries,
+        visibleGaps,
+        type FrameSeries,
+    } from '../frameSeries';
     import {
         fitView,
         clampView,
         zoomAbout,
         panBy,
-        hitTest,
         moveFocus,
+        scrollContentPx,
+        scrollLeftPx,
+        viewFromScrollLeft,
         type ViewRange,
         type Focus,
         type FocusMove,
@@ -16,17 +28,16 @@
     import { readTheme, drawTimeline, ROW_HEIGHT } from '../frameDraw';
     import { shareOfFrame, shareOfBudget, percent } from '../frameCost';
     import { ns } from '../format';
+    import { t } from '../i18n';
 
     let {
-        frame,
+        series = EMPTY_SERIES,
         names,
-        orphanCount = $bindable(0),
         selectedNode = $bindable(-1),
         onContext,
     }: {
-        frame: FrameData | null;
+        series?: FrameSeries;
         names: Map<number, { name: string; subsystem: string | null }>;
-        orphanCount?: number;
         selectedNode?: number;
         onContext?: (p: { sectionId: number; x: number; y: number }) => void;
     } = $props();
@@ -34,34 +45,30 @@
     const ANIM_MS = 180;
     const ZOOM_IN = 0.9;
     const ZOOM_OUT = 1 / 0.9;
-    const MAX_DEPTH = 32;
+    // deeper than the stage is tall on purpose; .stage takes over with a native scrollbar.
+    const MAX_DEPTH = 128;
 
     // matches --ease-out (theme.css) closely enough at 180ms.
-    const EASE = (t: number): number => 1 - (1 - t) ** 5;
+    const EASE = (x: number): number => 1 - (1 - x) ** 5;
 
-    let tree = $derived(frame ? buildFrameTree(frame) : { nodes: [], orphanCount: 0 });
-
-    $effect(() => {
-        orphanCount = tree.orphanCount;
-    });
+    let empty = $derived(series.entries.length === 0);
+    let bounds = $derived<ViewRange>({ startUs: series.startUs, endUs: series.endUs });
 
     $effect(() => {
-        selectedNode = focusTreeIndex;
+        selectedNode = focusIndex;
     });
 
     // the inbound direction is a call, not a second effect: binding both ways would make
     // focus and selectedNode write each other on every flush.
     export function focusNode(index: number): void {
-        const node = tree.nodes[index];
+        const node = series.nodes[index];
         if (node) focus = { depth: node.depth, atUs: node.startUs };
     }
 
     let view = $state<ViewRange | null>(null);
-    // clamped on read, not just on write: the frame changes under us on every poll and on
-    // every scrub, and a view from a longer frame culls every node in a shorter one.
-    let effectiveView = $derived(
-        view ? clampView(view, frame?.duration_us ?? 0) : fitView(frame?.duration_us ?? 0),
-    );
+    // clamped on read, not just on write: the window grows under us on every poll, and a
+    // view from a longer series culls every node in a shorter one.
+    let effectiveView = $derived(view ? clampView(view, bounds) : fitView(bounds));
 
     // holds the in-flight interpolated range while a zoom animation runs, so the layout
     // (quads) tracks what is actually painted instead of jumping to the target at t=0.
@@ -73,7 +80,7 @@
     let dpr = $state(1);
 
     let quads = $derived(
-        layoutFrame(tree.nodes, {
+        layoutSeries(series, {
             viewStartUs: layoutView.startUs,
             viewEndUs: layoutView.endUs,
             widthPx,
@@ -82,46 +89,45 @@
             minVisibleDurationUs,
         }),
     );
-    // depth of the actual tree, capped like the layout, so height is stable per frame
-    // instead of resizing every time a zoom step folds or reveals a row.
+    let gaps = $derived(visibleGaps(series.gaps, layoutView.startUs, layoutView.endUs));
+    let shown = $derived(
+        visibleEntries(series.entries, effectiveView.startUs, effectiveView.endUs),
+    );
+    let shownFrames = $derived(Math.max(0, shown.hi - shown.lo + 1));
+
+    // depth of the whole window, capped like the layout, so height is stable instead of
+    // resizing every time a zoom step folds or reveals a row.
     let deepestDepth = $derived(
-        tree.nodes.reduce((max, n) => Math.max(max, Math.min(n.depth, MAX_DEPTH - 1)), 0),
+        series.nodes.reduce((max, n) => Math.max(max, Math.min(n.depth, MAX_DEPTH - 1)), 0),
     );
     let heightPx = $derived(Math.max(1, deepestDepth + 1) * ROW_HEIGHT);
-
-    // hitTest is half-open, so a zero-duration node (dur_us: 0 is routine at microsecond
-    // resolution) never matches on atUs. fall back to the node that starts exactly there.
-    function resolveFocus(nodes: TreeNode[], f: Focus): number {
-        const hit = hitTest(nodes, f.depth, f.atUs);
-        if (hit >= 0) return hit;
-        for (let i = 0; i < nodes.length; i++) {
-            if (nodes[i].depth === f.depth && nodes[i].startUs === f.atUs) return i;
-        }
-        return -1;
-    }
 
     let focus = $state<Focus | null>(null);
     let hoverAt = $state<{ depth: number; atUs: number } | null>(null);
 
-    let focusTreeIndex = $derived(focus ? resolveFocus(tree.nodes, focus) : -1);
-    let hoverTreeIndex = $derived(hoverAt ? hitTest(tree.nodes, hoverAt.depth, hoverAt.atUs) : -1);
+    let focusIndex = $derived(focus ? resolveFocusIndex(series, focus.depth, focus.atUs) : -1);
+    let hoverIndex = $derived(hoverAt ? hitTestSeries(series, hoverAt.depth, hoverAt.atUs) : -1);
     let focusQuadIndex = $derived(
-        focusTreeIndex >= 0 ? quadIndexForNode(quads, tree.nodes[focusTreeIndex]) : -1,
+        focusIndex >= 0 ? quadIndexForNode(quads, series.nodes[focusIndex]) : -1,
     );
     let hoverQuadIndex = $derived(
-        hoverTreeIndex >= 0 ? quadIndexForNode(quads, tree.nodes[hoverTreeIndex]) : -1,
+        hoverIndex >= 0 ? quadIndexForNode(quads, series.nodes[hoverIndex]) : -1,
     );
 
     // stable on purpose: a per-frame label re-announces at 4Hz. numbers live in the StatCards.
-    const ariaLabel = 'current frame';
+    const ariaLabel = 'frame timeline';
     let rangeText = $derived(ns((effectiveView.endUs - effectiveView.startUs) * 1000));
 
-    // five evenly spaced marks; the view is already clamped so these always sit in frame.
+    // five evenly spaced marks, labelled from the start of the window rather than the
+    // session anchor so the numbers stay short.
     let ticks = $derived(
         [0, 0.2, 0.4, 0.6, 0.8].map((f) => ({
             at: f,
             label: ns(
-                (effectiveView.startUs + (effectiveView.endUs - effectiveView.startUs) * f) * 1000,
+                (effectiveView.startUs -
+                    series.startUs +
+                    (effectiveView.endUs - effectiveView.startUs) * f) *
+                    1000,
             ),
         })),
     );
@@ -129,18 +135,22 @@
     function nodeName(n: TreeNode): string {
         return names.get(n.sectionId)?.name ?? `section ${n.sectionId}`;
     }
-    function nodeCost(n: TreeNode): string {
-        const frameDurationUs = frame?.duration_us ?? 0;
-        return `${percent(shareOfFrame(n.durUs, frameDurationUs))} of frame, ${percent(shareOfBudget(n.durUs))} of budget`;
+    function frameDurationOf(index: number): number {
+        return entryOfNode(series, index)?.durationUs ?? 0;
+    }
+    function nodeCost(index: number): string {
+        const n = series.nodes[index];
+        return `${percent(shareOfFrame(n.durUs, frameDurationOf(index)))} of frame, ${percent(shareOfBudget(n.durUs))} of budget`;
     }
     let liveText = $derived(
-        focusTreeIndex >= 0
-            ? `${nodeName(tree.nodes[focusTreeIndex])}, ${ns(tree.nodes[focusTreeIndex].durUs * 1000)}, ${nodeCost(tree.nodes[focusTreeIndex])}`
+        focusIndex >= 0
+            ? `${nodeName(series.nodes[focusIndex])}, ${ns(series.nodes[focusIndex].durUs * 1000)}, ${nodeCost(focusIndex)}`
             : '',
     );
 
     let canvasEl = $state<HTMLCanvasElement | null>(null);
     let hostEl = $state<HTMLDivElement | null>(null);
+    let scrollEl = $state<HTMLDivElement | null>(null);
     let hoverClientX = $state(0);
     let hoverClientY = $state(0);
     let dirty = $state(true);
@@ -151,7 +161,7 @@
     let animStart = 0;
 
     $effect(() => {
-        void frame;
+        void series;
         void effectiveView;
         void hoverQuadIndex;
         void focusQuadIndex;
@@ -161,6 +171,25 @@
         dirty = true;
     });
 
+    let contentPx = $derived(scrollContentPx(effectiveView, bounds, widthPx));
+    let wantScrollLeft = $derived(scrollLeftPx(effectiveView, bounds, widthPx, contentPx));
+
+    $effect(() => {
+        const el = scrollEl;
+        const want = wantScrollLeft;
+        if (el && Math.abs(el.scrollLeft - want) > 1) el.scrollLeft = want;
+    });
+
+    function handleScroll(): void {
+        const el = scrollEl;
+        if (!el || empty) return;
+        const next = viewFromScrollLeft(el.scrollLeft, effectiveView, bounds, widthPx, contentPx);
+        const pxUs = (effectiveView.endUs - effectiveView.startUs) / Math.max(widthPx, 1);
+        // sub-pixel moves are the echo of our own write; acting on them oscillates.
+        if (Math.abs(next.startUs - effectiveView.startUs) < pxUs) return;
+        setViewInstant(next);
+    }
+
     function reducedMotion(): boolean {
         return (
             typeof matchMedia === 'function' &&
@@ -169,16 +198,16 @@
     }
 
     function setViewInstant(next: ViewRange): void {
-        if (!frame) return;
+        if (empty) return;
         animFrom = null;
         animTo = null;
-        view = clampView(next, frame.duration_us);
+        view = clampView(next, bounds);
         dirty = true;
     }
 
     function zoomToNode(node: TreeNode): void {
-        if (!frame) return;
-        const target = clampView({ startUs: node.startUs, endUs: node.endUs }, frame.duration_us);
+        if (empty) return;
+        const target = clampView({ startUs: node.startUs, endUs: node.endUs }, bounds);
         if (reducedMotion()) {
             animFrom = null;
             animTo = null;
@@ -199,10 +228,10 @@
     }
 
     function handleMove(move: FocusMove): void {
-        if (tree.nodes.length === 0) return;
-        const idx = focusTreeIndex >= 0 ? focusTreeIndex : 0;
-        const next = moveFocus(tree.nodes, idx, move);
-        const node = tree.nodes[next];
+        if (series.nodes.length === 0) return;
+        const idx = focusIndex >= 0 ? focusIndex : 0;
+        const next = moveFocus(series.nodes, idx, move);
+        const node = series.nodes[next];
         if (node) focus = { depth: node.depth, atUs: node.startUs };
     }
 
@@ -226,7 +255,7 @@
                 break;
             case 'Enter':
                 event.preventDefault();
-                if (focusTreeIndex >= 0) zoomToNode(tree.nodes[focusTreeIndex]);
+                if (focusIndex >= 0) zoomToNode(series.nodes[focusIndex]);
                 break;
             case 'Escape':
             case 'Home':
@@ -274,7 +303,7 @@
     } | null = null;
 
     function handlePointerDown(event: PointerEvent): void {
-        if (!frame || !canvasEl) return;
+        if (empty || !canvasEl) return;
         canvasEl.focus();
         canvasEl.setPointerCapture(event.pointerId);
         dragState = {
@@ -286,7 +315,7 @@
     }
 
     function handlePointerMove(event: PointerEvent): void {
-        if (!frame || !canvasEl) return;
+        if (empty || !canvasEl) return;
         if (dragState) {
             const dx = event.clientX - dragState.startClientX;
             if (Math.abs(dx) > 2 || Math.abs(event.clientY - dragState.startClientY) > 2) {
@@ -303,22 +332,22 @@
     }
 
     function handlePointerUp(event: PointerEvent): void {
-        if (!frame || !canvasEl) return;
+        if (empty || !canvasEl) return;
         const wasDrag = dragState?.moved ?? false;
         dragState = null;
         if (wasDrag) return;
         const { depth, atUs } = posToView(event.clientX, event.clientY);
-        const idx = hitTest(tree.nodes, depth, atUs);
-        if (idx >= 0) zoomToNode(tree.nodes[idx]);
+        const idx = hitTestSeries(series, depth, atUs);
+        if (idx >= 0) zoomToNode(series.nodes[idx]);
     }
 
     function handleContextMenu(event: MouseEvent): void {
-        if (!frame || !canvasEl || !onContext) return;
+        if (empty || !canvasEl || !onContext) return;
         const { depth, atUs } = posToView(event.clientX, event.clientY);
-        const idx = hitTest(tree.nodes, depth, atUs);
+        const idx = hitTestSeries(series, depth, atUs);
         if (idx < 0) return;
         event.preventDefault();
-        onContext({ sectionId: tree.nodes[idx].sectionId, x: event.clientX, y: event.clientY });
+        onContext({ sectionId: series.nodes[idx].sectionId, x: event.clientX, y: event.clientY });
     }
 
     function handlePointerLeave(): void {
@@ -326,8 +355,14 @@
     }
 
     function handleWheel(event: WheelEvent): void {
-        if (!frame || !canvasEl) return;
+        if (empty || !canvasEl) return;
         event.preventDefault();
+        // a trackpad's horizontal axis pans; the vertical one zooms at the cursor.
+        if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+            const span = effectiveView.endUs - effectiveView.startUs;
+            setViewInstant(panBy(effectiveView, (event.deltaX / Math.max(widthPx, 1)) * span));
+            return;
+        }
         const { atUs } = posToView(event.clientX, event.clientY);
         setViewInstant(zoomAbout(effectiveView, atUs, event.deltaY < 0 ? ZOOM_IN : ZOOM_OUT));
     }
@@ -347,6 +382,7 @@
             subsystem: (q) => names.get(q.sectionId)?.subsystem ?? null,
             hoverIndex: hoverQuadIndex,
             focusIndex: focusQuadIndex,
+            gaps,
         });
     }
 
@@ -357,14 +393,14 @@
 
         let drawView = effectiveView;
         if (animating) {
-            const t = Math.min((now - animStart) / ANIM_MS, 1);
-            const eased = EASE(t);
+            const x = Math.min((now - animStart) / ANIM_MS, 1);
+            const eased = EASE(x);
             drawView = {
                 startUs: animFrom!.startUs + (animTo!.startUs - animFrom!.startUs) * eased,
                 endUs: animFrom!.endUs + (animTo!.endUs - animFrom!.endUs) * eased,
             };
-            animatedView = t >= 1 ? null : drawView;
-            if (t >= 1) {
+            animatedView = x >= 1 ? null : drawView;
+            if (x >= 1) {
                 animFrom = null;
                 animTo = null;
             }
@@ -396,7 +432,7 @@
     });
 </script>
 
-{#if !frame}
+{#if empty}
     <div class="empty" data-testid="frame-empty">no frame captured yet</div>
 {:else}
     <div class="wrap" bind:this={hostEl}>
@@ -423,19 +459,21 @@
             onpointerup={handlePointerUp}
             onpointerleave={handlePointerLeave}
         ></canvas>
-        {#if hoverTreeIndex >= 0}
-            {@const hoverNode = tree.nodes[hoverTreeIndex]}
+        {#if hoverIndex >= 0}
+            {@const hoverNode = series.nodes[hoverIndex]}
             {@const hoverQuad = hoverQuadIndex >= 0 ? quads[hoverQuadIndex] : null}
             <div class="tip" style="left: {hoverClientX + 14}px; top: {hoverClientY + 14}px">
                 <span class="tip-name mono">{nodeName(hoverNode)}</span>
                 <dl>
                     <dt>subsystem</dt>
                     <dd>{names.get(hoverNode.sectionId)?.subsystem ?? 'untagged'}</dd>
+                    <dt>frame</dt>
+                    <dd class="mono">{entryOfNode(series, hoverIndex)?.ordinal ?? '--'}</dd>
                     <dt>duration</dt>
                     <dd class="mono">{ns(hoverNode.durUs * 1000)}</dd>
                     <dt>of frame</dt>
                     <dd class="mono">
-                        {percent(shareOfFrame(hoverNode.durUs, frame.duration_us))}
+                        {percent(shareOfFrame(hoverNode.durUs, frameDurationOf(hoverIndex)))}
                     </dd>
                     <dt>of budget</dt>
                     <dd class="mono">{percent(shareOfBudget(hoverNode.durUs))}</dd>
@@ -447,14 +485,27 @@
             </div>
         {/if}
     </div>
-    {#if focusTreeIndex >= 0}
-        {@const focusNode = tree.nodes[focusTreeIndex]}
+    <div
+        class="hscroll"
+        bind:this={scrollEl}
+        onscroll={handleScroll}
+        aria-label={t('flamegraph.timeScroll')}
+        data-testid="frame-hscroll"
+    >
+        <div class="hscroll-inner" style="width: {contentPx}px"></div>
+    </div>
+    {#if focusIndex >= 0}
         <p class="meta mono" data-testid="frame-selected">
-            {nodeName(focusNode)}, {ns(focusNode.durUs * 1000)}, {nodeCost(focusNode)}
+            {nodeName(series.nodes[focusIndex])}, {ns(series.nodes[focusIndex].durUs * 1000)}, {nodeCost(
+                focusIndex,
+            )}
         </p>
     {/if}
     <p class="meta">
         <span data-testid="frame-range" class="mono">{rangeText}</span>
+        <span data-testid="frame-span" class="mono"
+            >{t('flamegraph.overFrames').replace('{n}', String(shownFrames))}</span
+        >
     </p>
     <div class="sr-only" role="status" aria-live="polite">{liveText}</div>
 {/if}
@@ -487,6 +538,15 @@
     canvas:focus {
         box-shadow: var(--ring-focus);
     }
+    .hscroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 14px;
+        border-top: 1px solid var(--border-soft);
+    }
+    .hscroll-inner {
+        height: 1px;
+    }
     .empty {
         padding: var(--s-7) var(--s-4);
         text-align: center;
@@ -497,6 +557,10 @@
         margin: var(--s-2) 0 0;
         font-size: 0.78rem;
         color: var(--text-dim);
+    }
+    .meta span + span::before {
+        content: ' · ';
+        color: var(--border-strong);
     }
     .tip {
         position: fixed;

@@ -33,6 +33,7 @@
         <Compile Include="..\..\Source\Shared\MethodTransplanter.cs" Link="LinkedSource\MethodTransplanter.cs"/>
         <Compile Include="..\..\Source\RimObs.Patches.Harmony\HarmonyBackend.cs" Link="LinkedSource\HarmonyBackend.cs"/>
         <Compile Include="..\Shared\RecordingSink.cs" Link="LinkedSource\RecordingSink.cs"/>
+        <Compile Include="..\Shared\AutoTargets.cs" Link="LinkedSource\AutoTargets.cs"/>
     </ItemGroup>
 
     <ItemGroup>

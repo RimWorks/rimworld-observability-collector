@@ -176,6 +176,33 @@ const BUNDLE_HOTSPOTS_BODY = {
     ],
 };
 
+type StubFrame = (typeof FRAMES_BODY)['frame'];
+
+// each older frame sits 20ms earlier on the same axis, which is what the timeline needs to
+// place them side by side instead of on top of each other.
+function shiftFrame(frame: StubFrame, ordinal: number, deltaUs: number): StubFrame {
+    return {
+        ...frame,
+        capture_ordinal: ordinal,
+        start_us: frame.start_us + deltaUs,
+        end_us: frame.end_us + deltaUs,
+        nodes: { ...frame.nodes, start_us: frame.nodes.start_us.map((v) => v + deltaUs) },
+    };
+}
+
+// the window backfill: three frames ending at whatever /frames/latest was stubbed with.
+function frameRangeBody(latest: unknown, url: string) {
+    const body = latest as typeof FRAMES_BODY;
+    if (!body.frame) return { ...body, frames: [] };
+    const newest = body.frame.capture_ordinal;
+    const asked = Number(new URL(url, 'http://x').searchParams.get('from') ?? newest - 2);
+    const frames: StubFrame[] = [];
+    for (let o = Math.max(asked, newest - 2); o <= newest; o++) {
+        frames.push(shiftFrame(body.frame, o, (o - newest) * 20000));
+    }
+    return { ...body, frames };
+}
+
 function frameAtBody(url: string) {
     const ordinal = Number(url.split('/').pop());
     return {
@@ -207,6 +234,7 @@ function mockFetch(
         let body: unknown;
         let status = 200;
         if (/\/api\/v1\/frames\/\d+$/.test(url)) body = frameAtBody(url);
+        else if (url.includes('/api/v1/frames?')) body = frameRangeBody(frames, url);
         else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
@@ -951,6 +979,38 @@ describe('Flamegraph page', () => {
 
         await fireEvent.click(screen.getByTestId('tab-tree'));
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+    });
+
+    // the whole point of the multi-frame view: one axis, many frames, not one frame per draw.
+    it('backfills a window of frames and spans all of them at rest', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('frame-ruler');
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 3 frames'),
+        );
+        expect(
+            vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes('/api/v1/frames?')),
+        ).toBe(true);
+    });
+
+    it('draws the window on one continuous axis, not one frame at the origin', async () => {
+        const { drawTimeline } = await import('../lib/frameDraw');
+        render(Flamegraph);
+        await waitFor(() => expect(vi.mocked(drawTimeline)).toHaveBeenCalled());
+        const opts = vi.mocked(drawTimeline).mock.lastCall![2];
+        // the oldest of the three stub frames starts 40ms before the newest.
+        expect(opts.view.startUs).toBe(-40000);
+        expect(opts.view.endUs).toBe(16200);
+    });
+
+    it('keeps the window pinned to the frame the user stepped back to', async () => {
+        render(Flamegraph);
+        await screen.findByText('4321');
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await screen.findByText('4320');
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 2 frames'),
+        );
     });
 
     it('rules the flame canvas with microsecond marks', async () => {

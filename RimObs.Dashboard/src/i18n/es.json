@@ -133,6 +133,8 @@
     "comparison.col.kind": "Tipo",
     "flamegraph.rate": "Rate",
     "flamegraph.ordinal": "Frame",
+    "flamegraph.overFrames": "over {n} frames",
+    "flamegraph.timeScroll": "scroll the time axis",
     "flamegraph.duration": "Duration",
     "flamegraph.nodes": "Nodes",
     "flamegraph.median": "Median",

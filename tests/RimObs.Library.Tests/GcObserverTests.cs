@@ -7,6 +7,10 @@ using Xunit;
 namespace RimWorks.RimObs.Tests;
 
 public sealed class GcObserverTests {
+    public GcObserverTests() {
+        FrameTickCounters.Reset();
+    }
+
     [Fact]
     public void Initial_poll_with_no_collection_returns_false() {
         GcObserver observer = new();
@@ -80,7 +84,7 @@ public sealed class GcObserverTests {
 
     [Fact]
     public void GcEventSample_carries_all_fields() {
-        GcEventSample sample = new(generation: 1, pauseType: GcPauseType.Background, heapBefore: 100, heapAfter: 80, durationMicros: 250, tick: 99, allocationRateBytesPerMinute: 1024);
+        GcEventSample sample = new(generation: 1, pauseType: GcPauseType.Background, heapBefore: 100, heapAfter: 80, durationMicros: 250, tick: 99, allocationRateBytesPerMinute: 1024, frameOrdinal: 42);
 
         sample.Generation.Should().Be(1);
         sample.PauseType.Should().Be(GcPauseType.Background);
@@ -89,5 +93,30 @@ public sealed class GcObserverTests {
         sample.DurationMicros.Should().Be(250);
         sample.Tick.Should().Be(99);
         sample.AllocationRateBytesPerMinute.Should().Be(1024);
+        sample.FrameOrdinal.Should().Be(42);
+    }
+
+    [Fact]
+    // the poller wakes long after the collection, so the sample must carry the frame the
+    // per-frame counter saw it in, not the frame the poller happens to be in now.
+    public void Detected_collection_reports_the_frame_the_collection_landed_in() {
+        GcObserver observer = new();
+        observer.TryPoll(0, out _);
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.BeginFrame();
+        FrameTickCounters.BeginFrame();
+
+        GC.Collect(generation: 0, mode: GCCollectionMode.Forced, blocking: true);
+        FrameTickCounters.NoteCollections(GC.CollectionCount(0));
+        int landedOn = FrameTickCounters.FrameOrdinal;
+
+        for (int i = 0; i < 40; i++)
+            FrameTickCounters.BeginFrame();
+
+        bool detected = observer.TryPoll(currentTick: 1, out GcEventSample sample);
+
+        detected.Should().BeTrue();
+        sample.FrameOrdinal.Should().Be(landedOn);
+        FrameTickCounters.FrameOrdinal.Should().Be(landedOn + 40);
     }
 }

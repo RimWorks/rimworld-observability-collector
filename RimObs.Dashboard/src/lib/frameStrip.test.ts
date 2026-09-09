@@ -8,6 +8,7 @@ import {
     stepOrdinal,
     STRIP_FULL_SCALE_US,
     gridLines,
+    gcMarkIndices,
 } from './frameStrip';
 
 const bars = (ordinals: number[]) =>
@@ -124,5 +125,25 @@ describe('gridLines', () => {
         const by = new Map(gridLines().map((l) => [l.fps, l.at]));
         expect(by.get(15)).toBeCloseTo(1, 2);
         expect(by.get(60)).toBeCloseTo(0.25, 2);
+    });
+});
+
+describe('gcMarkIndices', () => {
+    it('maps a GC ordinal to its bar index', () => {
+        expect(gcMarkIndices(bars([1, 2, 3, 4]), [2, 4])).toEqual([1, 3]);
+    });
+
+    it('returns nothing when no collection happened', () => {
+        expect(gcMarkIndices(bars([1, 2, 3]), [])).toEqual([]);
+    });
+
+    // several collections in one frame still read as a single mark.
+    it('dedupes several collections landing in the same frame', () => {
+        expect(gcMarkIndices(bars([1, 2, 3]), [2, 2, 2])).toEqual([1]);
+    });
+
+    // the strip's ring already dropped this frame, so there is nothing to mark it against.
+    it('drops an ordinal the ring has already evicted', () => {
+        expect(gcMarkIndices(bars([5, 6, 7]), [99])).toEqual([]);
     });
 });

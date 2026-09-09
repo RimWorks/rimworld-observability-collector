@@ -152,6 +152,42 @@ public sealed class CollectorStatusTests {
     }
 
     [Fact]
+    public void BuildLinesReadsOffWhenNoFilterMatchedAnything() {
+        StatusLine auto = Running().BuildLines().Single(l => l.Label == "Auto sections");
+
+        auto.Value.Should().Be("off");
+        auto.Healthy.Should().BeTrue();
+    }
+
+    // a filter that matches thousands and instruments none is the failure a user cannot see
+    // any other way, so the matched count has to be on screen next to the instrumented one.
+    [Fact]
+    public void BuildLinesFlagsAFilterThatMatchedButInstrumentedNothing() {
+        CollectorStatus status = new() { AutoMatched = 900, AutoSkippedTrivial = 900 };
+
+        StatusLine auto = status.BuildLines().Single(l => l.Label == "Auto sections");
+
+        auto.Value.Should().Be("0/900 matched instrumented (900 trivial, 0 muted, 0 pending)");
+        auto.Healthy.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildLinesReportsEveryAutoInstrumentationCount() {
+        CollectorStatus status = new() {
+            AutoMatched = 100,
+            AutoInstrumented = 30,
+            AutoMuted = 4,
+            AutoSkippedTrivial = 66,
+            AutoPending = 7,
+        };
+
+        StatusLine auto = status.BuildLines().Single(l => l.Label == "Auto sections");
+
+        auto.Value.Should().Be("30/100 matched instrumented (66 trivial, 4 muted, 7 pending)");
+        auto.Healthy.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildLinesMarksOptInAllocationSamplerAsHealthyWhenOff() {
         StatusLine sampler = Running().BuildLines().Single(l => l.Label == "Allocation sampler");
 

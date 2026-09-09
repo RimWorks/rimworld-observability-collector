@@ -169,6 +169,7 @@ public sealed class EndToEndSmokeTests {
                 DurationMicros = [10, 20, 30],
                 Ticks = [111, 222, 333],
                 AllocationRateBytesPerMinute = [1000, 2000, 3000],
+                FrameOrdinals = [10, 20, 30],
             }));
 
             await WaitFor(async () => {
@@ -185,6 +186,7 @@ public sealed class EndToEndSmokeTests {
             events.GetArrayLength().Should().Be(3);
             events[0].GetProperty("ticks").GetInt64().Should().Be(333);
             events[0].GetProperty("generation").GetInt32().Should().Be(2);
+            events[0].GetProperty("frame_ordinal").GetInt32().Should().Be(30);
             events[1].GetProperty("ticks").GetInt64().Should().Be(222);
             events[2].GetProperty("ticks").GetInt64().Should().Be(111);
 

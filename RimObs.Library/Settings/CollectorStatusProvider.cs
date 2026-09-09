@@ -1,4 +1,5 @@
 using RimWorks.RimObs.Api;
+using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Observers;
 using RimWorks.RimObs.Patching;
@@ -53,6 +54,11 @@ public static class CollectorStatusProvider {
             AllocationSamplerRunning = AllocationSamplerHost.IsRunning,
             SessionId = sessionId,
             OwnerId = CollectorRuntimeInfo.OwnerId,
+            AutoMatched = AutoInstrumentRunner.Matched,
+            AutoInstrumented = AutoInstrumentRunner.Instrumented,
+            AutoMuted = AutoInstrumentRunner.Muted,
+            AutoSkippedTrivial = AutoInstrumentRunner.SkippedTrivial,
+            AutoPending = AutoInstrumentRunner.Pending,
         };
     }
 }

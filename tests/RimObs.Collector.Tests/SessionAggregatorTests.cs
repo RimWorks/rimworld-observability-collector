@@ -363,6 +363,45 @@ public sealed class SessionAggregatorTests {
     }
 
     [Fact]
+    public void OnGcEvents_captures_frame_ordinal_per_event() {
+        SessionAggregator agg = new();
+        GcEventsBatch batch = new() {
+            Generations = new byte[] { 0, 0 },
+            PauseTypes = new byte[2],
+            HeapBefore = new long[2],
+            HeapAfter = new long[2],
+            DurationMicros = new long[2],
+            Ticks = new long[] { 1, 2 },
+            AllocationRateBytesPerMinute = new long[2],
+            FrameOrdinals = new[] { 40, 41 },
+        };
+
+        agg.OnGcEvents(batch);
+
+        GcEventRecord[] events = agg.SnapshotGcEvents(10);
+        events.Should().Contain(e => e.FrameOrdinal == 40);
+        events.Should().Contain(e => e.FrameOrdinal == 41);
+    }
+
+    [Fact]
+    public void OnGcEvents_defaults_frame_ordinal_to_zero_for_a_pre_v7_batch() {
+        SessionAggregator agg = new();
+        GcEventsBatch batch = new() {
+            Generations = new byte[] { 0 },
+            PauseTypes = new byte[1],
+            HeapBefore = new long[1],
+            HeapAfter = new long[1],
+            DurationMicros = new long[1],
+            Ticks = new long[1],
+            AllocationRateBytesPerMinute = new long[1],
+        };
+
+        agg.OnGcEvents(batch);
+
+        agg.SnapshotGcEvents(10).Should().OnlyContain(e => e.FrameOrdinal == 0);
+    }
+
+    [Fact]
     public void OnAllocations_increments_total_count_by_window_count() {
         SessionAggregator agg = new();
         AllocationsBatch batch = new() {

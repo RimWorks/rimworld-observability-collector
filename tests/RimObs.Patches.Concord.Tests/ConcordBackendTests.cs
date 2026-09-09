@@ -2,6 +2,9 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using FluentAssertions;
+using RimObsTest.AutoFixtures;
+using RimWorks.RimObs.Auto;
+using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patches.Concord;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
@@ -24,7 +27,70 @@ public sealed class ConcordBackendTests : IDisposable {
     public void Dispose() {
         _backend.UnpatchAllForTests();
         Profiler.SetSink(null);
+        AutoInstrumentRunner.ResetForTests();
+        AutoMute.ResetForTests();
+        PatchRegistry.ResetForTests();
+        SectionCatalog.Clear();
+        SectionRegistry.Clear();
         PatchBackends.ResetForTests();
+    }
+
+    // auto-instrumentation drives IPatchBackend.Patch, so it has to be proven against Concord
+    // too. these live here because a second Concord test class breaks the suite, see below.
+    [Fact]
+    public void AutoInstrumentationPatchesAFilteredMethodAndRecordsIt() {
+        ApplyAutoFilter("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        Drain();
+
+        AutoTargets.Worthwhile(4);
+
+        AutoInstrumentRunner.Instrumented.Should().Be(1);
+        AutoInstrumentRunner.Refused.Should().Be(0);
+        _sink.Samples.Should().HaveCount(1);
+    }
+
+    // one pump is one frame's budget, and a Concord patch can cost more than the whole budget,
+    // so a four-target plan takes several frames.
+    [Fact]
+    public void AutoInstrumentationPatchesEveryEligibleMethodOverSeveralPumps() {
+        ApplyAutoFilter("RimObsTest.AutoFixtures.*");
+        Drain();
+
+        AutoTargets.Worthwhile(2);
+        AutoTargets.AlsoWorthwhile(2);
+        AutoTargets.ThirdWorthwhile(2);
+        OtherAutoTargets.Elsewhere(2);
+
+        AutoInstrumentRunner.Refused.Should().Be(0);
+        _sink.Samples.Should().HaveCount(4);
+    }
+
+    // Concord keys its handles on (target, At), so a second transpiler on one method loses the
+    // first handle. the scanner has to keep an already-owned method out of the plan.
+    [Fact]
+    public void AutoInstrumentationSkipsAMethodAnExistingSectionAlreadyOwns() {
+        MethodInfo owned = typeof(AutoTargets).GetMethod(nameof(AutoTargets.Worthwhile))!;
+        SectionCatalog.RegisterDirect("test.concord_auto_owned", owned);
+        _backend.Patch(owned);
+
+        ApplyAutoFilter("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        AutoTargets.Worthwhile(2);
+
+        _sink.Samples.Should().HaveCount(1);
+    }
+
+    private static void Drain() {
+        while (AutoInstrumentRunner.Pending > 0)
+            AutoInstrumentRunner.Pump();
+        AutoInstrumentRunner.Pump();
+    }
+
+    private void ApplyAutoFilter(string filters) {
+        PatchBackends.Register(_backend, PatchBackends.ConcordPriority);
+        PatchBackends.SelectBest(scan: false);
+        AutoInstrumentRunner.ApplyFilters(
+            filters, autoMute: true, "test.owner", [typeof(AutoTargets).Assembly]);
     }
 
     [Fact]

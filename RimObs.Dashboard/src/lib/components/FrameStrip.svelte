@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { buildBars, barIndexAt, gridLines, type StripBar } from '../frameStrip';
+    import { buildBars, barIndexAt, gridLines, GC_BAND_PX, type StripBar } from '../frameStrip';
     import { drawStrip } from '../stripDraw';
     import { ns } from '../format';
     import { t } from '../i18n';
@@ -10,16 +10,18 @@
         durationsUs,
         selectedOrdinal = null,
         cutOrdinals = [],
+        gcOrdinals = [],
         onSelect,
     }: {
         ordinals: readonly number[];
         durationsUs: readonly number[];
         selectedOrdinal?: number | null;
         cutOrdinals?: readonly number[];
+        gcOrdinals?: readonly number[];
         onSelect?: (ordinal: number) => void;
     } = $props();
 
-    const HEIGHT_PX = 132;
+    const HEIGHT_PX = 132 + GC_BAND_PX;
 
     let bars = $derived(buildBars(ordinals, durationsUs));
     let canvasEl = $state<HTMLCanvasElement | null>(null);
@@ -50,6 +52,7 @@
             dpr,
             selectedOrdinal,
             cutOrdinals,
+            gcOrdinals,
             theme: {
                 background: read('--bg-surface', '#131925'),
                 bar: read('--sub-none', '#5c6b85'),
@@ -57,6 +60,7 @@
                 selected: read('--text', '#d4dded'),
                 line: read('--border', '#28344a'),
                 cut: read('--text-faint', '#8a98b3'),
+                gc: read('--bad', '#f25d63'),
             },
         });
     }
@@ -65,6 +69,7 @@
         void bars;
         void selectedOrdinal;
         void cutOrdinals;
+        void gcOrdinals;
         void widthPx;
         void heightPx;
         void dpr;
@@ -117,10 +122,10 @@
             <span class="read dim">{t('strip.budget')}</span>
         {/if}
     </div>
-    <div class="plot">
+    <div class="plot" style="--gc-band-px: {GC_BAND_PX}px">
         <div class="axis" aria-hidden="true">
             {#each gridLines() as line (line.fps)}
-                <span style="bottom:{line.at * 100}%">
+                <span style="bottom: calc({GC_BAND_PX}px + {line.at} * (100% - {GC_BAND_PX}px))">
                     <b>{line.fps} FPS</b><em>{line.ms.toFixed(1)} ms</em>
                 </span>
             {/each}
@@ -164,7 +169,8 @@
         position: relative;
         display: grid;
         grid-template-columns: var(--gut, 112px) 1fr;
-        height: 128px;
+        /* the extra band is the reserved GC tick lane below the bars' baseline */
+        height: calc(128px + var(--gc-band-px));
         background: var(--bg-void);
     }
     .axis {

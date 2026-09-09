@@ -94,3 +94,20 @@ export function gridLines(): GridLine[] {
     }
     return out;
 }
+
+/** Reserved pixel height below the bar baseline for the GC tick lane. */
+export const GC_BAND_PX = 8;
+
+/**
+ * Bar indices whose frame had a collection, deduped per frame so several GCs in one frame
+ * still draw one mark, and silently dropping ordinals the strip's ring already evicted.
+ */
+export function gcMarkIndices(bars: readonly StripBar[], gcOrdinals: readonly number[]): number[] {
+    if (gcOrdinals.length === 0) return [];
+    const ordinals = new Set(gcOrdinals);
+    const indices: number[] = [];
+    for (let i = 0; i < bars.length; i++) {
+        if (ordinals.has(bars[i].ordinal)) indices.push(i);
+    }
+    return indices;
+}

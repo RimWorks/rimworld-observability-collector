@@ -4,7 +4,9 @@ using System.Runtime.CompilerServices;
 namespace RimWorks.RimObs.Profile;
 
 internal static class SectionRegistry {
-    public const int MaxSections = 4096;
+    // filter-driven auto-instrumentation registers thousands. three arrays at this size cost
+    // about 550 KB, which is cheaper than refusing sections a user asked for.
+    public const int MaxSections = 32768;
 
     internal static readonly string[] s_Names = new string[MaxSections];
     internal static readonly bool[] s_Active = new bool[MaxSections];

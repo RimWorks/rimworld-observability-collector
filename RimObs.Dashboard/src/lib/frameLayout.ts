@@ -7,6 +7,9 @@ export interface LayoutOptions {
     maxDepth: number;
     minWidthPx: number;
     minVisibleDurationUs: number;
+    /** half-open node index bounds; defaults to the whole tree. */
+    from?: number;
+    to?: number;
 }
 
 export interface Quad {
@@ -20,10 +23,15 @@ export interface Quad {
 }
 
 // a node under the threshold goes, and so does everything beneath it.
-export function foldFrame(tree: TreeNode[], minVisibleDurationUs: number): Uint8Array {
+export function foldFrame(
+    tree: TreeNode[],
+    minVisibleDurationUs: number,
+    from = 0,
+    to = tree.length,
+): Uint8Array {
     const folded = new Uint8Array(tree.length);
     // buildFrameTree emits a parent before its children, so one forward pass carries the flag down.
-    for (let i = 0; i < tree.length; i++) {
+    for (let i = from; i < to; i++) {
         const n = tree[i];
         const parentFolded = n.parentIndex >= 0 && folded[n.parentIndex] === 1;
         folded[i] = parentFolded || n.durUs < minVisibleDurationUs ? 1 : 0;
@@ -54,7 +62,9 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
     const span = opts.viewEndUs - opts.viewStartUs;
     if (span <= 0 || opts.widthPx <= 0) return [];
 
-    const folded = foldFrame(tree, opts.minVisibleDurationUs);
+    const from = opts.from ?? 0;
+    const to = opts.to ?? tree.length;
+    const folded = foldFrame(tree, opts.minVisibleDurationUs, from, to);
     const minUs = (span / opts.widthPx) * opts.minWidthPx;
     const out: Quad[] = [];
     const open = new Map<number, Quad>();
@@ -67,7 +77,7 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
         }
     };
 
-    for (let i = 0; i < tree.length; i++) {
+    for (let i = from; i < to; i++) {
         const n = tree[i];
         if (isHidden(n, i, folded, opts)) continue;
 

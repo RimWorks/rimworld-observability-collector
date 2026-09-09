@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { drawStrip, type StripTheme } from './stripDraw';
-import { buildBars } from './frameStrip';
+import { buildBars, GC_BAND_PX } from './frameStrip';
 
 const THEME: StripTheme = {
     background: '#000',
@@ -9,6 +9,7 @@ const THEME: StripTheme = {
     selected: '#sel',
     line: '#line',
     cut: '#cut',
+    gc: '#gc',
 };
 
 interface Line {
@@ -65,12 +66,17 @@ function fakeCtx() {
     return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, lines };
 }
 
-const opts = (selectedOrdinal: number | null = null, cutOrdinals: number[] = []) => ({
+const opts = (
+    selectedOrdinal: number | null = null,
+    cutOrdinals: number[] = [],
+    gcOrdinals: number[] = [],
+) => ({
     widthPx: 100,
     heightPx: 40,
     dpr: 1,
     selectedOrdinal,
     cutOrdinals,
+    gcOrdinals,
     theme: THEME,
 });
 
@@ -98,8 +104,8 @@ describe('drawStrip', () => {
     it('grows the bar upward from the bottom edge', () => {
         const { ctx, rects } = fakeCtx();
         drawStrip(ctx, buildBars([1], [66_666.4]), opts());
-        // full scale on a 40px strip is the whole height
-        expect(rects[1].h).toBeCloseTo(40, 5);
+        // full scale fills the bar area, which stops short of the reserved GC band
+        expect(rects[1].h).toBeCloseTo(40 - GC_BAND_PX, 5);
         expect(rects[1].y).toBeCloseTo(0, 5);
     });
 
@@ -158,5 +164,24 @@ describe('drawStrip', () => {
         const cut = lines.find((l) => l.stroke === '#cut');
         expect(cut!.x1).toBeLessThan(100);
         expect(cut!.x1).toBeGreaterThan(0);
+    });
+
+    it('draws a gc mark hanging below the baseline for a frame that collected', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars([1, 2], [1000, 1000]), opts(null, [], [2]));
+        const mark = rects.find((r) => r.fill === '#gc');
+        expect(mark).toMatchObject({ y: 40 - GC_BAND_PX, h: GC_BAND_PX });
+    });
+
+    it('draws no gc marks when nothing collected', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars([1, 2], [1000, 1000]), opts());
+        expect(rects.some((r) => r.fill === '#gc')).toBe(false);
+    });
+
+    it('skips a gc mark for a frame the ring already evicted', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars([5, 6], [1000, 1000]), opts(null, [], [99]));
+        expect(rects.some((r) => r.fill === '#gc')).toBe(false);
     });
 });

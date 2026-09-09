@@ -15,5 +15,7 @@ public static class SchemaVersion {
     //     ParentIds holds section ids, which can't address repeated siblings (DoSingleTick emits 3 Tick nodes/tick).
     // v7: SectionBatch gains AllocBytes, bytes allocated inside each timed scope. zero on a
     //     runtime where the mono allocation hook could not be enabled.
-    public const int Current = 7;
+    // v8: GcEventsBatch gains FrameOrdinals, so a collection can be placed on the strip.
+    //     Readers built for v7 get an empty array.
+    public const int Current = 8;
 }

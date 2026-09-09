@@ -80,7 +80,8 @@ internal sealed class GcObserver {
             heapAfter: heapAfter,
             durationMicros: durationMicros,
             tick: currentTick,
-            allocationRateBytesPerMinute: Interlocked.Read(ref _allocationRateBytesPerMinute)
+            allocationRateBytesPerMinute: Interlocked.Read(ref _allocationRateBytesPerMinute),
+            frameOrdinal: FrameTickCounters.LastGcFrameOrdinal
         );
         return true;
     }

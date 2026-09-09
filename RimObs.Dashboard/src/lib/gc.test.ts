@@ -11,6 +11,7 @@ function ev(partial: Partial<GcEvent>): GcEvent {
         duration_micros: 0,
         ticks: 0,
         allocation_rate_bpm: 0,
+        frame_ordinal: 0,
         ...partial,
     };
 }

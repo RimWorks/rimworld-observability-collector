@@ -4,12 +4,13 @@ import {
     clampView,
     zoomAbout,
     panBy,
-    hitTest,
     moveFocus,
+    scrollContentPx,
+    scrollLeftPx,
+    viewFromScrollLeft,
     type ViewRange,
-    type Focus,
 } from './frameView';
-import { buildFrameTree, type FrameData, type TreeNode } from './frameTree';
+import { type TreeNode } from './frameTree';
 
 function node(
     depth: number,
@@ -33,32 +34,49 @@ const TREE: TreeNode[] = [
     node(1, 210, 10, 60, 600, 4),
 ];
 
+const BOUNDS: ViewRange = { startUs: 0, endUs: 100 };
+
 describe('fitView', () => {
-    it('spans the whole frame', () => {
-        expect(fitView(160)).toEqual({ startUs: 0, endUs: 160 });
+    it('spans the whole window', () => {
+        expect(fitView({ startUs: 0, endUs: 160 })).toEqual({ startUs: 0, endUs: 160 });
+    });
+
+    it('starts at the window origin, not at zero', () => {
+        expect(fitView({ startUs: 5_000_000, endUs: 5_000_160 })).toEqual({
+            startUs: 5_000_000,
+            endUs: 5_000_160,
+        });
     });
 });
 
 describe('clampView', () => {
     it('leaves a view that already fits', () => {
-        expect(clampView({ startUs: 10, endUs: 20 }, 100)).toEqual({ startUs: 10, endUs: 20 });
+        expect(clampView({ startUs: 10, endUs: 20 }, BOUNDS)).toEqual({ startUs: 10, endUs: 20 });
     });
 
     it('slides a view that ran off the end back inside the frame', () => {
-        expect(clampView({ startUs: 95, endUs: 115 }, 100)).toEqual({ startUs: 80, endUs: 100 });
+        expect(clampView({ startUs: 95, endUs: 115 }, BOUNDS)).toEqual({ startUs: 80, endUs: 100 });
     });
 
     it('slides a view that ran off the start back inside the frame', () => {
-        expect(clampView({ startUs: -20, endUs: 0 }, 100)).toEqual({ startUs: 0, endUs: 20 });
+        expect(clampView({ startUs: -20, endUs: 0 }, BOUNDS)).toEqual({ startUs: 0, endUs: 20 });
     });
 
     it('never lets the span exceed the frame', () => {
-        expect(clampView({ startUs: -50, endUs: 300 }, 100)).toEqual({ startUs: 0, endUs: 100 });
+        expect(clampView({ startUs: -50, endUs: 300 }, BOUNDS)).toEqual({ startUs: 0, endUs: 100 });
     });
 
     it('never lets the span go below half a microsecond', () => {
-        const out = clampView({ startUs: 10, endUs: 10.1 }, 100);
+        const out = clampView({ startUs: 10, endUs: 10.1 }, BOUNDS);
         expect(out.endUs - out.startUs).toBeCloseTo(0.5);
+    });
+
+    it('clamps against a window that does not start at zero', () => {
+        const bounds = { startUs: 5_000_000, endUs: 5_000_100 };
+        expect(clampView({ startUs: 0, endUs: 20 }, bounds)).toEqual({
+            startUs: 5_000_000,
+            endUs: 5_000_020,
+        });
     });
 });
 
@@ -81,27 +99,6 @@ describe('zoomAbout', () => {
 describe('panBy', () => {
     it('shifts both ends by the same amount', () => {
         expect(panBy({ startUs: 10, endUs: 20 }, 5)).toEqual({ startUs: 15, endUs: 25 });
-    });
-});
-
-describe('hitTest', () => {
-    it('finds the node at a depth containing the time', () => {
-        expect(hitTest(TREE, 1, 15)).toBe(1);
-        expect(hitTest(TREE, 1, 55)).toBe(3);
-        expect(hitTest(TREE, 2, 17)).toBe(2);
-    });
-
-    it('returns -1 in a gap', () => {
-        expect(hitTest(TREE, 1, 40)).toBe(-1);
-    });
-
-    it('returns -1 below the deepest row', () => {
-        expect(hitTest(TREE, 5, 15)).toBe(-1);
-    });
-
-    it('treats a node span as half open so touching neighbours do not both hit', () => {
-        expect(hitTest(TREE, 1, 30)).toBe(-1);
-        expect(hitTest(TREE, 1, 10)).toBe(1);
     });
 });
 
@@ -147,48 +144,50 @@ describe('moveFocus', () => {
     });
 });
 
-describe('Focus', () => {
-    it('round-trips a Focus through hitTest', () => {
-        const focus: Focus = { depth: 2, atUs: 17 };
-        expect(hitTest(TREE, focus.depth, focus.atUs)).toBe(2);
-    });
-});
+describe('the scrollbar proxy', () => {
+    const bounds: ViewRange = { startUs: 1000, endUs: 2000 };
 
-// regression guard: the old flamegraph mixed session-clock and frame-relative time.
-describe('with a non-zero frame origin', () => {
-    const ORIGIN = 5_000_000;
-    const frameData: FrameData = {
-        capture_ordinal: 1,
-        start_us: ORIGIN,
-        end_us: ORIGIN + 100,
-        duration_us: 100,
-        node_count: 2,
-        nodes: {
-            section_ids: [10, 20],
-            parent_ids: [-1, 10],
-            node_ids: [1, 2],
-            parent_node_ids: [-1, 1],
-            start_us: [ORIGIN, ORIGIN + 10],
-            dur_us: [100, 20],
-        },
-    };
-    const { nodes } = buildFrameTree(frameData);
-
-    it('fits the view to frame-relative bounds, not the origin', () => {
-        expect(fitView(frameData.duration_us)).toEqual({ startUs: 0, endUs: 100 });
+    it('makes the spacer as many times the track as the view is zoomed in', () => {
+        expect(scrollContentPx({ startUs: 1000, endUs: 1100 }, bounds, 600)).toBe(6000);
     });
 
-    it('hits the expected node with a frame-relative time', () => {
-        expect(hitTest(nodes, 1, 15)).toBe(1);
+    it('never makes the spacer narrower than the track', () => {
+        expect(scrollContentPx({ startUs: 1000, endUs: 2000 }, bounds, 600)).toBe(600);
     });
 
-    it('misses when passed the absolute session time instead', () => {
-        expect(hitTest(nodes, 1, ORIGIN + 15)).toBe(-1);
+    it('pins the thumb to the left at the start of the window', () => {
+        const content = scrollContentPx({ startUs: 1000, endUs: 1100 }, bounds, 600);
+        expect(scrollLeftPx({ startUs: 1000, endUs: 1100 }, bounds, 600, content)).toBe(0);
     });
 
-    it('keeps a clamped view inside [0, duration], never near the origin', () => {
-        const out = clampView({ startUs: ORIGIN - 10, endUs: ORIGIN + 10 }, frameData.duration_us);
-        expect(out.startUs).toBeGreaterThanOrEqual(0);
-        expect(out.endUs).toBeLessThanOrEqual(100);
+    it('pins the thumb to the right at the end of the window', () => {
+        const view = { startUs: 1900, endUs: 2000 };
+        const content = scrollContentPx(view, bounds, 600);
+        expect(scrollLeftPx(view, bounds, 600, content)).toBe(content - 600);
+    });
+
+    // the spacer is capped at a million px, so past that the offset has to be scaled by the
+    // travel the thumb actually has, not by the raw window.
+    it('still reaches the right edge once the spacer hits its cap', () => {
+        const view = { startUs: 1999.5, endUs: 2000 };
+        const content = scrollContentPx(view, bounds, 600);
+        expect(content).toBe(1_000_000);
+        expect(scrollLeftPx(view, bounds, 600, content)).toBe(content - 600);
+    });
+
+    it('round-trips a view through the scroll offset', () => {
+        const view = { startUs: 1400, endUs: 1500 };
+        const content = scrollContentPx(view, bounds, 600);
+        const left = scrollLeftPx(view, bounds, 600, content);
+        const back = viewFromScrollLeft(left, view, bounds, 600, content);
+        expect(back.startUs).toBeCloseTo(1400, 1);
+        expect(back.endUs).toBeCloseTo(1500, 1);
+    });
+
+    it('keeps a scroll past the end inside the window', () => {
+        const view = { startUs: 1400, endUs: 1500 };
+        const content = scrollContentPx(view, bounds, 600);
+        const back = viewFromScrollLeft(content * 10, view, bounds, 600, content);
+        expect(back.endUs).toBeLessThanOrEqual(2000);
     });
 });

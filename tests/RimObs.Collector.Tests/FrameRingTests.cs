@@ -326,4 +326,53 @@ public sealed class FrameRingTests {
 
         ring.Snapshot().Should().BeEmpty();
     }
+
+    private static FrameRing RingOfOrdinals(int capacity, params int[] ordinals) {
+        FrameRing ring = new(capacity);
+        foreach (int ordinal in ordinals)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+        // the last frame stays open until a higher ordinal lands, so close it out.
+        ring.Add(int.MaxValue, 10, -1, 0, -1, long.MaxValue / 2, 1L);
+        return ring;
+    }
+
+    [Fact]
+    public void Range_returns_a_run_of_frames_ascending_from_the_asked_ordinal() {
+        FrameRing ring = RingOfOrdinals(16, 1, 2, 3, 4, 5);
+
+        ring.Range(2, 3).Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4);
+    }
+
+    [Fact]
+    public void Range_with_a_negative_from_returns_the_newest_frames() {
+        FrameRing ring = RingOfOrdinals(16, 1, 2, 3, 4, 5);
+
+        ring.Range(-1, 2).Select(f => f.CaptureOrdinal).Should().Equal(4, 5);
+    }
+
+    [Fact]
+    public void Range_clips_to_the_oldest_frame_still_held_when_from_was_evicted() {
+        FrameRing ring = RingOfOrdinals(3, 1, 2, 3, 4, 5);
+
+        ring.Range(1, 10).Select(f => f.CaptureOrdinal).Should().Equal(3, 4, 5);
+    }
+
+    [Fact]
+    public void Range_skips_the_ordinals_no_frame_was_recorded_for() {
+        FrameRing ring = RingOfOrdinals(16, 1, 5, 9);
+
+        ring.Range(2, 10).Select(f => f.CaptureOrdinal).Should().Equal(5, 9);
+    }
+
+    [Fact]
+    public void Range_is_empty_past_the_newest_ordinal() {
+        FrameRing ring = RingOfOrdinals(16, 1, 2, 3);
+
+        ring.Range(int.MaxValue - 1, 4).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Range_is_empty_on_an_empty_ring() {
+        new FrameRing(8).Range(-1, 10).Should().BeEmpty();
+    }
 }

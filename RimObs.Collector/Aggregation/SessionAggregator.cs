@@ -179,6 +179,7 @@ public sealed class SessionAggregator {
                 )
             )
         );
+        int frameOrdinalLen = batch.FrameOrdinals.Length;
         for (int i = 0; i < n; i++) {
             GcEventRecord record = new(
                 generation: batch.Generations[i],
@@ -187,7 +188,8 @@ public sealed class SessionAggregator {
                 heapAfter: batch.HeapAfter[i],
                 durationMicros: batch.DurationMicros[i],
                 ticks: batch.Ticks[i],
-                allocationRateBytesPerMinute: batch.AllocationRateBytesPerMinute[i]
+                allocationRateBytesPerMinute: batch.AllocationRateBytesPerMinute[i],
+                frameOrdinal: i < frameOrdinalLen ? batch.FrameOrdinals[i] : 0
             );
             _gcEvents.Add(in record);
         }

@@ -27,6 +27,29 @@ public static class FramesEndpoints {
             });
         });
 
+        // clipped, not padded: an evicted `from` starts at the oldest frame held, and holes
+        // inside the run stay missing so the client can draw them.
+        endpoints.MapGet("/api/v1/frames", (SessionAggregator aggregator, int? from, int? count) => {
+            SessionMeta? meta = aggregator.Meta;
+            double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+            long anchor = meta?.AnchorTimestamp ?? 0L;
+            FrameSnapshot[] frames = aggregator.Frames.Range(from ?? -1, QueryLimit.Clamp(count, 64, 256));
+            object[] mapped = new object[frames.Length];
+            for (int i = 0; i < frames.Length; i++)
+                mapped[i] = FramePayload.Map(frames[i], anchor, usPerTick);
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
+                frames = mapped,
+                strip = MapStrip(aggregator, usPerTick, 240),
+                stats = FramePayload.MapStats(aggregator.Frames.ComputeStats(), usPerTick),
+                dropped = new {
+                    pre_frame_samples = aggregator.Frames.PreFrameSamples,
+                    late_samples = aggregator.Frames.LateSamples,
+                },
+            });
+        });
+
         endpoints.MapGet("/api/v1/frames/{ordinal:int}", (SessionAggregator aggregator, int ordinal) => {
             SessionMeta? meta = aggregator.Meta;
             double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;

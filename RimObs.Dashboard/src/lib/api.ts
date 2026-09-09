@@ -1,4 +1,5 @@
-import type { FrameResponse, BundleFramesResponse } from './frameTree';
+import type { FrameResponse, FrameRangeResponse, BundleFramesResponse } from './frameTree';
+import { MAX_WINDOW_FRAMES } from './frameSeries';
 
 export interface StatusResponse {
     schema_version: number;
@@ -128,6 +129,7 @@ export interface GcEvent {
     duration_micros: number;
     ticks: number;
     allocation_rate_bpm: number;
+    frame_ordinal: number;
 }
 
 export interface GcResponse {
@@ -409,6 +411,10 @@ export const api = {
     allSections: () => get<RegistrySectionsResponse>('/api/v1/sections'),
     frames: () => get<FrameResponse>('/api/v1/frames/latest'),
     frameAt: (ordinal: number) => get<FrameResponse>(`/api/v1/frames/${ordinal}`),
+    frameRange: (from?: number, count = MAX_WINDOW_FRAMES) =>
+        get<FrameRangeResponse>(
+            `/api/v1/frames?count=${count}${from === undefined ? '' : `&from=${from}`}`,
+        ),
     frameBaseline: (frames = 128) =>
         get<{ median_us: Record<string, number> }>(`/api/v1/frames/baseline?frames=${frames}`),
     sectionTimeseries: (id: number) =>
