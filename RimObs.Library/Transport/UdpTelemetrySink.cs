@@ -289,6 +289,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 NodeIds = Slice(_batch.NodeIds, n),
                 ParentNodeIds = Slice(_batch.ParentNodeIds, n),
                 AllocBytes = Slice(_batch.AllocBytes, n),
+                ThreadIds = Slice(_batch.ThreadIds, n),
             };
             SendBatch(BatchType.Sections, batch);
             Interlocked.Add(ref _sent, n);
