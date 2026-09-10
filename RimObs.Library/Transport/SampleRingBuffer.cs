@@ -130,7 +130,7 @@ internal sealed class SampleRingSet {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
-        return _lane.Value.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
+        return _lane.Value!.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
     }
 
     /// <summary>

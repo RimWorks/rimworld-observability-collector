@@ -42,3 +42,8 @@ dotnet_diagnostic.S1075.severity = none
 [Observers/AllocationHook.cs]
 # mono keeps the raw function pointer, so the delegate field has to outlive TryEnable.
 dotnet_diagnostic.S1450.severity = none
+
+[Transport/SampleRingBuffer.cs]
+# the ! on _lane.Value is load-bearing under net8 in the test projects, where ThreadLocal<T>.Value
+# is [MaybeNull] and CS8602 fires without it. the net472 ref assemblies lack that annotation.
+dotnet_diagnostic.S8969.severity = none
