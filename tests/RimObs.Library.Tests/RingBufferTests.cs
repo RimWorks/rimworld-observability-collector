@@ -163,4 +163,43 @@ public sealed class RingBufferTests {
         batch.ThreadIds[1].Should().Be(otherThreadId);
         batch.ThreadIds[1].Should().NotBe(batch.ThreadIds[0]);
     }
+
+    [Fact]
+    public void A_flooding_thread_only_drops_its_own_samples() {
+        SampleRingSet set = new(4);
+
+        Thread flooder = new(() => {
+            for (int i = 0; i < 64; i++)
+                set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+        });
+        flooder.Start();
+        flooder.Join();
+
+        for (int i = 0; i < 4; i++)
+            set.TryWrite(1000 + i, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+
+        set.LaneCount.Should().Be(2);
+        set.Dropped.Should().Be(60);
+    }
+
+    [Fact]
+    public void Drain_walks_every_lane_round_robin() {
+        SampleRingSet set = new(16);
+        set.TryWrite(1, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+
+        Thread other = new(() => set.TryWrite(2, -1, 0, -1, 0, 0, 1).Should().BeTrue());
+        other.Start();
+        other.Join();
+
+        SampleBatch batch = new SampleBatch(16);
+        int first = set.Drain(batch, 16);
+        int firstId = batch.SectionIds[0];
+        int second = set.Drain(batch, 16);
+        int secondId = batch.SectionIds[0];
+
+        first.Should().Be(1);
+        second.Should().Be(1);
+        set.Drain(batch, 16).Should().Be(0);
+        new[] { firstId, secondId }.Should().BeEquivalentTo(new[] { 1, 2 });
+    }
 }

@@ -82,3 +82,68 @@ internal sealed class SampleRingBuffer {
         return n;
     }
 }
+
+/// <summary>
+/// One <see cref="SampleRingBuffer"/> per producing thread, so a runaway worker fills and drops
+/// its own lane instead of eating the capacity the main thread needs.
+/// </summary>
+internal sealed class SampleRingSet {
+    private readonly int _laneCapacity;
+    private readonly ThreadLocal<SampleRingBuffer> _lane;
+    private SampleRingBuffer[] _lanes = Array.Empty<SampleRingBuffer>();
+    private int _cursor;
+
+    public SampleRingSet(int laneCapacity) {
+        _laneCapacity = laneCapacity;
+        _lane = new ThreadLocal<SampleRingBuffer>(AddLane);
+    }
+
+    public int LaneCapacity => _laneCapacity;
+    public int LaneCount => Volatile.Read(ref _lanes).Length;
+
+    public long Dropped {
+        get {
+            SampleRingBuffer[] lanes = Volatile.Read(ref _lanes);
+            long total = 0;
+            for (int i = 0; i < lanes.Length; i++)
+                total += lanes[i].Dropped;
+            return total;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
+        return _lane.Value.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
+    }
+
+    /// <summary>
+    /// Drains the next non-empty lane, round-robin, so a hot lane cannot starve the others.
+    /// Returns 0 only when every lane is empty.
+    /// </summary>
+    public int Drain(SampleBatch batch, int maxCount) {
+        SampleRingBuffer[] lanes = Volatile.Read(ref _lanes);
+        for (int i = 0; i < lanes.Length; i++) {
+            int idx = (_cursor + i) % lanes.Length;
+            int n = lanes[idx].Drain(batch, maxCount);
+            if (n > 0) {
+                _cursor = (idx + 1) % lanes.Length;
+                return n;
+            }
+        }
+        return 0;
+    }
+
+    private SampleRingBuffer AddLane() {
+        SampleRingBuffer ring = new(_laneCapacity);
+        SampleRingBuffer[] old;
+        SampleRingBuffer[] grown;
+        do {
+            old = Volatile.Read(ref _lanes);
+            grown = new SampleRingBuffer[old.Length + 1];
+            Array.Copy(old, grown, old.Length);
+            grown[old.Length] = ring;
+        }
+        while (Interlocked.CompareExchange(ref _lanes, grown, old) != old);
+        return ring;
+    }
+}
