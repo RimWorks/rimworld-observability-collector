@@ -24,15 +24,25 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     private readonly UdpClient _client;
     private readonly IPEndPoint _endpoint;
-    private readonly SampleRingBuffer _ring = new(RingCapacity);
+    private readonly SampleRingSet _ring = new(RingCapacity);
     private readonly Thread _sender;
     private readonly ManualResetEventSlim _stop = new(false);
     private readonly string _ownerId;
+
+    // the sink is built during mod init, on the game's main thread, so that id names the main lane.
+    private readonly int _mainThreadId = Environment.CurrentManagedThreadId;
 
     private readonly SampleBatch _batch = new SampleBatch(BatchSize);
     private readonly int[] _registrationIds = new int[64];
     private readonly string[] _registrationNames = new string[64];
     private readonly string?[] _registrationSubsystems = new string?[64];
+
+    private const int ThreadRegistrationCapacity = 64;
+    private readonly HashSet<int> _knownThreadIds = new();
+    private readonly int[] _threadRegistrationIds = new int[ThreadRegistrationCapacity];
+    private readonly int[] _threadRegistrationRoles = new int[ThreadRegistrationCapacity];
+    private readonly string[] _threadRegistrationNames = new string[ThreadRegistrationCapacity];
+    private int _threadRegistrationStaged;
 
     private readonly int[] _metricRegistrationIds = new int[64];
     private readonly string[] _metricRegistrationNames = new string[64];
@@ -280,6 +290,9 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             if (n == 0)
                 return;
 
+            StageThreadRegistrations(_batch.ThreadIds, n);
+            FlushThreadRegistrations();
+
             SectionBatch batch = new() {
                 SectionIds = Slice(_batch.SectionIds, n),
                 ParentIds = Slice(_batch.ParentIds, n),
@@ -294,6 +307,37 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             SendBatch(BatchType.Sections, batch);
             Interlocked.Add(ref _sent, n);
         }
+    }
+
+    /// <summary>
+    /// Announces each lane the drain has never seen before. Names stay empty: only the producing
+    /// thread can read its own name, and reading it there would allocate on the hot path.
+    /// </summary>
+    private void StageThreadRegistrations(int[] threadIds, int n) {
+        for (int i = 0; i < n; i++) {
+            int id = threadIds[i];
+            if (!_knownThreadIds.Add(id))
+                continue;
+            if (_threadRegistrationStaged == ThreadRegistrationCapacity)
+                FlushThreadRegistrations();
+            _threadRegistrationIds[_threadRegistrationStaged] = id;
+            _threadRegistrationNames[_threadRegistrationStaged] = string.Empty;
+            _threadRegistrationRoles[_threadRegistrationStaged] = (int)(id == _mainThreadId ? ThreadRole.Main : ThreadRole.UnityJob);
+            _threadRegistrationStaged++;
+        }
+    }
+
+    private void FlushThreadRegistrations() {
+        int n = _threadRegistrationStaged;
+        if (n == 0)
+            return;
+        _threadRegistrationStaged = 0;
+        ThreadRegistrationsBatch batch = new() {
+            ThreadIds = Slice(_threadRegistrationIds, n),
+            Names = Slice(_threadRegistrationNames, n),
+            Roles = Slice(_threadRegistrationRoles, n),
+        };
+        SendBatch(BatchType.ThreadRegistrations, batch);
     }
 
     private void FlushGcEvents() {

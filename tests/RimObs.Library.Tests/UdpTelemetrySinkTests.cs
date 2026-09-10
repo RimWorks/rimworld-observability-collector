@@ -94,6 +94,51 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
     }
 
     [Fact]
+    public void Lanes_are_announced_once_before_the_samples_that_use_them() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 2000;
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        sink.Start();
+
+        SectionHandle handle = SectionRegistry.Register("test.lanes");
+        for (int i = 0; i < 8; i++)
+            sink.RecordSection(handle.Id, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: i, elapsedTicks: 100, allocBytes: 0L);
+
+        ThreadRegistrationsBatch? lanes = null;
+        int laneBatches = 0;
+        int sectionBatches = 0;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+        IPEndPoint any = new(IPAddress.Any, 0);
+        while (DateTime.UtcNow < deadline && sectionBatches < 2) {
+            try {
+                byte[] bytes = receiver.Receive(ref any);
+                TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
+                if (envelope.BatchType == BatchType.ThreadRegistrations) {
+                    laneBatches++;
+                    lanes ??= WireCodec.Deserialize<ThreadRegistrationsBatch>(envelope.Payload);
+                }
+                else if (envelope.BatchType == BatchType.Sections) {
+                    sectionBatches++;
+                    // a second sample batch on the same lane must not re-announce it.
+                    sink.RecordSection(handle.Id, parentId: -1, nodeId: 99, parentNodeId: -1, startTimestamp: 1, elapsedTicks: 1, allocBytes: 0L);
+                }
+            }
+            catch (SocketException) {
+                break;
+            }
+        }
+
+        lanes.Should().NotBeNull("the sink must announce a lane before the SectionBatch that references it");
+        lanes!.ThreadIds.Should().Equal(Environment.CurrentManagedThreadId);
+        lanes.Roles.Should().Equal((int)ThreadRole.Main);
+        laneBatches.Should().Be(1);
+    }
+
+    [Fact]
     public void Send_to_unbound_port_records_socket_error() {
         int port = GetFreePort();
         SessionAnchor.Initialize("test-session");
