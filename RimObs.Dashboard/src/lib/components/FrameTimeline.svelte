@@ -34,9 +34,11 @@
         series = EMPTY_SERIES,
         names,
         selectedNode = $bindable(-1),
+        selectedOrdinal = null,
         onContext,
     }: {
         series?: FrameSeries;
+        selectedOrdinal?: number | null;
         names: Map<number, { name: string; subsystem: string | null }>;
         selectedNode?: number;
         onContext?: (p: { sectionId: number; x: number; y: number }) => void;
@@ -65,10 +67,17 @@
         if (node) focus = { depth: node.depth, atUs: node.startUs };
     }
 
+    // the window holds many frames so a user can zoom out to them, but landing on the whole
+    // window would bury the frame they picked. default to that frame alone.
+    let selectedBounds = $derived.by<ViewRange>(() => {
+        const entry = series.entries.find((e) => e.ordinal === selectedOrdinal);
+        return entry ? { startUs: entry.startUs, endUs: entry.endUs } : bounds;
+    });
+
     let view = $state<ViewRange | null>(null);
     // clamped on read, not just on write: the window grows under us on every poll, and a
     // view from a longer series culls every node in a shorter one.
-    let effectiveView = $derived(view ? clampView(view, bounds) : fitView(bounds));
+    let effectiveView = $derived(view ? clampView(view, bounds) : fitView(selectedBounds));
 
     // holds the in-flight interpolated range while a zoom animation runs, so the layout
     // (quads) tracks what is actually painted instead of jumping to the target at t=0.
@@ -413,17 +422,30 @@
 
     onMount(() => {
         dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-        if (hostEl && typeof ResizeObserver !== 'undefined') {
-            ro = new ResizeObserver((entries) => {
-                const w = entries[0]?.contentRect.width;
-                if (w) {
-                    widthPx = Math.max(1, Math.round(w));
-                    dirty = true;
-                }
-            });
-            ro.observe(hostEl);
-        }
         rafId = requestAnimationFrame(tick);
+    });
+
+    // hostEl only exists once a frame has arrived, so this cannot be done on mount: the
+    // element is null then and the width stays at its placeholder forever.
+    $effect(() => {
+        const host = hostEl;
+        if (!host || typeof ResizeObserver === 'undefined') return;
+
+        const observer = new ResizeObserver((entries) => {
+            const w = entries[0]?.contentRect.width;
+            if (w) {
+                widthPx = Math.max(1, Math.round(w));
+                dirty = true;
+            }
+        });
+        observer.observe(host);
+        widthPx = Math.max(1, Math.round(host.getBoundingClientRect().width) || widthPx);
+        ro = observer;
+
+        return () => {
+            observer.disconnect();
+            ro = null;
+        };
     });
 
     onDestroy(() => {
@@ -506,6 +528,13 @@
         <span data-testid="frame-span" class="mono"
             >{t('flamegraph.overFrames').replace('{n}', String(shownFrames))}</span
         >
+        <button
+            type="button"
+            class="reset"
+            onclick={resetView}
+            disabled={view === null}
+            data-testid="reset-view">{t('flamegraph.resetView')}</button
+        >
     </p>
     <div class="sr-only" role="status" aria-live="polite">{liveText}</div>
 {/if}
@@ -514,6 +543,25 @@
     .wrap {
         position: relative;
         width: 100%;
+    }
+    .reset {
+        margin-left: auto;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        color: var(--text-dim);
+        font: inherit;
+        font-size: 0.74rem;
+        padding: 1px 8px;
+        cursor: pointer;
+    }
+    .reset:hover:not(:disabled) {
+        border-color: var(--cyan);
+        color: var(--cyan);
+    }
+    .reset:disabled {
+        opacity: 0.4;
+        cursor: default;
     }
     canvas {
         display: block;
@@ -554,6 +602,9 @@
         font-size: 0.85rem;
     }
     .meta {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
         margin: var(--s-2) 0 0;
         font-size: 0.78rem;
         color: var(--text-dim);

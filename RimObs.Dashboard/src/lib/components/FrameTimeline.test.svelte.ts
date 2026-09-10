@@ -126,6 +126,47 @@ const STAGGERED_FRAME: FrameData = {
 };
 
 describe('FrameTimeline', () => {
+    it('resets the view back to the selected frame', async () => {
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const reset = screen.getByTestId('reset-view');
+        expect(reset).toBeDisabled();
+
+        const canvas = document.querySelector('canvas')!;
+        await fireEvent.keyDown(canvas, { key: '+' });
+        await waitFor(() => expect(reset).not.toBeDisabled());
+
+        await fireEvent.click(reset);
+
+        await waitFor(() => expect(reset).toBeDisabled());
+    });
+
+    // the host element only exists once a frame arrives. attaching the observer on mount
+    // left the canvas stuck at its placeholder width, so nodes were cut off mid-frame.
+    it('measures the canvas once a frame arrives, not only on mount', async () => {
+        const observed: Element[] = [];
+        const previous = globalThis.ResizeObserver;
+        globalThis.ResizeObserver = class {
+            observe(el: Element) {
+                observed.push(el);
+            }
+            unobserve() {}
+            disconnect() {}
+        } as unknown as typeof ResizeObserver;
+
+        try {
+            const { rerender } = render(FrameTimeline, {
+                series: EMPTY_SERIES,
+                names: NAMES,
+            });
+            expect(observed).toHaveLength(0);
+
+            await rerender({ series: buildSeries([FRAME]), names: NAMES });
+            await waitFor(() => expect(observed.length).toBeGreaterThan(0));
+        } finally {
+            globalThis.ResizeObserver = previous;
+        }
+    });
+
     it('shows an empty state before the first frame', () => {
         render(FrameTimeline, { series: EMPTY_SERIES, names: NAMES });
         expect(screen.queryByRole('application')).toBeNull();

@@ -16,6 +16,7 @@
     import Syringe from '@lucide/svelte/icons/syringe';
     import Download from '@lucide/svelte/icons/download';
     import Upload from '@lucide/svelte/icons/upload';
+    import Info from '@lucide/svelte/icons/info';
 
     const ICONS = {
         gauge: Gauge,
@@ -35,6 +36,7 @@
         probe: Syringe,
         download: Download,
         upload: Upload,
+        info: Info,
     };
     export type IconName = keyof typeof ICONS;
     export { ICONS };

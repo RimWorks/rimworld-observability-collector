@@ -34,12 +34,19 @@ export interface FrameStripData {
     durations_us: number[];
 }
 
+export interface FrameVitals {
+    tps: number;
+    fps: number;
+    tick: number;
+}
+
 export interface FrameResponse {
     schema_version: number;
     stopwatch_frequency: number;
     frame: FrameData | null;
     strip?: FrameStripData;
     stats: FrameStats;
+    vitals?: FrameVitals | null;
     dropped: { pre_frame_samples: number; late_samples: number };
 }
 

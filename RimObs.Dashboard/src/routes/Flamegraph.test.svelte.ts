@@ -211,6 +211,11 @@ function frameAtBody(url: string) {
     };
 }
 
+const CONFIG_BODY = {
+    schema_version: 6,
+    sampling: { frame_ring_capacity: 5000 },
+};
+
 const IMPORT_BODY = {
     token: 'tok-1',
     manifest: { session_id: 'sess-imported' },
@@ -233,8 +238,10 @@ function mockFetch(
         const url = requestUrl(input);
         let body: unknown;
         let status = 200;
+        if (url.includes('/api/v1/frames/clear')) body = { frame_count: 0 };
         if (/\/api\/v1\/frames\/\d+$/.test(url)) body = frameAtBody(url);
         else if (url.includes('/api/v1/frames?')) body = frameRangeBody(frames, url);
+        else if (url.includes('/api/v1/config')) body = CONFIG_BODY;
         else if (url.includes('/frames/baseline')) body = BASELINE_BODY;
         else if (url.includes('/call_tree')) body = CALL_TREE_BODY;
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
@@ -255,6 +262,21 @@ function mockFetch(
             }),
         );
     }) as unknown as typeof fetch;
+}
+
+// the tab footer starts collapsed, so anything reading the tree has to open the drawer first
+async function openTree() {
+    await screen.findByTestId('tab-tree');
+    await fireEvent.click(screen.getByTestId('tab-tree'));
+}
+
+function jsonResponse(body: unknown) {
+    return Promise.resolve(
+        new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        }),
+    );
 }
 
 function frameCalls() {
@@ -306,9 +328,10 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
     });
 
-    it('offers a poll rate picker', () => {
+    // the rate control is gone: a frame the dashboard never asked for is a frame it cannot show.
+    it('offers no poll rate control', () => {
         render(Flamegraph);
-        expect(screen.getByLabelText(/rate/i)).toBeInTheDocument();
+        expect(screen.queryByLabelText(/rate/i)).toBeNull();
     });
 
     it('renders no iframe', async () => {
@@ -317,10 +340,12 @@ describe('Flamegraph page', () => {
         expect(container.querySelector('iframe')).toBeNull();
     });
 
-    it('tells keyboard users how to move around the canvas', async () => {
+    // the keyboard help moved into the header's info tooltip, covered by TopBar.test. what this
+    // page still owes is that it does not keep a second copy as a standing paragraph.
+    it('no longer prints the keyboard help as a standing paragraph', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
-        expect(screen.getByText(/arrow keys move between bars/i)).toBeInTheDocument();
+        expect(screen.queryByText(/arrow keys move between bars/i)).toBeNull();
     });
 
     it('shows the empty state when no frame has arrived', async () => {
@@ -381,21 +406,16 @@ describe('Flamegraph page', () => {
         expect(orphans.className).toContain('warn');
     });
 
-    it('changing the rate changes how often it polls', async () => {
+    it('polls once per frame', async () => {
         vi.useFakeTimers();
         render(Flamegraph);
         await vi.advanceTimersByTimeAsync(0);
 
-        const rateSelect = screen.getByLabelText(/rate/i) as HTMLSelectElement;
-        await fireEvent.change(rateSelect, { target: { value: '1000' } });
-        await vi.advanceTimersByTimeAsync(0);
-        expect(rateSelect.value).toBe('1000');
-
         const base = frameCalls();
-        await vi.advanceTimersByTimeAsync(900);
-        expect(frameCalls()).toBe(base);
-        await vi.advanceTimersByTimeAsync(200);
-        expect(frameCalls()).toBe(base + 1);
+        await vi.advanceTimersByTimeAsync(160);
+
+        // 16ms cadence, so ten polls in 160ms. the timer is not exact, so allow one either way.
+        expect(frameCalls() - base).toBeGreaterThanOrEqual(9);
     });
 
     it('stops polling once the page goes away', async () => {
@@ -417,16 +437,16 @@ describe('Flamegraph page', () => {
         render(Flamegraph);
         // the footer renders before the first poll, so wait for the share, not the constant.
         await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('0.02% of frame'),
+            expect(screen.getByTestId('footer-overhead')).toHaveTextContent('0.02% of frame'),
         );
-        expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope');
+        expect(screen.getByTestId('footer-overhead')).toHaveTextContent('73 ns/scope');
     });
 
     it('renders the timer resolution when the session reports a stopwatch frequency', async () => {
         mockFetch({ ...FRAMES_BODY, stopwatch_frequency: 10_000_000 });
         render(Flamegraph);
         await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('timer res 100 ns'),
+            expect(screen.getByTestId('footer-timerres')).toHaveTextContent('timer res 100 ns'),
         );
     });
 
@@ -434,9 +454,9 @@ describe('Flamegraph page', () => {
         mockFetch({ ...FRAMES_BODY, stopwatch_frequency: 0 });
         render(Flamegraph);
         await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead')).toHaveTextContent('73 ns/scope'),
+            expect(screen.getByTestId('footer-overhead')).toHaveTextContent('73 ns/scope'),
         );
-        expect(screen.getByTestId('frame-overhead')).not.toHaveTextContent('timer res');
+        expect(screen.queryByTestId('footer-timerres')).toBeNull();
     });
 
     it('marks the Duration stat as a warning once the frame runs over the frame budget', async () => {
@@ -460,7 +480,7 @@ describe('Flamegraph page', () => {
         });
         render(Flamegraph);
         await vi.advanceTimersByTimeAsync(0);
-        expect(screen.getByTestId('frame-overhead')).not.toHaveTextContent('Δ');
+        expect(screen.queryByTestId('footer-delta')).toBeNull();
 
         mockFetch({
             ...FRAMES_BODY,
@@ -468,10 +488,10 @@ describe('Flamegraph page', () => {
         });
         await vi.advanceTimersByTimeAsync(250);
 
-        const line = screen.getByTestId('frame-overhead');
+        const line = screen.getByTestId('footer-delta');
         expect(line.textContent).toContain('Δ');
         expect(line.textContent).toContain('+');
-        expect(line.querySelector('.warn')).not.toBeNull();
+        expect(line.className).toContain('warn');
     });
 
     it('leaves a small frame-to-frame wobble uncolored', async () => {
@@ -489,10 +509,10 @@ describe('Flamegraph page', () => {
         });
         await vi.advanceTimersByTimeAsync(250);
 
-        const line = screen.getByTestId('frame-overhead');
+        const line = screen.getByTestId('footer-delta');
         expect(line.textContent).toContain('Δ');
-        expect(line.querySelector('.warn')).toBeNull();
-        expect(line.querySelector('.cool')).toBeNull();
+        expect(line.className).not.toContain('warn');
+        expect(line.className).not.toContain('cool');
     });
 
     it('colors a frame-to-frame speedup cool, not warn, with no double space next to it', async () => {
@@ -510,25 +530,37 @@ describe('Flamegraph page', () => {
         });
         await vi.advanceTimersByTimeAsync(250);
 
-        const line = screen.getByTestId('frame-overhead');
+        const line = screen.getByTestId('footer-delta');
         expect(line.textContent).toContain('Δ');
         expect(line.textContent).toContain('-');
-        expect(line.querySelector('.cool')).not.toBeNull();
-        expect(line.querySelector('.warn')).toBeNull();
+        expect(line.className).toContain('cool');
+        expect(line.className).not.toContain('warn');
         expect(line.textContent).not.toMatch(/ {2,}/);
     });
 
-    it('renders the overhead line with no stray space where the delta is absent', async () => {
+    it('keeps the status footer mounted while the tab drawer opens and closes', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('status-footer')).toBeInTheDocument());
+
+        await openTree();
+        expect(screen.getByTestId('status-footer')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('tab-tree'));
+        expect(screen.getByTestId('status-footer')).toBeInTheDocument();
+    });
+
+    it('renders the overhead readout with no stray space and no timer res when absent', async () => {
         mockFetch({
             ...FRAMES_BODY,
             frame: { ...FRAMES_BODY.frame, node_count: 9, duration_us: 4045 },
         });
         render(Flamegraph);
         await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead').textContent).toBe(
+            expect(screen.getByTestId('footer-overhead').textContent).toBe(
                 'overhead 73 ns/scope (~0.02% of frame)',
             ),
         );
+        expect(screen.queryByTestId('footer-timerres')).toBeNull();
     });
 
     it('scrubs through an imported bundle instead of polling', async () => {
@@ -611,9 +643,9 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(frameCalls()).toBeGreaterThan(base));
     });
 
-    // an abandoned import holds the whole decompressed frames.json on disk for 30 minutes,
-    // so every path that does not hand the token to `imported` has to delete it.
-    it('deletes the previous import when a second bundle is opened', async () => {
+    // one import feeds both jobs now, so a bundle is kept as a comparison source rather than
+    // deleted the moment a second one arrives. the collector expires the tokens itself.
+    it('keeps every import as a source instead of deleting the previous one', async () => {
         let n = 0;
         const realFetch = globalThis.fetch;
         globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -633,21 +665,43 @@ describe('Flamegraph page', () => {
         const { getByLabelText } = render(Flamegraph);
         await openFile(getByLabelText);
         await screen.findByTestId('frame-scrub');
-        expect(deletedTokens()).toEqual([]);
 
         await openFile(getByLabelText, 'other.rimobs.zip');
-        await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
+
+        const source = () => getByLabelText(/^Source$/i) as HTMLSelectElement;
+        await waitFor(() => expect(source().options).toHaveLength(3));
+        expect(deletedTokens()).toEqual([]);
     });
 
-    it('deletes the import when the bundle has no frames.json', async () => {
+    // a frameless bundle cannot be scrubbed, but it is still a valid comparison source.
+    it('keeps a bundle with no frames.json without offering it as a frame source', async () => {
         mockFetch(FRAMES_BODY, { ...IMPORT_BODY, contents: ['manifest.json'] });
         const { getByLabelText } = render(Flamegraph);
         await openFile(getByLabelText);
-        await screen.findByRole('alert');
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/no frames\.json/i);
+        const source = getByLabelText(/^Source$/i) as HTMLSelectElement;
+        expect(source.options).toHaveLength(1);
+        expect(source.value).toBe('live');
+        expect(deletedTokens()).toEqual([]);
+    });
+
+    // the orphan cleanup still has to fire when the upload wins but a later request throws.
+    it('deletes the upload when reading its frames fails', async () => {
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            if (requestUrl(input).includes('/file/frames.json'))
+                return Promise.resolve(new Response('nope', { status: 500 }));
+            return realFetch(input, init);
+        }) as unknown as typeof fetch;
+
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+
         await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
     });
 
-    it('refuses a bundle whose frame ring is empty, deletes it, and stays live', async () => {
+    it('keeps a bundle whose frame ring is empty and stays live', async () => {
         const realFetch = globalThis.fetch;
         globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
             if (requestUrl(input).includes('/file/frames.json'))
@@ -665,27 +719,27 @@ describe('Flamegraph page', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent(/empty frame ring/i);
         expect(screen.queryByTestId('frame-scrub')).toBeNull();
-        expect((getByLabelText(/^Source$/i) as HTMLSelectElement).value).toBe('live');
-        await waitFor(() => expect(deletedTokens()).toEqual(['tok-1']));
+        const source = getByLabelText(/^Source$/i) as HTMLSelectElement;
+        expect(source.options).toHaveLength(1);
+        expect(source.value).toBe('live');
+        expect(deletedTokens()).toEqual([]);
     });
 
     // the bundle's newest frame usually reuses an ordinal the poller already drew, so the
     // effect short-circuits and the delta keeps a value computed from two live frames.
     it('drops the live delta when the source switches to a bundle', async () => {
         const { getByLabelText } = render(Flamegraph);
-        await waitFor(() => expect(screen.getByTestId('frame-overhead')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('status-footer')).toBeInTheDocument());
 
         mockFetch({
             ...FRAMES_BODY,
             frame: { ...FRAMES_BODY.frame, capture_ordinal: 4322, duration_us: 30000 },
         });
-        await waitFor(() =>
-            expect(screen.getByTestId('frame-overhead').textContent).toContain('\u0394'),
-        );
+        await waitFor(() => expect(screen.getByTestId('footer-delta')).toBeInTheDocument());
 
         await openFile(getByLabelText);
         await screen.findByTestId('frame-scrub');
-        expect(screen.getByTestId('frame-overhead').textContent).not.toContain('\u0394');
+        expect(screen.queryByTestId('footer-delta')).toBeNull();
     });
 
     it('draws the frame strip from the strip endpoint', async () => {
@@ -743,6 +797,7 @@ describe('Flamegraph page', () => {
     // /hotspots. they are the one thing the cut Hotspots page had that the tree did not.
     it('shows per-section percentiles only in session scope', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         expect(screen.queryByTestId('tree-p50')).toBeNull();
 
@@ -774,6 +829,7 @@ describe('Flamegraph page', () => {
     // it is a session ring and says nothing about the one frame on screen.
     it('opens a per-section trend drawer in session scope', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         expect(screen.queryByTestId('trend-toggle')).toBeNull();
 
@@ -791,10 +847,11 @@ describe('Flamegraph page', () => {
         expect(screen.getByText(/no samples in the last five minutes/i)).toBeInTheDocument();
     });
 
-    // baselineUs is a per-frame median over 128 frames. against a session cumulative total it
-    // is meaningless, so the delta column has to go blank rather than print a wrong number.
+    // the 128-frame median means nothing against a session total, so only a session
+    // comparison fills that column. until one runs it stays blank.
     it('blanks the delta column in session scope', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-delta').length).toBeGreaterThan(0));
         // frame scope has a real per-frame baseline for section 10, so it prints a delta
         await waitFor(() =>
@@ -804,6 +861,76 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('scope-session'));
         await waitFor(() =>
             expect(screen.getAllByTestId('tree-delta')[0].textContent?.trim()).toBe(''),
+        );
+    });
+
+    // a session comparison is the one comparand session totals can be measured against.
+    it('fills the session-scope delta column from a comparison result', async () => {
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url === '/api/v1/sessions')
+                return jsonResponse({
+                    sessions: [
+                        { id: 'head-session', is_current: true },
+                        { id: 'base-session', is_current: false },
+                    ],
+                });
+            if (url.startsWith('/api/v1/sessions/compare'))
+                return jsonResponse({
+                    disclaimer: 'd',
+                    warnings: [],
+                    timing: {
+                        base_total_ns: 1,
+                        head_total_ns: 1,
+                        delta_ns: 0,
+                        delta_percent: 0,
+                        base_mean_ns: 1,
+                        head_mean_ns: 1,
+                        delta_mean_ns: 0,
+                        base_sample_count: 1,
+                        head_sample_count: 1,
+                    },
+                    // id 999 is deliberately wrong; the name is what has to resolve it to 10
+                    hotspots: [
+                        {
+                            id: 999,
+                            name: 'Verse.Root_Play.Update',
+                            owner: 'core',
+                            status: 'regressed',
+                            base_total_ns: 1_000,
+                            head_total_ns: 2_000,
+                            delta_ns: 1_000,
+                            delta_percent: 100,
+                            base_mean_ns: 1,
+                            head_mean_ns: 2,
+                            likely_regression_candidate: false,
+                        },
+                    ],
+                    mod_costs: [],
+                    metrics: [],
+                    load_order: { added: [], removed: [], common: [] },
+                });
+            return realFetch(input, init);
+        }) as unknown as typeof fetch;
+
+        render(Flamegraph);
+        await openTree();
+        await waitFor(() => expect(screen.getAllByTestId('tree-delta').length).toBeGreaterThan(0));
+
+        const panel = screen.getByTestId('comparison-panel') as HTMLDetailsElement;
+        panel.open = true;
+        await fireEvent(panel, new Event('toggle'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Compare' })).toBeEnabled());
+
+        await fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+
+        // the result flips the tree to session scope, where the delta is now measurable
+        await waitFor(() => expect(screen.getByTestId('scope-session')).toHaveClass('on'));
+        await waitFor(() =>
+            expect(
+                screen.getAllByTestId('tree-delta').some((e) => e.textContent?.trim() !== ''),
+            ).toBe(true),
         );
     });
 
@@ -867,14 +994,15 @@ describe('Flamegraph page', () => {
     it('ignores Space typed into a form control', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
-        const rate = screen.getByLabelText(/rate/i);
-        await fireEvent.keyDown(rate, { key: ' ' });
+        const picker = screen.getByLabelText(/source/i);
+        await fireEvent.keyDown(picker, { key: ' ' });
         expect(screen.queryByTestId('paused-badge')).toBeNull();
     });
 
     it('badges a tree row with the number of other mods patching it', async () => {
         mockFetch();
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
 
         const badges = await screen.findAllByTestId('patch-badge');
@@ -898,6 +1026,8 @@ describe('Flamegraph page', () => {
     it('draws the pie tab from the frames own sections', async () => {
         mockFetch();
         render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('tab-tree')).toBeTruthy());
+        await fireEvent.click(screen.getByTestId('tab-tree'));
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
 
         await fireEvent.click(screen.getByRole('button', { name: /^pie$/i }));
@@ -925,6 +1055,7 @@ describe('Flamegraph page', () => {
 
     it('renders the call tree panel with a row for each section in the frame', async () => {
         render(Flamegraph);
+        await openTree();
         await screen.findByTestId('call-tree-panel');
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         expect(screen.getByText('Verse.Root_Play.Update')).toBeInTheDocument();
@@ -932,6 +1063,7 @@ describe('Flamegraph page', () => {
 
     it('filters the tree by the search box', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         await fireEvent.input(screen.getByTestId('tree-search'), { target: { value: 'ticklist' } });
         await waitFor(() => expect(screen.getAllByTestId('tree-row')).toHaveLength(1));
@@ -939,6 +1071,7 @@ describe('Flamegraph page', () => {
 
     it('expand all reveals the nested section, collapse all hides it again', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         expect(screen.queryByText('Verse.TickList.Tick')).toBeNull();
 
@@ -951,6 +1084,7 @@ describe('Flamegraph page', () => {
 
     it('sorting by self flips direction on a second click', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         const self = screen.getByTestId('sort-self');
         await fireEvent.click(self);
@@ -959,11 +1093,63 @@ describe('Flamegraph page', () => {
         expect(self.textContent).toContain('\u2191');
     });
 
+    it('starts with the tab footer collapsed and no tab selected', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('call-tree-panel');
+
+        expect(screen.queryByTestId('tree-drawer')).toBeNull();
+        for (const id of ['tree', 'pie', 'alloc', 'vram']) {
+            expect(screen.getByTestId(`tab-${id}`)).toHaveAttribute('aria-expanded', 'false');
+        }
+    });
+
+    it('expands the drawer over the flamegraph when a tab is picked', async () => {
+        render(Flamegraph);
+        await openTree();
+
+        expect(screen.getByTestId('tree-drawer')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-tree')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('collapses again when the active tab is picked a second time', async () => {
+        render(Flamegraph);
+        await openTree();
+
+        await fireEvent.click(screen.getByTestId('tab-tree'));
+
+        expect(screen.queryByTestId('tree-drawer')).toBeNull();
+    });
+
+    it('collapses from the close button', async () => {
+        render(Flamegraph);
+        await openTree();
+
+        await fireEvent.click(screen.getByTestId('tree-close'));
+
+        expect(screen.queryByTestId('tree-drawer')).toBeNull();
+    });
+
     // the half of Neo's link it calls ExpandCallTreeToNode.
     it('clicking a tree row selects it and drives the flame view', async () => {
         render(Flamegraph);
+        await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
         await fireEvent.click(screen.getByText('Verse.Root_Play.Update'));
+        await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
+    });
+
+    // the row-to-flame link has to survive the drawer closing over it and coming back.
+    it('keeps the selected row after the drawer is closed and reopened', async () => {
+        render(Flamegraph);
+        await openTree();
+        await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
+        await fireEvent.click(screen.getByText('Verse.Root_Play.Update'));
+        await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('tree-close'));
+        expect(screen.queryByTestId('tree-drawer')).toBeNull();
+        await openTree();
+
         await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
     });
 
@@ -982,34 +1168,45 @@ describe('Flamegraph page', () => {
     });
 
     // the whole point of the multi-frame view: one axis, many frames, not one frame per draw.
-    it('backfills a window of frames and spans all of them at rest', async () => {
+    // the window is fetched so a zoom out has somewhere to go, but landing on all of it
+    // would bury the frame the user is looking at.
+    it('backfills a window of frames but rests on the selected one', async () => {
         render(Flamegraph);
         await screen.findByTestId('frame-ruler');
         await waitFor(() =>
-            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 3 frames'),
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
         );
         expect(
             vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes('/api/v1/frames?')),
         ).toBe(true);
     });
 
-    it('draws the window on one continuous axis, not one frame at the origin', async () => {
+    // the axis stays absolute across the whole window, but the resting view is one frame of it.
+    it('rests on the selected frame while the window stays behind it', async () => {
         const { drawTimeline } = await import('../lib/frameDraw');
         render(Flamegraph);
         await waitFor(() => expect(vi.mocked(drawTimeline)).toHaveBeenCalled());
         const opts = vi.mocked(drawTimeline).mock.lastCall![2];
-        // the oldest of the three stub frames starts 40ms before the newest.
-        expect(opts.view.startUs).toBe(-40000);
+
+        expect(opts.view.startUs).toBe(0);
         expect(opts.view.endUs).toBe(16200);
+
+        // the two older stub frames are still loaded, reaching back 40ms on the same axis.
+        await waitFor(() =>
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
+        );
+        expect(
+            vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes('/api/v1/frames?')),
+        ).toBe(true);
     });
 
-    it('keeps the window pinned to the frame the user stepped back to', async () => {
+    it('rests on the frame the user stepped back to', async () => {
         render(Flamegraph);
         await screen.findByText('4321');
         await fireEvent.click(screen.getByTestId('step-older'));
         await screen.findByText('4320');
         await waitFor(() =>
-            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 2 frames'),
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
         );
     });
 
@@ -1028,5 +1225,41 @@ describe('Flamegraph page', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent(/import failed: 500/i);
         expect(screen.queryByTestId('frame-scrub')).toBeNull();
         expect((getByLabelText(/^Source$/i) as HTMLSelectElement).value).toBe('live');
+    });
+});
+
+describe('Flamegraph clear history', () => {
+    it('offers the clear button beside the mode segment', async () => {
+        mockFetch();
+        render(Flamegraph);
+
+        expect(await screen.findByTestId('clear-ring')).toBeInTheDocument();
+    });
+
+    it('posts to the clear endpoint when pressed', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await screen.findByTestId('clear-ring');
+
+        await fireEvent.click(screen.getByTestId('clear-ring'));
+
+        const posted = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+            .map((c) => ({ url: requestUrl(c[0] as RequestInfo), init: c[1] as RequestInit }))
+            .filter((c) => c.url.includes('/api/v1/frames/clear'));
+        expect(posted.length).toBeGreaterThan(0);
+        expect(posted[0].init?.method).toBe('POST');
+    });
+
+    // a paused view is pinned to a frame the clear is about to delete, so clearing resumes.
+    it('resumes a paused view rather than pinning it to deleted history', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await screen.findByTestId('pause');
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('clear-ring'));
+
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
     });
 });

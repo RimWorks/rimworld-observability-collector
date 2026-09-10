@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Icon, { ICONS, type IconName } from './Icon.svelte';
-import { routes } from '../router.svelte';
 
 describe('Icon', () => {
     it('renders an svg at the requested size', () => {
@@ -23,10 +22,5 @@ describe('Icon', () => {
         const { container } = render(Icon, { name });
 
         expect(container.querySelector('svg')).toBeTruthy();
-    });
-
-    // the sidebar looks its icon up by route id, so a bad name renders nothing at all.
-    it('covers every icon the router asks for', () => {
-        for (const route of routes) expect(ICONS[route.icon]).toBeDefined();
     });
 });

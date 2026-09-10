@@ -14,17 +14,27 @@ afterEach(() => {
     globalThis.location.hash = '';
 });
 
-describe('App route dispatch', () => {
-    it('renders the Comparison route for #/comparison', async () => {
-        globalThis.location.hash = '#/comparison';
+// the three-page router is gone. the flamegraph is the whole application, so the shell owes
+// the user that page whatever the hash says, and owes them no navigation to anywhere else.
+describe('App shell', () => {
+    it('renders the flamegraph as the only page', async () => {
         render(App);
-        expect(await screen.findByText('Select sources to compare')).toBeInTheDocument();
+
+        expect(await screen.findByTestId('frame-budget')).toBeInTheDocument();
     });
 
-    // a hash naming a route that no longer exists must not render a blank shell
-    it('falls back to Overview for a route that was cut', async () => {
-        globalThis.location.hash = '#/logs';
+    it('still renders the flamegraph for a hash left over from a cut route', async () => {
+        globalThis.location.hash = '#/comparison';
         render(App);
-        expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+
+        expect(await screen.findByTestId('frame-budget')).toBeInTheDocument();
+    });
+
+    it('offers no navigation', async () => {
+        render(App);
+        await screen.findByTestId('frame-budget');
+
+        expect(screen.queryByRole('navigation')).toBeNull();
+        expect(screen.queryByRole('link')).toBeNull();
     });
 });

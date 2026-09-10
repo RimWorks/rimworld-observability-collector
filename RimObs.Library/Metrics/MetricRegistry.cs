@@ -75,6 +75,20 @@ internal static class MetricRegistry {
         }
     }
 
+    /// <summary>
+    /// Queues every registered metric to be sent again, for the same reason sections do it: a
+    /// new session starts the collector's name table empty. Runs once per session start.
+    /// </summary>
+    public static void RequeueAllRegistrations() {
+        lock (s_Lock) {
+            s_PendingRegistrations.Clear();
+            for (int id = 0; id < s_Count; id++) {
+                if (s_Descriptors[id] != null)
+                    s_PendingRegistrations.Add(id);
+            }
+        }
+    }
+
     public static void Clear() {
         lock (s_Lock) {
             for (int i = 0; i < s_Count; i++)

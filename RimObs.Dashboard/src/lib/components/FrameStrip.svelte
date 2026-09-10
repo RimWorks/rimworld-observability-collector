@@ -1,9 +1,18 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { buildBars, barIndexAt, gridLines, GC_BAND_PX, type StripBar } from '../frameStrip';
+    import {
+        buildBars,
+        barIndexAt,
+        DEFAULT_STRIP_SLOTS,
+        clampTooltipX,
+        gridLines,
+        GC_BAND_PX,
+        type StripBar,
+    } from '../frameStrip';
     import { drawStrip } from '../stripDraw';
     import { ns } from '../format';
     import { t } from '../i18n';
+    import { FRAME_BUDGET_US } from '../frameCost';
 
     let {
         ordinals,
@@ -11,6 +20,7 @@
         selectedOrdinal = null,
         cutOrdinals = [],
         gcOrdinals = [],
+        slots = DEFAULT_STRIP_SLOTS,
         onSelect,
     }: {
         ordinals: readonly number[];
@@ -18,6 +28,8 @@
         selectedOrdinal?: number | null;
         cutOrdinals?: readonly number[];
         gcOrdinals?: readonly number[];
+        /** the ring's capacity. bars fill these slots left to right and never resize. */
+        slots?: number;
         onSelect?: (ordinal: number) => void;
     } = $props();
 
@@ -30,6 +42,9 @@
     let heightPx = $state(HEIGHT_PX);
     let dpr = $state(1);
     let hoverIndex = $state(-1);
+    let hoverX = $state(0);
+    let tooltipEl = $state<HTMLDivElement | null>(null);
+    let tooltipWidth = $state(0);
     let ro: ResizeObserver | null = null;
 
     function cssVar(el: Element, token: string): string {
@@ -53,14 +68,19 @@
             selectedOrdinal,
             cutOrdinals,
             gcOrdinals,
+            slots,
             theme: {
                 background: read('--bg-surface', '#131925'),
-                bar: read('--sub-none', '#5c6b85'),
-                over: read('--warn', '#d9a441'),
+                good: read('--good', '#5fcf80'),
+                warn: read('--warn', '#e8b53e'),
+                bad: read('--bad', '#f25d63'),
+                badDeep: read('--bad-deep', '#c2393e'),
                 selected: read('--text', '#d4dded'),
+                grid: read('--border-soft', '#1c2535'),
                 line: read('--border', '#28344a'),
                 cut: read('--text-faint', '#8a98b3'),
-                gc: read('--bad', '#f25d63'),
+                // distinct hue from the budget-color ramp so a GC mark never reads as "over budget".
+                gc: read('--cyan', '#39c4d4'),
             },
         });
     }
@@ -96,7 +116,7 @@
 
     function indexFromEvent(e: MouseEvent): number {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        return barIndexAt(e.clientX - rect.left, rect.width, bars.length);
+        return barIndexAt(e.clientX - rect.left, rect.width, bars.length, slots);
     }
 
     function handleClick(e: MouseEvent): void {
@@ -105,10 +125,14 @@
     }
 
     function handleMove(e: MouseEvent): void {
-        hoverIndex = indexFromEvent(e);
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        hoverX = e.clientX - rect.left;
+        hoverIndex = barIndexAt(hoverX, rect.width, bars.length, slots);
     }
 
     let hovered = $derived<StripBar | null>(bars[hoverIndex] ?? null);
+    let tooltipLeft = $derived(clampTooltipX(hoverX, tooltipWidth, widthPx));
+    let budgetMs = $derived((FRAME_BUDGET_US / 1000).toFixed(1));
 </script>
 
 <div class="strip" data-testid="frame-strip">
@@ -119,7 +143,7 @@
                 {hovered.ordinal} · {ns(hovered.durationUs * 1000)}
             </span>
         {:else}
-            <span class="read dim">{t('strip.budget')}</span>
+            <span class="read dim">{t('strip.budget')} ({budgetMs} ms)</span>
         {/if}
     </div>
     <div class="plot" style="--gc-band-px: {GC_BAND_PX}px">
@@ -141,6 +165,17 @@
                 role="img"
                 aria-label={t('strip.title')}
             ></canvas>
+            {#if hovered}
+                <div
+                    class="hover-tip"
+                    bind:this={tooltipEl}
+                    bind:clientWidth={tooltipWidth}
+                    style="left: {tooltipLeft}px"
+                    data-testid="strip-tooltip"
+                >
+                    <b>#{hovered.ordinal}</b><span>{ns(hovered.durationUs * 1000)}</span>
+                </div>
+            {/if}
         </div>
     </div>
 </div>
@@ -173,6 +208,7 @@
         height: calc(128px + var(--gc-band-px));
         background: var(--bg-void);
     }
+    /* labels only. the rules are painted on the canvas, under the bars. */
     .axis {
         position: relative;
     }
@@ -181,7 +217,6 @@
         left: 0;
         width: 100%;
         height: 0;
-        border-top: 1px dashed var(--border);
     }
     /* labels hang below their rule; at bottom they would escape the box and land on the header */
     .axis b,
@@ -228,5 +263,27 @@
         width: 100%;
         height: 100%;
         cursor: pointer;
+    }
+    .hover-tip {
+        position: absolute;
+        top: 6px;
+        z-index: 2;
+        display: flex;
+        gap: var(--s-2);
+        align-items: center;
+        transform: translateX(-50%);
+        padding: 2px 6px;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        font-family: var(--font-mono);
+        font-size: var(--f-small, 11.5px);
+        white-space: nowrap;
+        color: var(--text);
+        pointer-events: none;
+    }
+    .hover-tip b {
+        color: var(--text-dim);
+        font-weight: 500;
     }
 </style>

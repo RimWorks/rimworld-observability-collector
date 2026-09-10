@@ -109,7 +109,26 @@ public static class Program {
         }
         builder.Services.AddSingleton(configStore ?? new Config.ConfigStore(ResolveConfigFilePath(sessionsDir)));
         builder.Services.AddSingleton<Panels.PanelRegistry>();
-        builder.Services.AddSingleton<Aggregation.SessionAggregator>();
+        builder.Services.AddSingleton(sp => {
+            // resolve the persister rather than calling new(): the parameterless constructor
+            // leaves the aggregator with no persister, which silently stops every session
+            // reaching disk.
+            Aggregation.SessionAggregator agg = new(sp.GetService<Storage.ISessionPersister>());
+            Config.ConfigStore store = sp.GetRequiredService<Config.ConfigStore>();
+            agg.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
+            // a name typed before a game restart waits on disk. the first session to appear
+            // afterwards claims it, and it is cleared so the one after that does not inherit it.
+            agg.SessionStarted += sessionId => {
+                string pending = store.Current.Session.PendingName;
+                if (string.IsNullOrWhiteSpace(pending))
+                    return;
+                agg.SessionName = pending;
+                sp.GetService<Storage.SqliteSessionPersister>()?.WriteSessionName(sessionId, pending);
+                store.Current.Session.PendingName = string.Empty;
+                store.Replace(store.Current);
+            };
+            return agg;
+        });
         builder.Services.AddSingleton(sp => new Bundle.BundleExportService(
             sp.GetRequiredService<Aggregation.SessionAggregator>(),
             BuildInfo.Revision));

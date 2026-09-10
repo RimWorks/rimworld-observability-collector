@@ -87,6 +87,21 @@ internal static class SectionRegistry {
         }
     }
 
+    /// <summary>
+    /// Queues every registered section to be sent again. A new session starts the collector's
+    /// name table empty, so without this every section in the new session arrives as a bare id.
+    /// Not a hot path: this runs once when a session starts.
+    /// </summary>
+    public static void RequeueAllRegistrations() {
+        lock (s_Lock) {
+            s_PendingRegistrations.Clear();
+            for (int id = 0; id < s_Count; id++) {
+                if (s_Names[id] != null)
+                    s_PendingRegistrations.Add(id);
+            }
+        }
+    }
+
     public static void Clear() {
         lock (s_Lock) {
             Array.Clear(s_Names, 0, s_Count);

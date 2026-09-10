@@ -42,7 +42,10 @@ export class UserPrefs {
     }
 
     private snapshot(): PersistedPrefs {
-        return { closeOnDisconnect: this.closeOnDisconnect, lang: this.lang };
+        return {
+            closeOnDisconnect: this.closeOnDisconnect,
+            lang: this.lang,
+        };
     }
 
     setCloseOnDisconnect(value: boolean): void {

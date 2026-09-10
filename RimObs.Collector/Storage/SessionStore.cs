@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class SessionStore : IDisposable {
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
     private const string SchemaVersionPragma = "user_version";
 
     private readonly SqliteConnection _connection;
@@ -84,6 +84,33 @@ ON CONFLICT(session_id) DO UPDATE SET
         cmd.Parameters.AddWithValue("$lib", meta.LibraryVersion ?? string.Empty);
         cmd.Parameters.AddWithValue("$game", meta.GameVersion ?? string.Empty);
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>The label the user gave this session, or an empty string when unnamed.</summary>
+    public string ReadSessionName() {
+        ThrowIfDisposed();
+
+        using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT name FROM session_meta LIMIT 1;";
+        object? value = cmd.ExecuteScalar();
+        return value as string ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Renames the session. Writes nothing when the row is not there yet, so a name set before
+    /// the first meta flush is the caller's problem to re-apply rather than a silent insert of
+    /// a half-built row.
+    /// </summary>
+    public bool WriteSessionName(string sessionId, string name) {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            throw new ArgumentException("sessionId must be non-empty", nameof(sessionId));
+        ThrowIfDisposed();
+
+        using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = "UPDATE session_meta SET name = $name WHERE session_id = $id;";
+        cmd.Parameters.AddWithValue("$name", name ?? string.Empty);
+        cmd.Parameters.AddWithValue("$id", sessionId);
+        return cmd.ExecuteNonQuery() > 0;
     }
 
     public SessionMeta? ReadSessionMeta(string sessionId) {
@@ -463,7 +490,8 @@ CREATE TABLE session_meta (
     stopwatch_frequency INTEGER NOT NULL,
     anchor_timestamp INTEGER NOT NULL,
     library_version TEXT NOT NULL,
-    game_version TEXT NOT NULL
+    game_version TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT ''
 ) WITHOUT ROWID;
 
 CREATE TABLE sections (

@@ -130,6 +130,14 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         }
     }
 
+    /// <summary>
+    /// Replays the SessionMeta burst. A new session id is useless until the collector hears it,
+    /// and the heartbeat is ~5s away, so a restart re-arms the burst instead of waiting.
+    /// </summary>
+    public void RestartMetaBurst() {
+        Volatile.Write(ref _metaTicks, 0);
+    }
+
     private void SendSessionMeta() {
         ControlServer? server = ControlServices.Server;
         SessionMeta meta = new() {

@@ -185,6 +185,8 @@ export interface PatchesResponse {
 
 export interface SessionInfo {
     id: string;
+    /** the label the user gave it, empty when unnamed */
+    name: string;
     started_utc: string;
     library_version: string;
     game_version: string;
@@ -399,17 +401,49 @@ function authHeaders(): Record<string, string> {
     return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+/**
+ * Only the fields the dashboard edits are named. Everything else round-trips untouched, so a
+ * save never drops a key this build does not know about.
+ */
+export interface RimObsConfig {
+    schema_version: number;
+    sampling: { frame_ring_capacity: number; [key: string]: unknown };
+    session: { pending_name: string; prompt_for_name: boolean; [key: string]: unknown };
+    [key: string]: unknown;
+}
+
 function importFileUrl(token: string, name: string): string {
     return `/api/v1/import/bundle/${encodeURIComponent(token)}/file/${encodeURIComponent(name)}`;
 }
 
 export const api = {
     status: () => get<StatusResponse>('/api/v1/status'),
+    config: () => get<RimObsConfig>('/api/v1/config'),
+    saveConfig: async (config: RimObsConfig): Promise<RimObsConfig> => {
+        const res = await fetch('/api/v1/config', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+                ...authHeaders(),
+            },
+            body: JSON.stringify(config),
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+        return res.json() as Promise<RimObsConfig>;
+    },
     hotspots: (limit = 50) =>
         get<HotspotsResponse>(`/api/v1/sessions/current/hotspots?limit=${limit}`),
     sections: () => get<SectionsResponse>('/api/v1/sessions/current/sections'),
     allSections: () => get<RegistrySectionsResponse>('/api/v1/sections'),
     frames: () => get<FrameResponse>('/api/v1/frames/latest'),
+    clearFrames: async (): Promise<void> => {
+        const res = await fetch('/api/v1/frames/clear', {
+            method: 'POST',
+            headers: { accept: 'application/json', ...authHeaders() },
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    },
     frameAt: (ordinal: number) => get<FrameResponse>(`/api/v1/frames/${ordinal}`),
     frameRange: (from?: number, count = MAX_WINDOW_FRAMES) =>
         get<FrameRangeResponse>(
@@ -428,6 +462,37 @@ export const api = {
         return get<LogsResponse>(`/api/v1/logs?limit=${limit}${levelParam}`);
     },
     sessions: () => get<SessionsResponse>('/api/v1/sessions'),
+    restartGame: async (name: string, save: boolean): Promise<void> => {
+        const res = await fetch('/api/v1/sessions/restart-game', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+                ...authHeaders(),
+            },
+            body: JSON.stringify({ name, save }),
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    },
+    newSession: async (): Promise<void> => {
+        const res = await fetch('/api/v1/sessions/new', {
+            method: 'POST',
+            headers: { accept: 'application/json', ...authHeaders() },
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    },
+    renameSession: async (id: string, name: string): Promise<void> => {
+        const res = await fetch(`/api/v1/sessions/${encodeURIComponent(id)}/name`, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+                ...authHeaders(),
+            },
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    },
     compareSessions: (base: string, head: string) =>
         get<ComparisonResponse>(
             `/api/v1/sessions/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`,

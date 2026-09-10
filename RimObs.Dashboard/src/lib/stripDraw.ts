@@ -1,12 +1,22 @@
 import type { StripBar } from './frameStrip';
-import { budgetLine, barWidthPx, GC_BAND_PX, gcMarkIndices } from './frameStrip';
+import {
+    budgetLine,
+    slotWidthPx,
+    barColor,
+    gridLines,
+    GC_BAND_PX,
+    gcMarkIndices,
+} from './frameStrip';
 import { FRAME_BUDGET_US } from './frameCost';
 
 export interface StripTheme {
     background: string;
-    bar: string;
-    over: string;
+    good: string;
+    warn: string;
+    bad: string;
+    badDeep: string;
     selected: string;
+    grid: string;
     line: string;
     cut: string;
     gc: string;
@@ -21,6 +31,8 @@ export interface StripDrawOptions {
     cutOrdinals?: readonly number[];
     /** frame ordinals a GC fired in, drawn as ticks hanging below the baseline */
     gcOrdinals?: readonly number[];
+    /** slots to lay out, so a bar keeps its width while the strip is still filling */
+    slots?: number;
     theme: StripTheme;
 }
 
@@ -36,9 +48,25 @@ export function drawStrip(
 
     // the bottom band is reserved for GC ticks, so bars share the rest of the height.
     const barAreaHeight = h - GC_BAND_PX;
-    const bw = barWidthPx(w, bars.length);
-    // a sub-pixel gap would swallow the bar, so only inset once bars are wide enough to spare it.
-    const inset = bw > 3 ? 1 : 0;
+    const bw = slotWidthPx(w, opts.slots ?? bars.length);
+    // a slot can be a fraction of a pixel at 2000 frames, so fills get a device pixel floor.
+    // position still comes from the unfloored slot, which is what keeps the strip in bounds.
+    const fillW = Math.max(bw, 1 / dpr);
+
+    // gridlines before the bars, so a bar paints over its scale. drawn the other way round a
+    // rule cutting across every bar reads as damage rather than as a reference line.
+    ctx.save();
+    ctx.strokeStyle = theme.grid;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    for (const line of gridLines()) {
+        const y = Math.round(barAreaHeight - line.at * barAreaHeight) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    }
+    ctx.restore();
     for (let i = 0; i < bars.length; i++) {
         const bar = bars[i];
         if (bar.height <= 0) continue;
@@ -46,10 +74,8 @@ export function drawStrip(
         ctx.fillStyle =
             bar.ordinal === selectedOrdinal
                 ? theme.selected
-                : bar.overBudget
-                  ? theme.over
-                  : theme.bar;
-        ctx.fillRect(i * bw, barAreaHeight - barH, Math.max(1, bw - inset), barH);
+                : barColor(bar.durationUs, FRAME_BUDGET_US, theme);
+        ctx.fillRect(i * bw, barAreaHeight - barH, fillW, barH);
     }
 
     // a pause leaves a hole in the history; mark where it was so the jump is not read as data.
@@ -86,7 +112,7 @@ export function drawStrip(
     if (gcOrdinals.length > 0) {
         ctx.fillStyle = theme.gc;
         for (const index of gcMarkIndices(bars, gcOrdinals)) {
-            ctx.fillRect(index * bw, barAreaHeight, Math.max(1, bw - inset), GC_BAND_PX);
+            ctx.fillRect(index * bw, barAreaHeight, fillW, GC_BAND_PX);
         }
     }
 }

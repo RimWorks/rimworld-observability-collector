@@ -18,6 +18,26 @@ export function signedPercent(value: number | null): string {
     return `${sign}${value.toFixed(1)}%`;
 }
 
+/**
+ * Turns a comparison's baseline totals into the section-keyed map the call tree reads.
+ * Session totals only, so it belongs to session scope and never to a single frame.
+ */
+export function comparisonBaselineUs(
+    hotspots: readonly { name: string; base_total_ns: number }[],
+    names: ReadonlyMap<number, { name: string }>,
+): Map<number, number> {
+    // the collector pairs sections by name, so its section id can come from either session.
+    const idByName = new Map<string, number>();
+    for (const [id, meta] of names) idByName.set(meta.name, id);
+
+    const out = new Map<number, number>();
+    for (const h of hotspots) {
+        const id = idByName.get(h.name);
+        if (id !== undefined) out.set(id, h.base_total_ns / 1000);
+    }
+    return out;
+}
+
 export type DeltaTone = 'up' | 'down' | 'flat' | 'new' | 'gone';
 
 export function deltaTone(status: DeltaStatus): DeltaTone {

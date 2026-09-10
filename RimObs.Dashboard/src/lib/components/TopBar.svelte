@@ -1,25 +1,61 @@
 <script lang="ts">
     import type { StatusResponse } from '../api';
-    import { router } from '../router.svelte';
     import { t } from '../i18n';
-    import { relativeTime } from '../format';
+    import { relativeTime, rate } from '../format';
     import Icon from './Icon.svelte';
+    import Logo from './Logo.svelte';
     import SettingsPopover from './SettingsPopover.svelte';
+    import Tooltip from './Tooltip.svelte';
+    import { liveVitals } from '../vitals.svelte';
 
     let { status }: { status: StatusResponse | null } = $props();
 
-    let what = $derived(t(`nav.${router.current}.what`, ''));
     let online = $derived(status?.status === 'running');
     let connected = $derived(!!status?.session);
+    let r = $derived(status?.receive ?? null);
+    // the frame poll is the fresher source; status is the fallback for an imported bundle or a
+    // session with no flamegraph mounted yet.
+    let tps = $derived(liveVitals.tps ?? r?.tps ?? null);
+    let fps = $derived(liveVitals.fps ?? r?.fps ?? null);
 </script>
 
 <header class="topbar">
     <div class="crumbs">
-        <h1>{t(`nav.${router.current}`, router.route.title)}</h1>
-        {#if what}<p class="what">{what}</p>{/if}
+        <div class="glyph"><Logo size={24} /></div>
+        <h1>RimObs</h1>
+        <p class="what">{t('nav.flamegraph.what')}</p>
+        <Tooltip
+            text={`${t('flamegraph.keys')} ${t('flamegraph.keys.transport')}`}
+            placement="bottom"
+        >
+            <span
+                class="help"
+                role="img"
+                aria-label={t('flamegraph.keys.title')}
+                data-testid="keys-help"
+            >
+                <Icon name="info" size={13} />
+            </span>
+        </Tooltip>
     </div>
 
     <div class="right">
+        {#if tps !== null || fps !== null}
+            <div class="vitals" data-testid="vitals">
+                {#if tps !== null}
+                    <div class="vital" data-testid="vital-tps">
+                        <b class="mono">{rate(tps)}</b><span>{t('overview.tps')}</span>
+                    </div>
+                {/if}
+                {#if fps !== null}
+                    <div class="vital" data-testid="vital-fps">
+                        <b class="mono">{rate(fps)}</b><span>{t('overview.fps')}</span>
+                    </div>
+                {/if}
+            </div>
+            <span class="rule"></span>
+        {/if}
+
         {#if status?.update?.available}
             <a class="update" href={status.update.url ?? '#'} target="_blank" rel="noreferrer">
                 <Icon name="external" size={14} />
@@ -28,19 +64,14 @@
             </a>
         {/if}
 
-        <div class="session" class:connected>
+        <div class="health" class:up={online && connected} data-testid="health">
             <span class="dot"></span>
             {#if connected}
-                <span class="sid mono">{status?.session?.id}</span>
-                <span class="ago">{relativeTime(status?.receive?.last_batch_utc ?? null)}</span>
+                {t('status.running')}
+                <span class="ago">{relativeTime(r?.last_batch_utc ?? null)}</span>
             {:else}
-                <span class="ago">{t('overview.noSession')}</span>
+                {online ? t('overview.noSession') : t('status.offline')}
             {/if}
-        </div>
-
-        <div class="health" class:up={online}>
-            <span class="dot"></span>
-            {online ? t('status.running') : t('status.offline')}
         </div>
 
         <SettingsPopover {status} />
@@ -50,6 +81,7 @@
 <style>
     .topbar {
         grid-area: topbar;
+        gap: var(--s-3);
         height: var(--topbar-h);
         display: flex;
         align-items: center;
@@ -63,9 +95,16 @@
     }
     .crumbs {
         display: flex;
-        flex-direction: column;
-        justify-content: center;
+        align-items: center;
+        gap: var(--s-3);
         min-width: 0;
+    }
+    .glyph {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        flex: none;
     }
     .what {
         margin: 0;
@@ -75,9 +114,15 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        transition:
+            color var(--t-fast) var(--ease-out),
+            background var(--t-fast) var(--ease-out);
     }
     h1 {
+        font-family: var(--font-display);
         font-size: 1.15rem;
+        letter-spacing: 0.04em;
+        flex: none;
     }
     .right {
         display: flex;
@@ -95,7 +140,44 @@
         border-radius: 99px;
         padding: var(--s-1) var(--s-3);
     }
-    .session,
+    .vitals {
+        display: flex;
+        align-items: center;
+        gap: var(--s-4);
+    }
+    /* number over unit, so the eye lands on the value and the label stays out of the way */
+    .vital {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        line-height: 1.05;
+    }
+    .vital b {
+        font-size: 1rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+    }
+    .vital span {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-faint);
+    }
+    .help {
+        display: grid;
+        place-items: center;
+        flex: none;
+        color: var(--text-faint);
+    }
+    .help:hover {
+        color: var(--text-dim);
+    }
+    .rule {
+        width: 1px;
+        height: 22px;
+        background: var(--border);
+    }
     .health {
         display: inline-flex;
         align-items: center;
@@ -107,24 +189,15 @@
         padding: var(--s-1) var(--s-3);
         background: var(--bg-surface);
     }
-    .sid {
-        color: var(--text);
-        max-width: 12rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
     .ago {
         color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
     }
     .dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: var(--text-faint);
-    }
-    .session.connected .dot {
-        background: var(--cyan);
     }
     .health.up .dot {
         background: var(--good);
@@ -134,20 +207,18 @@
         .topbar {
             padding: 0 var(--s-3);
         }
-        h1 {
-            font-size: 1rem;
-        }
         .right {
             gap: var(--s-2);
             min-width: 0;
         }
-        .sid {
-            max-width: 6rem;
+        .vitals {
+            gap: var(--s-3);
         }
     }
     @media (max-width: 560px) {
-        .session,
-        .update {
+        .update,
+        .rule,
+        .ago {
             display: none;
         }
     }

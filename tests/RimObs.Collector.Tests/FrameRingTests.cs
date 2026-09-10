@@ -375,4 +375,93 @@ public sealed class FrameRingTests {
     public void Range_is_empty_on_an_empty_ring() {
         new FrameRing(8).Range(-1, 10).Should().BeEmpty();
     }
+
+    // resizing is a live setting, so the frames already captured have to survive whatever fits.
+    [Fact]
+    public void Growing_the_ring_keeps_every_frame_it_held() {
+        FrameRing ring = new(4);
+        for (int ordinal = 1; ordinal <= 5; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Resize(16);
+
+        ring.Capacity.Should().Be(16);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3, 4);
+    }
+
+    [Fact]
+    public void Shrinking_the_ring_keeps_the_newest_frames_that_fit() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 6; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Resize(2);
+
+        ring.Capacity.Should().Be(2);
+        ring.Count.Should().Be(2);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(4, 5);
+    }
+
+    [Fact]
+    public void Resizing_to_the_same_capacity_leaves_the_ring_alone() {
+        FrameRing ring = new(4);
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Resize(4);
+
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2);
+    }
+
+    // a resized ring still has to wrap correctly, or the strip reorders after the next writes.
+    [Fact]
+    public void A_resized_ring_keeps_wrapping_in_ordinal_order() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 6; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Resize(3);
+        for (int ordinal = 7; ordinal <= 9; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(6, 7, 8);
+    }
+
+    [Fact]
+    public void The_strip_returns_every_frame_the_ring_holds() {
+        FrameRing ring = new(2000);
+        for (int ordinal = 1; ordinal <= 900; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.SnapshotStrip(0).Should().HaveCount(899);
+    }
+
+    // clearing is a user action that throws away history, so it has to actually empty the ring
+    // rather than just reset the write cursor.
+    [Fact]
+    public void Clearing_empties_the_strip_and_the_stats() {
+        FrameRing ring = new(8);
+        for (int ordinal = 1; ordinal <= 6; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Clear();
+
+        ring.Count.Should().Be(0);
+        ring.SnapshotStrip(0).Should().BeEmpty();
+        ring.Latest().Should().BeNull();
+        ring.ComputeStats().FrameCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void A_cleared_ring_keeps_capturing_from_the_next_frame() {
+        FrameRing ring = new(4);
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.Clear();
+        for (int ordinal = 7; ordinal <= 9; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(7, 8);
+    }
 }

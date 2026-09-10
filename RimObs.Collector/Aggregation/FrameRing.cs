@@ -37,7 +37,7 @@ public sealed record FrameRingStats(
 public sealed class FrameRing {
     public const int DefaultCapacity = 2000;
 
-    private readonly FrameSnapshot[] _buffer;
+    private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
     private readonly List<int> _openSectionIds = [];
     private readonly List<int> _openParentIds = [];
@@ -127,6 +127,26 @@ public sealed class FrameRing {
             for (int i = 0; i < _count; i++)
                 frames[i] = _buffer[(start + i) % _buffer.Length];
             return frames;
+        }
+    }
+
+    /// <summary>
+    /// Swaps in a buffer of a new size, keeping the newest frames that still fit. Shrinking
+    /// drops the oldest; the open frame and the drop counters survive either way.
+    /// </summary>
+    public void Resize(int capacity) {
+        int size = Math.Max(1, capacity);
+        lock (_gate) {
+            if (size == _buffer.Length)
+                return;
+            int take = Math.Min(_count, size);
+            FrameSnapshot[] next = new FrameSnapshot[size];
+            int start = _count < _buffer.Length ? 0 : _next;
+            for (int i = 0; i < take; i++)
+                next[i] = _buffer[(start + _count - take + i) % _buffer.Length];
+            _buffer = next;
+            _count = take;
+            _next = take % size;
         }
     }
 

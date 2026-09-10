@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { drawStrip, type StripTheme } from './stripDraw';
 import { buildBars, GC_BAND_PX } from './frameStrip';
+import { FRAME_BUDGET_US } from './frameCost';
 
 const THEME: StripTheme = {
     background: '#000',
-    bar: '#bar',
-    over: '#over',
+    good: '#00ff00',
+    warn: '#ffff00',
+    bad: '#ff0000',
+    badDeep: '#880000',
     selected: '#sel',
+    grid: '#grid',
     line: '#line',
     cut: '#cut',
     gc: '#gc',
@@ -32,6 +36,8 @@ interface Rect {
 function fakeCtx() {
     const rects: Rect[] = [];
     const lines: Line[] = [];
+    /** every paint in order, so tests can assert what covers what */
+    const ops: string[] = [];
     let fillStyle = '';
     let from = { x: 0, y: 0 };
     let dash: number[] = [];
@@ -45,8 +51,10 @@ function fakeCtx() {
         strokeStyle: '',
         lineWidth: 0,
         setTransform: () => {},
-        fillRect: (x: number, y: number, w: number, h: number) =>
-            rects.push({ x, y, w, h, fill: fillStyle }),
+        fillRect: (x: number, y: number, w: number, h: number) => {
+            ops.push('rect');
+            rects.push({ x, y, w, h, fill: fillStyle });
+        },
         save: () => {},
         restore: () => {
             dash = [];
@@ -59,11 +67,12 @@ function fakeCtx() {
             from = { x, y };
         },
         lineTo: (x: number, y: number) => {
+            ops.push('line');
             lines.push({ x1: from.x, y1: from.y, x2: x, y2: y, stroke: ctx.strokeStyle, dash });
         },
         stroke: () => {},
     };
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, lines };
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, lines, ops };
 }
 
 const opts = (
@@ -88,11 +97,25 @@ describe('drawStrip', () => {
         expect(rects).toHaveLength(3);
     });
 
-    it('colors an over-budget bar differently from an under-budget one', () => {
+    it('colors a comfortably-under-budget bar green and a 1.5x-over one red', () => {
         const { ctx, rects } = fakeCtx();
-        drawStrip(ctx, buildBars([1, 2], [1000, 50_000]), opts());
-        expect(rects[1].fill).toBe('#bar');
-        expect(rects[2].fill).toBe('#over');
+        // 1.5x the frame budget is the far end of the warn-to-bad lerp, so it lands exactly on bad.
+        drawStrip(ctx, buildBars([1, 2], [1000, FRAME_BUDGET_US * 1.5]), opts());
+        expect(rects[1].fill).toBe('#00ff00');
+        expect(rects[2].fill).toBe('#ff0000');
+    });
+
+    it('keeps bars flush against each other, no inter-bar gap', () => {
+        const { ctx, rects } = fakeCtx();
+        // 40px wide for 4 bars is 10px a bar, well past the old >3px gap threshold.
+        drawStrip(ctx, buildBars([1, 2, 3, 4], [1000, 1000, 1000, 1000]), {
+            ...opts(),
+            widthPx: 40,
+        });
+        const bars = rects.slice(1);
+        for (let i = 0; i < bars.length - 1; i++) {
+            expect(bars[i].x + bars[i].w).toBeCloseTo(bars[i + 1].x, 5);
+        }
     });
 
     it('the selected bar wins over the over-budget color', () => {
@@ -183,5 +206,37 @@ describe('drawStrip', () => {
         const { ctx, rects } = fakeCtx();
         drawStrip(ctx, buildBars([5, 6], [1000, 1000]), opts(null, [], [99]));
         expect(rects.some((r) => r.fill === '#gc')).toBe(false);
+    });
+});
+
+describe('gridline paint order', () => {
+    // a rule drawn over every bar reads as damage, not as a scale. the only thing that decides
+    // this on a canvas is paint order, so that is what gets pinned.
+    it('paints every gridline before any bar', () => {
+        const { ctx, ops, lines } = fakeCtx();
+
+        drawStrip(ctx, buildBars([1, 2, 3], [1000, 2000, 3000]), opts());
+
+        // ops[0] is the background fill, so the first bar is the next rect after it.
+        const firstBar = ops.indexOf('rect', 1);
+        const gridCount = lines.filter((l) => l.stroke === '#grid').length;
+        const gridOps = ops.slice(0, firstBar).filter((o) => o === 'line').length;
+
+        expect(gridCount).toBeGreaterThan(0);
+        expect(gridOps).toBe(gridCount);
+    });
+
+    it('draws the gridlines in the grid colour, spanning the full width', () => {
+        const { ctx, lines } = fakeCtx();
+
+        drawStrip(ctx, buildBars([1], [1000]), opts());
+
+        const grid = lines.filter((l) => l.stroke === '#grid');
+        expect(grid.length).toBeGreaterThan(0);
+        for (const line of grid) {
+            expect(line.x1).toBe(0);
+            expect(line.x2).toBe(100);
+            expect(line.y1).toBe(line.y2);
+        }
     });
 });

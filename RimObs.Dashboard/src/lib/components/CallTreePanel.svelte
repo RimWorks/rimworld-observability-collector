@@ -103,7 +103,9 @@
         { id: 'alloc', label: 'tree.tab.alloc' },
         { id: 'vram', label: 'tree.tab.vram' },
     ] as const;
-    let activeTab = $state<(typeof TABS)[number]['id']>('tree');
+    type TabId = (typeof TABS)[number]['id'];
+    // the drawer is shut on load and never restores a tab, so the flame owns the viewport first
+    let activeTab = $state<TabId | null>(null);
 
     let rows = $derived(
         (inverted ? buildInvertedRows : buildTreeRows)(nodes, {
@@ -133,7 +135,11 @@
     }
 
     // the alloc tab is the same tree, ordered by bytes. one table, one code path.
-    function selectTab(id: (typeof TABS)[number]['id']): void {
+    function selectTab(id: TabId): void {
+        if (activeTab === id) {
+            activeTab = null;
+            return;
+        }
         activeTab = id;
         if (id === 'alloc') {
             sortColumn = 'alloc';
@@ -187,13 +193,14 @@
     }
 </script>
 
-<div class="panel" data-testid="call-tree-panel">
+<div class="panel" class:open={activeTab !== null} data-testid="call-tree-panel">
     <div class="tabs">
         {#each TABS as tab (tab.id)}
             <button
                 type="button"
                 class="tab"
                 class:on={activeTab === tab.id}
+                aria-expanded={activeTab === tab.id}
                 onclick={() => selectTab(tab.id)}
                 data-testid="tab-{tab.id}">{t(tab.label)}</button
             >
@@ -202,208 +209,262 @@
             <i></i>MainThread
             <b class="mono">{ns(frameDurationUs * 1000)}</b>
         </span>
-    </div>
-
-    <div class="bar">
-        <span class="seg" role="group" aria-label={t('tree.scope')}>
-            {#each SCOPES as s (s.id)}
-                <button
-                    type="button"
-                    class:on={scope === s.id}
-                    onclick={() => (scope = s.id)}
-                    data-testid="scope-{s.id}">{t(s.label)}</button
-                >
-            {/each}
-        </span>
-        <input
-            type="search"
-            bind:value={search}
-            placeholder={t('tree.search')}
-            aria-label={t('tree.search')}
-            data-testid="tree-search"
-        />
-        <label><input type="checkbox" bind:checked={inverted} /> {t('tree.inverted')}</label>
-        <label><input type="checkbox" bind:checked={foldRecursion} /> {t('tree.fold')}</label>
-        <button type="button" onclick={expandAll} data-testid="expand-all"
-            >{t('tree.expandAll')}</button
-        >
-        <button type="button" onclick={() => expanded.clear()} data-testid="collapse-all">
-            {t('tree.collapseAll')}
-        </button>
-    </div>
-
-    {#if activeTab === 'pie'}
-        {#if slices.length === 0}
-            <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>
-        {:else}
-            <PieChart
-                {slices}
-                onSelect={(sectionId) => {
-                    const row = rows.find((r) => r.sectionId === sectionId);
-                    if (row && row.nodes.length > 0) onSelect?.(row.nodes[0]);
-                }}
-            />
+        {#if activeTab !== null}
+            <button
+                type="button"
+                class="close"
+                aria-label={t('tree.close')}
+                onclick={() => (activeTab = null)}
+                data-testid="tree-close">&times;</button
+            >
         {/if}
-    {:else if activeTab !== 'tree' && activeTab !== 'alloc'}
-        <p class="empty" data-testid="tab-soon">{t('tree.soon')}</p>
-    {:else if rows.length === 0}
-        <p class="empty" data-testid="tree-empty">{t('tree.empty')}</p>
-    {:else}
-        <table>
-            <colgroup>
-                <col class="c-bar" />
-                <col class="c-pct" />
-                <col class="c-total" />
-                <col class="c-self" />
-                <col class="c-delta" />
-                <col class="c-calls" />
-                {#if scope === 'session'}
-                    <col class="c-pctile" />
-                    <col class="c-pctile" />
-                    <col class="c-pctile" />
+    </div>
+
+    {#if activeTab !== null}
+        <div class="drawer" data-testid="tree-drawer">
+            <div class="bar">
+                <span class="seg" role="group" aria-label={t('tree.scope')}>
+                    {#each SCOPES as s (s.id)}
+                        <button
+                            type="button"
+                            class:on={scope === s.id}
+                            onclick={() => (scope = s.id)}
+                            data-testid="scope-{s.id}">{t(s.label)}</button
+                        >
+                    {/each}
+                </span>
+                <input
+                    type="search"
+                    bind:value={search}
+                    placeholder={t('tree.search')}
+                    aria-label={t('tree.search')}
+                    data-testid="tree-search"
+                />
+                <label><input type="checkbox" bind:checked={inverted} /> {t('tree.inverted')}</label
+                >
+                <label
+                    ><input type="checkbox" bind:checked={foldRecursion} /> {t('tree.fold')}</label
+                >
+                <button type="button" onclick={expandAll} data-testid="expand-all"
+                    >{t('tree.expandAll')}</button
+                >
+                <button type="button" onclick={() => expanded.clear()} data-testid="collapse-all">
+                    {t('tree.collapseAll')}
+                </button>
+            </div>
+
+            {#if activeTab === 'pie'}
+                {#if slices.length === 0}
+                    <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>
+                {:else}
+                    <PieChart
+                        {slices}
+                        onSelect={(sectionId) => {
+                            const row = rows.find((r) => r.sectionId === sectionId);
+                            if (row && row.nodes.length > 0) onSelect?.(row.nodes[0]);
+                        }}
+                    />
                 {/if}
-                <col class="c-alloc" />
-                <col />
-            </colgroup>
-            <thead>
-                <tr>
-                    <th class="pct" aria-label="share"></th>
-                    <th class="num pct">%</th>
-                    <th class="num">
-                        <button type="button" onclick={() => sortBy('total')}>
-                            {t('tree.col.total')}{arrow('total')}
-                        </button>
-                    </th>
-                    <th class="num">
-                        <button
-                            type="button"
-                            onclick={() => sortBy('self')}
-                            data-testid="sort-self"
-                        >
-                            {t('tree.col.self')}{arrow('self')}
-                        </button>
-                    </th>
-                    <th class="num">{t('tree.col.delta')}</th>
-                    <th class="num">
-                        <button type="button" onclick={() => sortBy('calls')}>
-                            {t('tree.col.calls')}{arrow('calls')}
-                        </button>
-                    </th>
-                    {#if scope === 'session'}
-                        <th class="num">{t('tree.col.p50')}</th>
-                        <th class="num">{t('tree.col.p95')}</th>
-                        <th class="num">{t('tree.col.p99')}</th>
-                    {/if}
-                    <th class="num">
-                        <button
-                            type="button"
-                            onclick={() => sortBy('alloc')}
-                            data-testid="sort-alloc"
-                        >
-                            {t('tree.col.alloc')}{arrow('alloc')}
-                        </button>
-                    </th>
-                    <th class="name">
-                        <button type="button" onclick={() => sortBy('label')}>
-                            {t('tree.col.label')}{arrow('label')}
-                        </button>
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                {#each rows as row (row.key)}
-                    <tr class:selected={row.key === selectedKey} data-testid="tree-row">
-                        <td class="pct"><i style="width:{share(row.totalUs)}%"></i></td>
-                        <td class="num pct">{share(row.totalUs).toFixed(1)}</td>
-                        <td class="num">{ns(row.totalUs * 1000)}</td>
-                        <td class="num">{ns(row.selfUs * 1000)}</td>
-                        <td class="num delta {deltaClass(row)}" data-testid="tree-delta"
-                            >{deltaText(row)}</td
-                        >
-                        <td class="num">{row.calls || ''}</td>
+            {:else if activeTab !== 'tree' && activeTab !== 'alloc'}
+                <p class="empty" data-testid="tab-soon">{t('tree.soon')}</p>
+            {:else if rows.length === 0}
+                <p class="empty" data-testid="tree-empty">{t('tree.empty')}</p>
+            {:else}
+                <table>
+                    <colgroup>
+                        <col class="c-bar" />
+                        <col class="c-pct" />
+                        <col class="c-total" />
+                        <col class="c-self" />
+                        <col class="c-delta" />
+                        <col class="c-calls" />
                         {#if scope === 'session'}
-                            {@const p = percentiles.get(row.sectionId)}
-                            <td class="num" data-testid="tree-p50">{p ? ns(p.p50Us * 1000) : ''}</td
-                            >
-                            <td class="num">{p ? ns(p.p95Us * 1000) : ''}</td>
-                            <td class="num">{p ? ns(p.p99Us * 1000) : ''}</td>
+                            <col class="c-pctile" />
+                            <col class="c-pctile" />
+                            <col class="c-pctile" />
                         {/if}
-                        <td class="num" class:dim={row.allocBytes === 0} data-testid="tree-alloc">
-                            {row.allocBytes > 0 ? bytes(row.allocBytes) : '—'}
-                        </td>
-                        <td class="name" style="padding-left:{row.depth * 14 + 4}px">
-                            {#if row.hasChildren}
-                                <button
-                                    type="button"
-                                    class="twist"
-                                    onclick={() => toggle(row)}
-                                    aria-expanded={row.expanded}
-                                    aria-label={labelFor(row.sectionId, names)}
-                                >
-                                    <Icon
-                                        name={row.expanded ? 'chevronDown' : 'chevron'}
-                                        size={13}
-                                    />
+                        <col class="c-alloc" />
+                        <col />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="pct" aria-label="share"></th>
+                            <th class="num pct">%</th>
+                            <th class="num">
+                                <button type="button" onclick={() => sortBy('total')}>
+                                    {t('tree.col.total')}{arrow('total')}
                                 </button>
-                            {:else}
-                                <span class="twist"></span>
-                            {/if}
-                            <button
-                                type="button"
-                                class="label"
-                                onclick={() => row.nodes.length > 0 && onSelect?.(row.nodes[0])}
-                                >{labelFor(row.sectionId, names)}</button
-                            >
-                            {#if ownersFor(row.sectionId).length > 0}
-                                <Tooltip
-                                    text={`${t('tip.tree.patched')} ${ownersFor(row.sectionId).join(', ')}`}
-                                >
-                                    <span class="patched" data-testid="patch-badge">
-                                        <Icon name="probe" size={11} />
-                                        {ownersFor(row.sectionId).length}
-                                    </span>
-                                </Tooltip>
-                            {/if}
-                            {#if scope === 'session'}
+                            </th>
+                            <th class="num">
                                 <button
                                     type="button"
-                                    class="trend-toggle"
-                                    aria-expanded={trendSectionId === row.sectionId}
-                                    onclick={() => toggleTrend(row.sectionId)}
-                                    data-testid="trend-toggle">{t('tree.trend.open')}</button
+                                    onclick={() => sortBy('self')}
+                                    data-testid="sort-self"
                                 >
+                                    {t('tree.col.self')}{arrow('self')}
+                                </button>
+                            </th>
+                            <th class="num">{t('tree.col.delta')}</th>
+                            <th class="num">
+                                <button type="button" onclick={() => sortBy('calls')}>
+                                    {t('tree.col.calls')}{arrow('calls')}
+                                </button>
+                            </th>
+                            {#if scope === 'session'}
+                                <th class="num">{t('tree.col.p50')}</th>
+                                <th class="num">{t('tree.col.p95')}</th>
+                                <th class="num">{t('tree.col.p99')}</th>
                             {/if}
-                        </td>
-                    </tr>
-                    {#if scope === 'session' && trendSectionId === row.sectionId}
-                        <tr class="trend-row">
-                            <td colspan="11">
-                                {#if trendLoading}
-                                    <p class="trend-state">{t('tree.trend.loading')}</p>
-                                {:else if (trend?.points.length ?? 0) === 0}
-                                    <p class="trend-state">{t('tree.trend.empty')}</p>
-                                {:else}
-                                    <LineChart
-                                        x={trendX}
-                                        series={trendSeries}
-                                        height={160}
-                                        format={(n) => ns(n)}
-                                        xFormat={(n) => `${n}s`}
-                                    />
-                                {/if}
-                            </td>
+                            <th class="num">
+                                <button
+                                    type="button"
+                                    onclick={() => sortBy('alloc')}
+                                    data-testid="sort-alloc"
+                                >
+                                    {t('tree.col.alloc')}{arrow('alloc')}
+                                </button>
+                            </th>
+                            <th class="name">
+                                <button type="button" onclick={() => sortBy('label')}>
+                                    {t('tree.col.label')}{arrow('label')}
+                                </button>
+                            </th>
                         </tr>
-                    {/if}
-                {/each}
-            </tbody>
-        </table>
+                    </thead>
+                    <tbody>
+                        {#each rows as row (row.key)}
+                            <tr class:selected={row.key === selectedKey} data-testid="tree-row">
+                                <td class="pct"><i style="width:{share(row.totalUs)}%"></i></td>
+                                <td class="num pct">{share(row.totalUs).toFixed(1)}</td>
+                                <td class="num">{ns(row.totalUs * 1000)}</td>
+                                <td class="num">{ns(row.selfUs * 1000)}</td>
+                                <td class="num delta {deltaClass(row)}" data-testid="tree-delta"
+                                    >{deltaText(row)}</td
+                                >
+                                <td class="num">{row.calls || ''}</td>
+                                {#if scope === 'session'}
+                                    {@const p = percentiles.get(row.sectionId)}
+                                    <td class="num" data-testid="tree-p50"
+                                        >{p ? ns(p.p50Us * 1000) : ''}</td
+                                    >
+                                    <td class="num">{p ? ns(p.p95Us * 1000) : ''}</td>
+                                    <td class="num">{p ? ns(p.p99Us * 1000) : ''}</td>
+                                {/if}
+                                <td
+                                    class="num"
+                                    class:dim={row.allocBytes === 0}
+                                    data-testid="tree-alloc"
+                                >
+                                    {row.allocBytes > 0 ? bytes(row.allocBytes) : '—'}
+                                </td>
+                                <td class="name" style="padding-left:{row.depth * 14 + 4}px">
+                                    {#if row.hasChildren}
+                                        <button
+                                            type="button"
+                                            class="twist"
+                                            onclick={() => toggle(row)}
+                                            aria-expanded={row.expanded}
+                                            aria-label={labelFor(row.sectionId, names)}
+                                        >
+                                            <Icon
+                                                name={row.expanded ? 'chevronDown' : 'chevron'}
+                                                size={13}
+                                            />
+                                        </button>
+                                    {:else}
+                                        <span class="twist"></span>
+                                    {/if}
+                                    <button
+                                        type="button"
+                                        class="label"
+                                        onclick={() =>
+                                            row.nodes.length > 0 && onSelect?.(row.nodes[0])}
+                                        >{labelFor(row.sectionId, names)}</button
+                                    >
+                                    {#if ownersFor(row.sectionId).length > 0}
+                                        <Tooltip
+                                            text={`${t('tip.tree.patched')} ${ownersFor(row.sectionId).join(', ')}`}
+                                        >
+                                            <span class="patched" data-testid="patch-badge">
+                                                <Icon name="probe" size={11} />
+                                                {ownersFor(row.sectionId).length}
+                                            </span>
+                                        </Tooltip>
+                                    {/if}
+                                    {#if scope === 'session'}
+                                        <button
+                                            type="button"
+                                            class="trend-toggle"
+                                            aria-expanded={trendSectionId === row.sectionId}
+                                            onclick={() => toggleTrend(row.sectionId)}
+                                            data-testid="trend-toggle"
+                                            >{t('tree.trend.open')}</button
+                                        >
+                                    {/if}
+                                </td>
+                            </tr>
+                            {#if scope === 'session' && trendSectionId === row.sectionId}
+                                <tr class="trend-row">
+                                    <td colspan="11">
+                                        {#if trendLoading}
+                                            <p class="trend-state">{t('tree.trend.loading')}</p>
+                                        {:else if (trend?.points.length ?? 0) === 0}
+                                            <p class="trend-state">{t('tree.trend.empty')}</p>
+                                        {:else}
+                                            <LineChart
+                                                x={trendX}
+                                                series={trendSeries}
+                                                height={160}
+                                                format={(n) => ns(n)}
+                                                xFormat={(n) => `${n}s`}
+                                            />
+                                        {/if}
+                                    </td>
+                                </tr>
+                            {/if}
+                        {/each}
+                    </tbody>
+                </table>
+            {/if}
+        </div>
     {/if}
 </div>
 
 <style>
     .panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        /* stacks on top of the always-on status strip rather than over it */
+        bottom: var(--status-h, 0px);
+        z-index: 40;
+        display: flex;
+        /* tabs stay first in the DOM for screen readers, and last on screen as the footer */
+        flex-direction: column-reverse;
         background: var(--bg-base);
-        overflow: hidden;
+        border-top: 1px solid var(--border);
+    }
+    .panel.open {
+        box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .drawer {
+        height: 45vh;
+        overflow: auto;
+        border-bottom: 1px solid var(--border);
+    }
+    .close {
+        margin-left: auto;
+        font: inherit;
+        font-size: 1rem;
+        line-height: 1;
+        color: var(--text-dim);
+        background: none;
+        border: 0;
+        padding: 2px 6px;
+        cursor: pointer;
+    }
+    .close:hover {
+        color: var(--text);
     }
     .tabs {
         display: flex;
@@ -458,6 +519,9 @@
         border-bottom: 1px solid var(--border);
         font-size: var(--f-ui, 12px);
         background: var(--bg-surface);
+        position: sticky;
+        top: 0;
+        z-index: 1;
     }
     .seg {
         display: flex;

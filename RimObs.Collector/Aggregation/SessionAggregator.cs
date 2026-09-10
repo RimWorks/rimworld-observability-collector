@@ -50,6 +50,18 @@ public sealed class SessionAggregator {
     public int MetricCount => _metrics.Count;
     public FrameRing Frames => _frames;
 
+    // the live session's label. held here as well as in SQLite so /status reflects a rename
+    // immediately, rather than waiting on the next persistence flush.
+    private string _sessionName = string.Empty;
+
+    /// <summary>Raised the first time a session id is seen, so a pending name can claim it.</summary>
+    public event Action<string>? SessionStarted;
+
+    public string SessionName {
+        get => Volatile.Read(ref _sessionName);
+        set => Volatile.Write(ref _sessionName, value ?? string.Empty);
+    }
+
     public bool HasTpsFps => Interlocked.Read(ref _hasTpsFps) != 0;
     public double LatestTps => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _latestTpsBits));
     public double LatestFps => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _latestFpsBits));
@@ -81,8 +93,16 @@ public sealed class SessionAggregator {
     public void OnSessionMeta(SessionMeta meta) {
         string? previous = _meta?.SessionId;
         _meta = meta;
-        if (previous != null && previous != meta.SessionId)
+        bool changed = previous != null && previous != meta.SessionId;
+        if (changed) {
             _frames.Clear();
+            // a name belongs to the session it was given to, never to the next one.
+            SessionName = string.Empty;
+        }
+
+        if (previous != meta.SessionId)
+            SessionStarted?.Invoke(meta.SessionId);
+
         _persister?.WriteSessionMeta(meta);
     }
 

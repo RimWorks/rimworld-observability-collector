@@ -66,9 +66,9 @@
     /* label/value and form surfaces cap here so a label stays coupled to its value */
     --measure: 900px;
 
-    --sb-w: 232px;
     --topbar-h: 58px;
-    --sb-w-rail: 58px;
+    /* the always-on status strip. the tab footer stacks on top of it, so both read it. */
+    --status-h: 24px;
 
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
     --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);
@@ -165,12 +165,6 @@ button:disabled {
     outline: none;
     box-shadow: var(--ring-focus);
     border-radius: var(--r-sm);
-}
-
-@media (max-width: 1100px) {
-    :root {
-        --sb-w: var(--sb-w-rail);
-    }
 }
 
 @keyframes row-in {

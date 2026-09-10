@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GcEvent } from './api';
-import { pauseLabel, genLabel, summarize, heapSeries } from './gc';
+import { pauseLabel, genLabel, summarize } from './gc';
 
 function ev(partial: Partial<GcEvent>): GcEvent {
     return {
@@ -73,23 +73,5 @@ describe('summarize', () => {
         ]);
         expect(s.totalCollections).toBe(4);
         expect(s.perGen).toEqual([2, 1, 1]);
-    });
-});
-
-describe('heapSeries', () => {
-    it('reverses newest-first events into chronological order', () => {
-        const series = heapSeries([
-            ev({ ticks: 30, heap_after: 300 }),
-            ev({ ticks: 20, heap_after: 200 }),
-            ev({ ticks: 10, heap_after: 100 }),
-        ]);
-        expect(series.ticks).toEqual([10, 20, 30]);
-        expect(series.heap).toEqual([100, 200, 300]);
-    });
-
-    it('handles empty input', () => {
-        const series = heapSeries([]);
-        expect(series.ticks).toEqual([]);
-        expect(series.heap).toEqual([]);
     });
 });

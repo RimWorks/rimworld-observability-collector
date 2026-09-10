@@ -32,8 +32,9 @@ const nodes: TreeNode[] = [
 ];
 
 describe('CallTreePanel alloc column', () => {
-    it('shows bytes for a row that allocated and a dash for one that did not', () => {
+    it('shows bytes for a row that allocated and a dash for one that did not', async () => {
         render(CallTreePanel, { nodes, names, frameDurationUs: 1000 });
+        await fireEvent.click(screen.getByTestId('tab-tree'));
 
         const cells = screen.getAllByTestId('tree-alloc').map((c) => c.textContent?.trim());
         // sorted by total time, so the cheap-but-long row comes first.

@@ -39,19 +39,3 @@ export function summarize(events: readonly GcEvent[]): GcSummary {
     }
     return summary;
 }
-
-export interface HeapSeries {
-    ticks: number[];
-    heap: number[];
-}
-
-export function heapSeries(events: readonly GcEvent[]): HeapSeries {
-    const ordered = [...events].reverse();
-    const ticks: number[] = new Array(ordered.length);
-    const heap: number[] = new Array(ordered.length);
-    for (let i = 0; i < ordered.length; i++) {
-        ticks[i] = ordered[i].ticks;
-        heap[i] = ordered[i].heap_after;
-    }
-    return { ticks, heap };
-}

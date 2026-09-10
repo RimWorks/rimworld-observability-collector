@@ -1,12 +1,42 @@
 <script lang="ts">
     import { computePosition, autoUpdate, flip, shift, offset } from '@floating-ui/dom';
-    import type { StatusResponse } from '../api';
+    import { api, type StatusResponse } from '../api';
     import { t, getLang, LANGUAGES } from '../i18n';
+    import { relativeTime, count, bytes } from '../format';
     import { userPrefs } from '../userPrefs.svelte';
+    import { MIN_RING, MAX_RING, clampRing } from '../ringCapacity';
+    import { MAX_SESSION_NAME, sessionLabel } from '../sessionLabel';
+    import { sessionsStore } from '../sessions.svelte';
+    import BundleExportForm from './BundleExportForm.svelte';
     import Icon from './Icon.svelte';
     import Tooltip from './Tooltip.svelte';
 
     let { status }: { status: StatusResponse | null } = $props();
+
+    let exporting = $state(false);
+    let exportError = $state<string | null>(null);
+
+    // only the current session can be exported, so the form needs no session picker.
+    async function handleExport(p: { sessionId: string; includes: string[]; force: boolean }) {
+        exportError = null;
+        const result = await api.exportBundle(p);
+        if (result.kind === 'over_cap') {
+            const est = (result.estimatedBytes / 1_048_576).toFixed(1);
+            const cap = (result.capBytes / 1_048_576).toFixed(1);
+            exportError = `Bundle would be ${est} MB (cap ${cap} MB). Tick "${t('bundle.export.force')}" to override.`;
+            return;
+        }
+        if (result.kind === 'error') {
+            exportError = result.message;
+            return;
+        }
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${p.sessionId}.rimobs.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
 
     const GAP_PX = 8;
     const EDGE_PX = 8;
@@ -57,6 +87,37 @@
 
     let prom = $derived(status?.exporters);
     let health = $derived(prom?.prometheus_health);
+
+    let sessions = $derived(sessionsStore.items);
+    let renameError = $derived(sessionsStore.error);
+
+    let ringCapacity = $state<number | null>(null);
+    let ringSaving = $state(false);
+    let ringError = $state('');
+
+    async function loadRing(): Promise<void> {
+        try {
+            ringCapacity = (await api.config()).sampling.frame_ring_capacity;
+        } catch {
+            ringCapacity = null;
+        }
+    }
+
+    // the collector resizes in place and keeps the newest frames that still fit, so a shrink
+    // costs history but never the frame on screen.
+    async function saveRing(next: number): Promise<void> {
+        ringSaving = true;
+        ringError = '';
+        try {
+            const config = await api.config();
+            config.sampling.frame_ring_capacity = clampRing(next);
+            ringCapacity = (await api.saveConfig(config)).sampling.frame_ring_capacity;
+        } catch (err) {
+            ringError = (err as Error).message;
+        } finally {
+            ringSaving = false;
+        }
+    }
 </script>
 
 <button
@@ -66,7 +127,13 @@
     type="button"
     aria-label={t('settings.title')}
     aria-expanded={open}
-    onclick={() => (open = !open)}
+    onclick={() => {
+        open = !open;
+        if (open) {
+            if (ringCapacity === null) void loadRing();
+            void sessionsStore.load();
+        }
+    }}
     data-testid="settings-gear"
 >
     <Icon name="cog" size={16} />
@@ -74,7 +141,97 @@
 
 {#if open}
     <div class="panel" bind:this={panelEl} role="dialog" aria-label={t('settings.title')}>
+        <h3>{t('overview.session')}</h3>
+        {#if status?.session}
+            <div class="rows">
+                <div class="kv">
+                    <span class="k">{t('session.name')}</span>
+                    <span class="v">
+                        <input
+                            class="sname"
+                            type="text"
+                            maxlength={MAX_SESSION_NAME}
+                            placeholder={t('session.name.placeholder')}
+                            value={sessions.find((s) => s.id === status?.session?.id)?.name ?? ''}
+                            onchange={(e) =>
+                                sessionsStore.rename(status!.session!.id, e.currentTarget.value)}
+                            aria-label={t('session.name')}
+                            data-testid="session-name"
+                        />
+                    </span>
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.kv.id')}</span>
+                    <span class="v mono">{status.session.id}</span>
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.kv.library')}</span>
+                    <span class="v mono">{status.session.library_version}</span>
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.kv.started')}</span>
+                    <span class="v">{new Date(status.session.started_utc).toLocaleString()}</span>
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.kv.lastBatch')}</span>
+                    <span class="v">{relativeTime(status.receive?.last_batch_utc ?? null)}</span>
+                </div>
+            </div>
+
+            <div class="export">
+                {#if exporting}
+                    <BundleExportForm sessionId={status.session.id} onExport={handleExport} />
+                    {#if exportError}
+                        <p class="export-error" role="alert">{exportError}</p>
+                    {/if}
+                {:else}
+                    <button
+                        class="export-btn"
+                        type="button"
+                        onclick={() => (exporting = true)}
+                        data-testid="open-export">{t('bundle.export.title')}</button
+                    >
+                {/if}
+            </div>
+        {:else}
+            <p class="muted">{t('overview.noSession')}</p>
+        {/if}
+
+        {#if sessions.filter((s) => !s.is_current).length > 0}
+            <h3>{t('session.past')}</h3>
+            <div class="rows" data-testid="past-sessions">
+                {#each sessions.filter((s) => !s.is_current) as session (session.id)}
+                    <div class="kv">
+                        <Tooltip text={session.id}>
+                            <span class="k trunc">{sessionLabel(session)}</span>
+                        </Tooltip>
+                        <span class="v">
+                            <input
+                                class="sname"
+                                type="text"
+                                maxlength={MAX_SESSION_NAME}
+                                placeholder={t('session.name.placeholder')}
+                                value={session.name}
+                                onchange={(e) =>
+                                    sessionsStore.rename(session.id, e.currentTarget.value)}
+                                aria-label={`${t('session.name')} ${session.id}`}
+                                data-testid="past-session-name"
+                            />
+                        </span>
+                    </div>
+                {/each}
+            </div>
+        {/if}
+        {#if renameError}
+            <p class="muted" data-testid="rename-error">{renameError}</p>
+        {/if}
+
+        <h3>{t('overview.collector')}</h3>
         <div class="rows">
+            <div class="kv">
+                <span class="k">{t('overview.kv.status')}</span>
+                <span class="v mono">{status?.status ?? '-'}</span>
+            </div>
             <div class="kv">
                 <span class="k">{t('settings.version')}</span>
                 <span class="v mono">{status?.version ?? '-'}</span>
@@ -83,6 +240,60 @@
                 <span class="k">{t('settings.schema')}</span>
                 <span class="v mono">{status?.schema_version ?? '-'}</span>
             </div>
+            {#if status?.receive}
+                <div class="kv">
+                    <span class="k">{t('overview.sections')}</span>
+                    <span class="v mono" data-testid="kv-sections"
+                        >{count(status.receive.section_count)}</span
+                    >
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.gc')}</span>
+                    <span class="v mono" data-testid="kv-gc"
+                        >{count(status.receive.total_gc_events)}</span
+                    >
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.batches')}</span>
+                    <span class="v mono" data-testid="kv-batches"
+                        >{count(status.receive.total_batches)}</span
+                    >
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.samples')}</span>
+                    <span class="v mono" data-testid="kv-samples"
+                        >{count(status.receive.total_samples)}</span
+                    >
+                </div>
+                <div class="kv">
+                    <span class="k">{t('overview.bytes')}</span>
+                    <span class="v mono" data-testid="kv-bytes"
+                        >{bytes(status.receive.total_bytes)}</span
+                    >
+                </div>
+            {/if}
+            <div class="kv">
+                <Tooltip text={t('tip.settings.ringCapacity')}
+                    ><span class="k">{t('settings.ringCapacity')}</span></Tooltip
+                >
+                <span class="v">
+                    <input
+                        class="ring mono"
+                        type="number"
+                        min={MIN_RING}
+                        max={MAX_RING}
+                        step="100"
+                        disabled={ringSaving || ringCapacity === null}
+                        value={ringCapacity ?? ''}
+                        onchange={(e) => saveRing(Number(e.currentTarget.value))}
+                        aria-label={t('settings.ringCapacity')}
+                        data-testid="ring-capacity"
+                    />
+                </span>
+            </div>
+            {#if ringError}
+                <p class="muted" data-testid="ring-error">{ringError}</p>
+            {/if}
             <div class="kv">
                 <span class="k">{t('settings.language')}</span>
                 <select
@@ -207,6 +418,32 @@
         color: var(--text-faint);
         font-weight: 600;
     }
+    h3:first-child {
+        margin-top: 0;
+    }
+    .export {
+        margin-top: var(--s-3);
+    }
+    .export-btn {
+        width: 100%;
+        background: var(--bg-surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        padding: var(--s-2) var(--s-3);
+        font: inherit;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: border-color var(--t-fast) var(--ease-out);
+    }
+    .export-btn:hover {
+        border-color: var(--cyan);
+    }
+    .export-error {
+        margin: var(--s-2) 0 0;
+        color: var(--bad);
+        font-size: 0.8rem;
+    }
     .rows {
         display: flex;
         flex-direction: column;
@@ -283,5 +520,34 @@
         font-size: 0.76rem;
         color: var(--text-faint);
         line-height: 1.4;
+    }
+    .sname {
+        width: 100%;
+        font: inherit;
+        font-size: 0.8rem;
+        color: var(--text);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 2px 6px;
+    }
+    .trunc {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .ring {
+        width: 6.5rem;
+        text-align: right;
+        font: inherit;
+        font-size: 0.8rem;
+        color: var(--text);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 2px 6px;
+    }
+    .ring:disabled {
+        opacity: 0.5;
     }
 </style>

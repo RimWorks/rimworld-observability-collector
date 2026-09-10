@@ -168,6 +168,7 @@ public sealed class RimObsMod : Mod {
             PatchInstaller.InstallAll();
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();
+            SessionLifecyclePatches.InstallAll();
             s_Sink?.SetPatchConflicts(PatchConflictRecorder.BuildBatch());
             Profiler.SetEnabled(true);
             GcObserverHost.Start();
@@ -249,6 +250,7 @@ public sealed class RimObsMod : Mod {
         GcObserverHost.SetSink(sink);
         AllocationSamplerHost.SetSink(sink);
         TpsFpsObserverHost.SetSink(sink);
+        SessionRestarter.SetSink(sink);
         s_Sink = sink;
     }
 

@@ -347,6 +347,64 @@ public sealed class SessionStoreTests : IDisposable {
         cmd.CommandText = "SELECT call_count FROM call_tree_edges WHERE parent_id = 1 AND section_id = 2;";
         Convert.ToInt64(cmd.ExecuteScalar()).Should().Be(9);
     }
+
+    private static SessionMeta Meta(string id = "named-session") => new() {
+        SessionId = id,
+        StartedUtcTicks = 1000L,
+        StopwatchFrequency = 10_000_000L,
+        AnchorTimestamp = 0L,
+        LibraryVersion = "1.0.0",
+        GameVersion = "1.5",
+    };
+
+    [Fact]
+    public void A_session_starts_with_no_name() {
+        using SessionStore store = SessionStore.Open(_dbPath);
+        store.WriteSessionMeta(Meta());
+
+        store.ReadSessionName().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Writing_a_name_reads_it_back() {
+        using SessionStore store = SessionStore.Open(_dbPath);
+        store.WriteSessionMeta(Meta());
+
+        store.WriteSessionName("named-session", "Late game 12x").Should().BeTrue();
+
+        store.ReadSessionName().Should().Be("Late game 12x");
+    }
+
+    // the library re-sends session meta on reconnect. that must not wipe the label.
+    [Fact]
+    public void Rewriting_session_meta_keeps_the_name() {
+        using SessionStore store = SessionStore.Open(_dbPath);
+        store.WriteSessionMeta(Meta());
+        store.WriteSessionName("named-session", "Before mods");
+
+        store.WriteSessionMeta(Meta());
+
+        store.ReadSessionName().Should().Be("Before mods");
+    }
+
+    [Fact]
+    public void Naming_a_session_that_is_not_stored_reports_failure() {
+        using SessionStore store = SessionStore.Open(_dbPath);
+        store.WriteSessionMeta(Meta());
+
+        store.WriteSessionName("some-other-session", "nope").Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_name_survives_reopening_the_database() {
+        using (SessionStore store = SessionStore.Open(_dbPath)) {
+            store.WriteSessionMeta(Meta());
+            store.WriteSessionName("named-session", "Colony A");
+        }
+
+        using SessionStore reopened = SessionStore.Open(_dbPath);
+        reopened.ReadSessionName().Should().Be("Colony A");
+    }
 }
 
 public sealed class SessionStoreSubsystemTests : IDisposable {

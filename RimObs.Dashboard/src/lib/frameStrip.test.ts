@@ -4,12 +4,17 @@ import {
     budgetLine,
     buildBars,
     barIndexAt,
-    barWidthPx,
+    slotWidthPx,
+    DEFAULT_STRIP_SLOTS,
+    barColor,
+    clampTooltipX,
     stepOrdinal,
     STRIP_FULL_SCALE_US,
     gridLines,
     gcMarkIndices,
 } from './frameStrip';
+
+const SCALE = { good: '#00ff00', warn: '#ffff00', bad: '#ff0000', badDeep: '#800000' };
 
 const bars = (ordinals: number[]) =>
     buildBars(
@@ -73,12 +78,99 @@ describe('barIndexAt', () => {
     });
 });
 
-describe('barWidthPx', () => {
-    // a full 2000-frame ring on a 600px panel is 0.3px a bar, which would vanish.
-    it('never goes below a pixel', () => {
-        expect(barWidthPx(600, 2000)).toBe(1);
-        expect(barWidthPx(600, 60)).toBe(10);
-        expect(barWidthPx(600, 0)).toBe(0);
+describe('barColor', () => {
+    it('is flat green comfortably under budget', () => {
+        expect(barColor(0, 1000, SCALE)).toBe(SCALE.good);
+        expect(barColor(500, 1000, SCALE)).toBe(SCALE.good);
+    });
+
+    it('is exactly amber right at budget', () => {
+        expect(barColor(1000, 1000, SCALE)).toBe(SCALE.warn);
+    });
+
+    it('lerps between green and amber approaching budget', () => {
+        const mid = barColor(800, 1000, SCALE);
+        expect(mid).not.toBe(SCALE.good);
+        expect(mid).not.toBe(SCALE.warn);
+    });
+
+    it('is exactly red at 1.5x budget', () => {
+        expect(barColor(1500, 1000, SCALE)).toBe(SCALE.bad);
+    });
+
+    it('keeps darkening past 1.5x budget, clamping at 3x', () => {
+        expect(barColor(3000, 1000, SCALE)).toBe(SCALE.badDeep);
+        expect(barColor(10_000, 1000, SCALE)).toBe(SCALE.badDeep);
+    });
+
+    it('treats a negative or zero duration as fully under budget', () => {
+        expect(barColor(-500, 1000, SCALE)).toBe(SCALE.good);
+    });
+
+    it('does not blow up on a non-positive budget', () => {
+        expect(barColor(500, 0, SCALE)).toBe(SCALE.good);
+        expect(barColor(500, -100, SCALE)).toBe(SCALE.good);
+    });
+});
+
+describe('clampTooltipX', () => {
+    it('follows the cursor when there is room on both sides', () => {
+        expect(clampTooltipX(50, 20, 200)).toBe(50);
+    });
+
+    it('stops at the left edge instead of hanging off it', () => {
+        expect(clampTooltipX(2, 20, 200)).toBe(10);
+    });
+
+    it('stops at the right edge instead of hanging off it', () => {
+        expect(clampTooltipX(198, 20, 200)).toBe(190);
+    });
+
+    it('centers when the tooltip is wider than the container', () => {
+        expect(clampTooltipX(50, 300, 200)).toBe(150);
+    });
+
+    it('treats an empty container as zero', () => {
+        expect(clampTooltipX(50, 20, 0)).toBe(0);
+    });
+});
+
+describe('slotWidthPx', () => {
+    it('divides the panel by capacity, not by frames held', () => {
+        expect(slotWidthPx(2000, 2000)).toBe(1);
+        expect(slotWidthPx(600, 60)).toBe(10);
+    });
+
+    // flooring at a pixel makes 2000 slots sum to 2000px. on a 600px panel that pushes every
+    // frame past index 600 off the canvas, so the newest frames disappear as the ring fills.
+    it('goes sub-pixel rather than overflowing the panel', () => {
+        const bw = slotWidthPx(600, 2000);
+
+        expect(bw).toBeCloseTo(0.3, 10);
+        expect(bw * 2000).toBeCloseTo(600, 10);
+    });
+
+    it('sizes a slot the same however many frames have arrived', () => {
+        expect(slotWidthPx(1200, DEFAULT_STRIP_SLOTS)).toBe(slotWidthPx(1200, DEFAULT_STRIP_SLOTS));
+    });
+
+    it('returns zero for a panel with no width', () => {
+        expect(slotWidthPx(0, 2000)).toBe(0);
+    });
+});
+
+describe('fixed slot hit testing', () => {
+    it('maps x through the slot width, so a half-full strip does not stretch', () => {
+        // 100 frames in a 2000-slot, 2000px strip: frame 5 owns x 5..6.
+        expect(barIndexAt(5.5, 2000, 100, 2000)).toBe(5);
+    });
+
+    it('selects nothing on the empty strip past the newest frame', () => {
+        expect(barIndexAt(900, 2000, 100, 2000)).toBe(-1);
+    });
+
+    it('still reaches the last frame of a full ring', () => {
+        expect(barIndexAt(1999.5, 2000, 2000, 2000)).toBe(1999);
     });
 });
 

@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Config;
+using RimWorks.RimObs.Collector.Instrumentation;
 using RimWorks.RimObs.Collector.Storage;
 using RimWorks.RimObs.Wire;
 using Microsoft.AspNetCore.Builder;
@@ -32,6 +34,9 @@ public static class SessionsEndpoints {
         endpoints.MapGet("/api/v1/sessions/current/metrics", GetCurrentMetrics);
         endpoints.MapGet("/api/v1/sessions/current/patches", GetCurrentPatches);
         endpoints.MapGet("/api/v1/sessions/current/call_tree", GetCurrentCallTree);
+        endpoints.MapPost("/api/v1/sessions/{id}/name", RenameSession);
+        endpoints.MapPost("/api/v1/sessions/new", StartNewSession);
+        endpoints.MapPost("/api/v1/sessions/restart-game", RestartGame);
         endpoints.MapGet("/api/v1/sections", GetSections);
         return endpoints;
     }
@@ -42,14 +47,17 @@ public static class SessionsEndpoints {
         HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
 
         if (current is not null) {
-            sessions.Add(MapSession(current, isCurrent: true));
+            sessions.Add(MapSession(current, isCurrent: true, aggregator.SessionName));
             seen.Add(current.SessionId);
         }
 
         if (services.GetService<SqliteSessionPersister>() is { } persister) {
-            foreach (SessionMeta meta in SessionCatalog.List(persister.SessionsDirectory)) {
-                if (seen.Add(meta.SessionId))
-                    sessions.Add(MapSession(meta, isCurrent: meta.SessionId == current?.SessionId));
+            foreach (StoredSession stored in SessionCatalog.List(persister.SessionsDirectory)) {
+                if (seen.Add(stored.Meta.SessionId))
+                    sessions.Add(MapSession(
+                        stored.Meta,
+                        isCurrent: stored.Meta.SessionId == current?.SessionId,
+                        stored.Name));
             }
         }
 
@@ -59,6 +67,100 @@ public static class SessionsEndpoints {
         });
     }
 
+    /// <summary>
+    /// Labels a session. POST so the origin and bearer checks gate it. The live session is
+    /// renamed in memory as well as on disk, so /status shows it before the next flush.
+    /// </summary>
+    private static async Task<IResult> RenameSession(
+        HttpContext context,
+        string id,
+        SessionAggregator aggregator,
+        IServiceProvider services) {
+        (RenameRequest? body, IResult? error) = await RequestBody.Read<RenameRequest>(context, "session name");
+        if (error is not null)
+            return error;
+
+        string name = body!.Name.Trim();
+        if (name.Length > MaxSessionNameLength)
+            return Results.BadRequest(new {
+                schema_version = SchemaVersion.Current,
+                reason = $"name must be {MaxSessionNameLength} characters or fewer",
+            });
+
+        bool isCurrent = aggregator.Meta?.SessionId == id;
+        bool persisted = false;
+        if (services.GetService<SqliteSessionPersister>() is { } persister)
+            persisted = persister.WriteSessionName(id, name);
+
+        if (isCurrent)
+            aggregator.SessionName = name;
+
+        if (!persisted && !isCurrent)
+            return Results.NotFound(new { schema_version = SchemaVersion.Current, reason = "no such session" });
+
+        return Results.Ok(new { schema_version = SchemaVersion.Current, id, name });
+    }
+
+    private sealed class RenameRequest {
+        public string Name { get; init; } = string.Empty;
+    }
+
+    private const int MaxSessionNameLength = 80;
+
+    /// <summary>
+    /// Asks the game to start a fresh session. The collector cannot mint the id itself: the
+    /// library owns the anchor every sample is timed against, so it has to re-anchor and then
+    /// tell us the new id on the next SessionMeta burst.
+    /// </summary>
+    private static async Task<IResult> StartNewSession(SessionMetaRegistry registry) {
+        if (!registry.IsAvailable)
+            return Results.Problem(
+                detail: "the game is not reachable, so a new session cannot be started",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        ControlClient client = new(registry.ControlPort, registry.ControlSecret);
+        await client.NewSessionAsync();
+        return Results.Ok(new { schema_version = SchemaVersion.Current });
+    }
+
+    /// <summary>
+    /// Restarts the game so the next launch is a new session. The name is parked in config
+    /// rather than applied now: the collector dies with the game, so it has to survive on disk
+    /// and be claimed by whatever session comes up next.
+    /// </summary>
+    private static async Task<IResult> RestartGame(
+        HttpContext context,
+        SessionMetaRegistry registry,
+        ConfigStore config) {
+        (RestartRequest? body, IResult? error) = await RequestBody.Read<RestartRequest>(context, "restart");
+        if (error is not null)
+            return error;
+
+        if (!registry.IsAvailable)
+            return Results.Problem(
+                detail: "the game is not reachable, so it cannot be restarted",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        string name = body!.Name.Trim();
+        if (name.Length > MaxSessionNameLength)
+            return Results.BadRequest(new {
+                schema_version = SchemaVersion.Current,
+                reason = $"name must be {MaxSessionNameLength} characters or fewer",
+            });
+
+        config.Current.Session.PendingName = name;
+        config.Replace(config.Current);
+
+        ControlClient client = new(registry.ControlPort, registry.ControlSecret);
+        await client.RestartGameAsync(body.Save);
+        return Results.Accepted(value: new { schema_version = SchemaVersion.Current, pending_name = name });
+    }
+
+    private sealed class RestartRequest {
+        public string Name { get; init; } = string.Empty;
+        public bool Save { get; init; } = true;
+    }
+
     private static IResult GetCurrentSession(SessionAggregator aggregator) {
         SessionMeta? meta = aggregator.Meta;
         if (meta is null)
@@ -66,7 +168,7 @@ public static class SessionsEndpoints {
 
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
-            session = MapSession(meta, isCurrent: true),
+            session = MapSession(meta, isCurrent: true, aggregator.SessionName),
             receive = ReceiveCounters.Project(aggregator),
         });
     }
@@ -83,7 +185,7 @@ public static class SessionsEndpoints {
 
         return Results.Ok(new {
             schema_version = SchemaVersion.Current,
-            session = MapSession(meta, isCurrent: true),
+            session = MapSession(meta, isCurrent: true, aggregator.SessionName),
             section_count = aggregator.SectionCount,
             metric_count = aggregator.MetricCount,
             total_batches = aggregator.TotalBatches,
@@ -252,9 +354,10 @@ public static class SessionsEndpoints {
 
     private static double NsPerTick(SessionMeta? meta) => TickConverter.NsPerTick(meta);
 
-    internal static object MapSession(SessionMeta meta, bool isCurrent) {
+    internal static object MapSession(SessionMeta meta, bool isCurrent, string name = "") {
         return new {
             id = meta.SessionId,
+            name = name ?? string.Empty,
             started_utc = new DateTime(meta.StartedUtcTicks, DateTimeKind.Utc),
             library_version = meta.LibraryVersion,
             game_version = meta.GameVersion,

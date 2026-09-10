@@ -34,6 +34,22 @@ public sealed class SqliteSessionPersister : ISessionPersister {
         store.WriteSessionMeta(meta);
     }
 
+    /// <summary>
+    /// Renames a stored session. Returns false when no row was updated, which means the session
+    /// has no database yet, so the caller can say so instead of reporting a silent success.
+    /// </summary>
+    public bool WriteSessionName(string sessionId, string name) {
+        ValidateSessionId(sessionId);
+        ThrowIfDisposed();
+        return GetOrOpen(sessionId).WriteSessionName(sessionId, name);
+    }
+
+    public string ReadSessionName(string sessionId) {
+        ValidateSessionId(sessionId);
+        ThrowIfDisposed();
+        return GetOrOpen(sessionId).ReadSessionName();
+    }
+
 
     public void WriteSectionsSnapshot(string sessionId, IReadOnlyCollection<SectionStats> sections) {
         ArgumentNullException.ThrowIfNull(sections);

@@ -7,6 +7,8 @@ using System.Threading;
 using RimWorks.RimObs.Wire;
 using RimWorks.RimObs.Wire.Control;
 
+using RimWorks.RimObs.Session;
+
 namespace RimWorks.RimObs.Library.Control;
 
 internal sealed class ControlServer {
@@ -69,6 +71,8 @@ internal sealed class ControlServer {
         if (method == "POST" && path == "/search") { HandleSearch(ctx); return; }
         if (method == "POST" && path == "/patch") { HandlePatch(ctx); return; }
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
+        if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
+        if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
         if (method == "DELETE" && path.StartsWith("/patch/", StringComparison.Ordinal)) {
             HandleUnpatch(ctx, path); return;
         }
@@ -116,6 +120,22 @@ internal sealed class ControlServer {
             Status = apply.Status,
             ErrorReason = apply.ErrorReason,
         }));
+    }
+
+    // runs inline rather than through the op queue: it takes its own lock and touches no
+    // Harmony state, so it does not need the game thread the way patching does.
+    private static void HandleNewSession(HttpListenerContext ctx) {
+        SessionRestarter.StartNew();
+        ctx.Response.StatusCode = (int)HttpStatusCode.OK;
+    }
+
+    // queued, unlike /session/new: restarting touches the window stack and the save pipeline,
+    // so it has to run on the game thread. answered before the restart lands, because the
+    // process is about to go away and the caller would never see a later reply.
+    private static void HandleRestartGame(HttpListenerContext ctx) {
+        bool save = string.Equals(ctx.Request.QueryString["save"], "true", StringComparison.OrdinalIgnoreCase);
+        ControlServices.Queue.Enqueue(new ControlOp(ControlOpKind.Patch, () => SessionRestarter.RestartGame(save)));
+        ctx.Response.StatusCode = (int)HttpStatusCode.Accepted;
     }
 
     private static void HandlePatchList(HttpListenerContext ctx) {

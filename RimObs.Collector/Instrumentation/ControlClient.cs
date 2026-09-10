@@ -22,6 +22,24 @@ public sealed class ControlClient {
     public async Task<ControlPatchListResponse> ListAsync() =>
         await Roundtrip<ControlPatchListResponse>(HttpMethod.Get, "/patches", null);
 
+    /// <summary>Asks the game to restart itself, optionally saving the colony first.</summary>
+    public async Task RestartGameAsync(bool save) {
+        HttpRequestMessage req = new(HttpMethod.Post, $"/session/restart-game?save={(save ? "true" : "false")}");
+        req.Headers.Add(ControlProtocol.SecretHeader, _secret);
+        HttpResponseMessage res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            throw await Failure(res);
+    }
+
+    /// <summary>Tells the game to re-anchor onto a new session id.</summary>
+    public async Task NewSessionAsync() {
+        HttpRequestMessage req = new(HttpMethod.Post, "/session/new");
+        req.Headers.Add(ControlProtocol.SecretHeader, _secret);
+        HttpResponseMessage res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            throw await Failure(res);
+    }
+
     public async Task UnpatchAsync(long id) {
         HttpRequestMessage req = new(HttpMethod.Delete, $"/patch/{id}");
         req.Headers.Add(ControlProtocol.SecretHeader, _secret);

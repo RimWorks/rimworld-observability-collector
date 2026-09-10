@@ -1,12 +1,17 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
-    let { title, children }: { title?: string; children: Snippet } = $props();
+    let {
+        title,
+        headerExtra,
+        children,
+    }: { title?: string; headerExtra?: Snippet; children: Snippet } = $props();
 </script>
 
 <section class="card">
     {#if title}
         <header>
             <h3>{title}</h3>
+            {#if headerExtra}{@render headerExtra()}{/if}
         </header>
     {/if}
     <div class="body">{@render children()}</div>

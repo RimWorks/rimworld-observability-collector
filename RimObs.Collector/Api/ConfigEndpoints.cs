@@ -1,3 +1,4 @@
+using RimWorks.RimObs.Collector.Aggregation;
 using RimWorks.RimObs.Collector.Config;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -12,16 +13,21 @@ public static class ConfigEndpoints {
         endpoints.MapGet("/api/v1/config", (ConfigStore store) =>
             Results.Json(store.Current, ConfigJson.Options));
 
-        endpoints.MapPost("/api/v1/config", async (HttpContext context, ConfigStore store) => {
-            (RimObsConfig? incoming, IResult? error) = await RequestBody.ReadValidated<RimObsConfig>(
-                context, RimObsConfig.Version, c => c.SchemaVersion, "config");
-            if (error is not null) {
-                return error;
-            }
+        endpoints.MapPost("/api/v1/config", async (
+            HttpContext context,
+            ConfigStore store,
+            SessionAggregator aggregator) => {
+                (RimObsConfig? incoming, IResult? error) = await RequestBody.ReadValidated<RimObsConfig>(
+                    context, RimObsConfig.Version, c => c.SchemaVersion, "config");
+                if (error is not null) {
+                    return error;
+                }
 
-            store.Replace(incoming!);
-            return Results.Json(store.Current, ConfigJson.Options);
-        });
+                store.Replace(incoming!);
+                // the ring resizes in place so the strip keeps the history that still fits.
+                aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
+                return Results.Json(store.Current, ConfigJson.Options);
+            });
 
         return endpoints;
     }

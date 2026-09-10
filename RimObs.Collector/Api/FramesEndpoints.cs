@@ -18,8 +18,9 @@ public static class FramesEndpoints {
                 schema_version = SchemaVersion.Current,
                 stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
                 frame = frame is null ? null : FramePayload.Map(frame, anchor, usPerTick),
-                strip = MapStrip(aggregator, usPerTick, 240),
+                strip = MapStrip(aggregator, usPerTick, 0),
                 stats = FramePayload.MapStats(stats, usPerTick),
+                vitals = MapVitals(aggregator),
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
@@ -41,8 +42,9 @@ public static class FramesEndpoints {
                 schema_version = SchemaVersion.Current,
                 stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
                 frames = mapped,
-                strip = MapStrip(aggregator, usPerTick, 240),
+                strip = MapStrip(aggregator, usPerTick, 0),
                 stats = FramePayload.MapStats(aggregator.Frames.ComputeStats(), usPerTick),
+                vitals = MapVitals(aggregator),
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
@@ -61,12 +63,23 @@ public static class FramesEndpoints {
                 schema_version = SchemaVersion.Current,
                 stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
                 frame = FramePayload.Map(frame, anchor, usPerTick),
-                strip = MapStrip(aggregator, usPerTick, 240),
+                strip = MapStrip(aggregator, usPerTick, 0),
                 stats = FramePayload.MapStats(aggregator.Frames.ComputeStats(), usPerTick),
+                vitals = MapVitals(aggregator),
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
                 },
+            });
+        });
+
+        // POST so the Origin check gates it: it throws away capture history the user cannot
+        // get back. the session and its section registry are untouched.
+        endpoints.MapPost("/api/v1/frames/clear", (SessionAggregator aggregator) => {
+            aggregator.Frames.Clear();
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                frame_count = aggregator.Frames.Count,
             });
         });
 
@@ -87,6 +100,18 @@ public static class FramesEndpoints {
         });
 
         return endpoints;
+    }
+
+    // tps and fps ride along on the frame poll so the header updates every frame instead of
+    // waiting on the 2s /status poll. the aggregator already holds the newest values.
+    private static object? MapVitals(SessionAggregator aggregator) {
+        if (!aggregator.HasTpsFps)
+            return null;
+        return new {
+            tps = aggregator.LatestTps,
+            fps = aggregator.LatestFps,
+            tick = aggregator.LatestTpsFpsTick,
+        };
     }
 
     private static object MapStrip(SessionAggregator aggregator, double usPerTick, int count) {

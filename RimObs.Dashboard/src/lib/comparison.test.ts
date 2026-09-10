@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { signedNs, signedPercent, deltaTone } from './comparison';
+import { signedNs, signedPercent, deltaTone, comparisonBaselineUs } from './comparison';
 
 describe('signedNs', () => {
     it('renders zero without a sign', () => {
@@ -38,5 +38,40 @@ describe('deltaTone', () => {
         expect(deltaTone('regressed')).toBe('up');
         expect(deltaTone('improved')).toBe('down');
         expect(deltaTone('unchanged')).toBe('flat');
+    });
+});
+
+describe('comparisonBaselineUs', () => {
+    const names = new Map([
+        [7, { name: 'Verse.TickManager.DoSingleTick', subsystem: null }],
+        [9, { name: 'RimWorld.MapDrawer.MapUpdate', subsystem: null }],
+    ]);
+
+    function delta(name: string, id: number, baseTotalNs: number) {
+        return { name, id, base_total_ns: baseTotalNs };
+    }
+
+    // the collector pairs sections by name and reports whichever session's id it saw first,
+    // so an id from the compared session must never key the live tree.
+    it('keys by the live section id, not the id the comparison reported', () => {
+        const map = comparisonBaselineUs(
+            [delta('Verse.TickManager.DoSingleTick', 412, 3_000_000)],
+            names,
+        );
+
+        expect(map.get(7)).toBe(3000);
+        expect(map.has(412)).toBe(false);
+    });
+
+    it('converts base totals from ns to us', () => {
+        const map = comparisonBaselineUs([delta('RimWorld.MapDrawer.MapUpdate', 9, 1_500)], names);
+
+        expect(map.get(9)).toBe(1.5);
+    });
+
+    it('drops sections the live registry does not know', () => {
+        const map = comparisonBaselineUs([delta('SomeMod.GoneSection', 3, 900)], names);
+
+        expect(map.size).toBe(0);
     });
 });

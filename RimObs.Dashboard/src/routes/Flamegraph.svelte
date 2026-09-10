@@ -7,12 +7,14 @@
         type HotspotsResponse,
         type GcResponse,
         type PatchesResponse,
+        type ComparisonResponse,
     } from '../lib/api';
     import { summarize } from '../lib/gc';
     import { buildPatchIndex } from '../lib/patchIndex';
     import InstrumentationPanel from '../lib/components/InstrumentationPanel.svelte';
     import { liveSectionIds, type MergedPatch } from '../lib/livePatches';
     import { Resource } from '../lib/poll.svelte';
+    import { liveVitals } from '../lib/vitals.svelte';
     import type {
         FrameData,
         FrameResponse,
@@ -24,6 +26,10 @@
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
     import CallTreePanel from '../lib/components/CallTreePanel.svelte';
+    import ComparisonPanel from '../lib/components/ComparisonPanel.svelte';
+    import NewSessionDialog from '../lib/components/NewSessionDialog.svelte';
+    import StatusFooter from '../lib/components/StatusFooter.svelte';
+    import { comparisonBaselineUs } from '../lib/comparison';
     import { buildFrameTree } from '../lib/frameTree';
     import {
         buildSeries,
@@ -33,7 +39,7 @@
     } from '../lib/frameSeries';
     import { flattenCallNodes, sessionTotalUs } from '../lib/sessionTree';
     import type { CallTreeResponse } from '../lib/api';
-    import { buildBars, stepOrdinal } from '../lib/frameStrip';
+    import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { ns, count, bytes, gradeFromShare } from '../lib/format';
     import {
@@ -62,27 +68,38 @@
         { key: 'p99_us', label: 'flamegraph.p99' },
     ] as const;
 
-    const RATES = [
-        { ms: 16, label: '60/s' },
-        { ms: 25, label: '40/s' },
-        { ms: 50, label: '20/s' },
-        { ms: 100, label: '10/s' },
-        { ms: 250, label: '4/s' },
-        { ms: 500, label: '2/s' },
-        { ms: 1000, label: '1/s' },
-    ];
-
     const LIVE = 'live';
     const NO_DROPS = { pre_frame_samples: 0, late_samples: 0 };
 
-    let rateMs = $state(16);
+    // one import serves both jobs: a bundle with frames.json becomes a scrubbable source, and
+    // every bundle becomes a comparison source. the collector expires the tokens after 30 min.
+    interface ImportedBundle {
+        token: string;
+        label: string;
+        frames: BundleFramesResponse | null;
+        names: Map<number, { name: string; subsystem: string | null }>;
+    }
+
+    // one poll per frame. there is no rate control any more: the collector is on loopback and
+    // a frame the dashboard never asked for is a frame it cannot show.
+    const FRAME_POLL_MS = 16;
     let framesRes = $state<Resource<FrameResponse> | null>(null);
     let source = $state(LIVE);
-    let imported = $state<{ token: string; label: string } | null>(null);
-    let importedFrames = $state<BundleFramesResponse | null>(null);
-    let importedNames = $state(new Map<number, { name: string; subsystem: string | null }>());
+    let imports = $state<ImportedBundle[]>([]);
     let frameIndex = $state(0);
     let importError = $state('');
+    let importing = $state(false);
+    let comparison = $state<ComparisonResponse | null>(null);
+
+    let scrubbable = $derived(imports.filter((b) => b.frames !== null));
+    let active = $derived(imports.find((b) => b.token === source) ?? null);
+    let importedFrames = $derived(active?.frames ?? null);
+    let importedNames = $derived(
+        active?.names ?? new Map<number, { name: string; subsystem: string | null }>(),
+    );
+    let comparisonSources = $derived(
+        imports.map((b) => ({ value: `bundle:${b.token}`, label: b.label })),
+    );
     let paused = $state(false);
     // set while paused or stepping. null means follow the newest frame.
     let pinnedOrdinal = $state<number | null>(null);
@@ -101,7 +118,7 @@
             framesRes = null;
             return;
         }
-        const res = new Resource<FrameResponse>(() => api.frames(), rateMs);
+        const res = new Resource<FrameResponse>(() => api.frames(), FRAME_POLL_MS);
         framesRes = res;
         res.start();
         return () => res.stop();
@@ -265,12 +282,60 @@
     }
 
     const sectionsRes = new Resource(() => api.allSections(), 10000);
+    // read once: the ring capacity only moves when someone edits it in Settings, and the
+    // status footer just needs a number to divide the held count by.
+    let ringCapacity = $state<number | null>(null);
     let treeScope = $state<'frame' | 'session'>('frame');
-    // the session tree follows the same rate control as the frame poll, so it needs a fresh
-    // Resource whenever that rate changes. it costs about the same as one /frames/latest.
+    let startingSession = $state(false);
+    let askingNewSession = $state(false);
+
+    // a session is one launch of the game, so a genuinely new one means restarting it. the name
+    // is parked in the collector's config first: this process is about to die with the game, and
+    // the next session to come up claims it.
+    async function confirmNewSession(name: string, save: boolean): Promise<void> {
+        askingNewSession = false;
+        startingSession = true;
+        try {
+            resume();
+            await api.restartGame(name, save);
+            cutOrdinals = [];
+        } finally {
+            startingSession = false;
+        }
+    }
+
+    let clearing = $state(false);
+
+    // throws away the capture history the strip draws from. resumes through the one gate first,
+    // because a paused view is pinned to a frame the collector is about to forget, and the cuts
+    // go too: they mark gaps in a history that no longer exists.
+    async function clearRing(): Promise<void> {
+        clearing = true;
+        try {
+            resume();
+            await api.clearFrames();
+            cutOrdinals = [];
+            await framesRes?.refresh();
+        } finally {
+            clearing = false;
+        }
+    }
+
+    // the header sits outside this route, so the per-frame vitals go through a shared store
+    // rather than a prop chain. an imported bundle has none, so the header falls back to status.
+    $effect(() => {
+        if (!live) {
+            liveVitals.clear();
+            return;
+        }
+        liveVitals.set(framesRes?.data?.vitals);
+    });
+
+    // the session tree keeps pace with the frame poll. it costs about the same as one
+    // /frames/latest.
     let sessionTreeRes = $state<Resource<CallTreeResponse> | null>(null);
     $effect(() => {
-        const res = new Resource<CallTreeResponse>(() => api.callTree(12, 24), rateMs);
+        const res = new Resource<CallTreeResponse>(() => api.callTree(12, 24), FRAME_POLL_MS);
         sessionTreeRes = res;
         res.start();
         return () => res.stop();
@@ -281,6 +346,9 @@
             .then((r) => {
                 if (liveWindow.length === 0) liveWindow = r.frames ?? [];
             })
+            .catch(() => undefined);
+        api.config()
+            .then((c) => (ringCapacity = c.sampling.frame_ring_capacity))
             .catch(() => undefined);
         patchesRes.start();
         sectionsRes.start();
@@ -303,38 +371,52 @@
         const file = input.files?.[0];
         if (!file) return;
         importError = '';
-        // holds an import nobody owns yet. cleared once it is handed to `imported`, so the
-        // finally deletes it on every path that bails, including a throw after the upload won.
+        importing = true;
+        // holds an import nobody owns yet. cleared once it lands in `imports`, so the finally
+        // deletes it on every path that bails, including a throw after the upload won.
         let orphan = '';
         try {
             const res = await api.importBundle(file);
             orphan = res.token;
+            const label = String(res.manifest.session_id ?? file.name);
+
+            // a bundle without frames is still a comparison source, so it is kept either way.
+            let frames: BundleFramesResponse | null = null;
+            let names = new Map<number, { name: string; subsystem: string | null }>();
             if (!res.contents.includes('frames.json')) {
                 importError = t('flamegraph.source.noFrames');
-                return;
+            } else {
+                const [loaded, hotspots] = await Promise.all([
+                    api.importedFrames(res.token),
+                    api.importedHotspots(res.token),
+                ]);
+                if (loaded.frames.length === 0) {
+                    importError = t('flamegraph.source.emptyFrames');
+                } else {
+                    frames = loaded;
+                    names = new Map(
+                        hotspots.hotspots.map((h) => [
+                            h.id,
+                            { name: h.name, subsystem: h.subsystem },
+                        ]),
+                    );
+                }
             }
-            const [frames, hotspots] = await Promise.all([
-                api.importedFrames(res.token),
-                api.importedHotspots(res.token),
-            ]);
-            if (frames.frames.length === 0) {
-                importError = t('flamegraph.source.emptyFrames');
-                return;
-            }
-            importedFrames = frames;
-            importedNames = new Map(
-                hotspots.hotspots.map((h) => [h.id, { name: h.name, subsystem: h.subsystem }]),
-            );
-            const previous = imported?.token;
-            imported = { token: res.token, label: String(res.manifest.session_id ?? file.name) };
+
+            imports = [
+                ...imports.filter((b) => b.token !== res.token),
+                { token: res.token, label, frames, names },
+            ];
             orphan = '';
-            if (previous) void api.deleteImport(previous);
-            frameIndex = Math.max(0, frames.frames.length - 1);
-            source = res.token;
+            if (frames) {
+                frameIndex = Math.max(0, frames.frames.length - 1);
+                source = res.token;
+            }
         } catch (err) {
             importError = err instanceof ApiError ? err.message : String(err);
         } finally {
             if (orphan) void api.deleteImport(orphan);
+            importing = false;
             input.value = '';
         }
     }
@@ -409,6 +491,11 @@
     let liveRoots = $derived(sessionTreeRes?.data?.roots ?? []);
     let sessionRoots = $derived(frozenRoots ?? liveRoots);
     let treeNodes = $derived(treeScope === 'session' ? flattenCallNodes(sessionRoots) : frameNodes);
+    // session totals compare only against another session's totals, which is why the rolling
+    // 128-frame baseline never reaches this scope.
+    let sessionBaselineUs = $derived(
+        comparison ? comparisonBaselineUs(comparison.hotspots, names) : NO_BASELINE,
+    );
 
     let overhead = $state(OVERHEAD_SEED);
     let deltaUs = $state<number | null>(null);
@@ -439,20 +526,19 @@
         return `${sign}${ns(Math.abs(us) * 1000)}`;
     }
 
-    let overheadLine = $derived.by(() => {
-        const parts: string[] = [];
-        if (PER_SAMPLE_OVERHEAD_NS > 0) {
-            const pctSuffix =
-                overhead.percent > 0
-                    ? ` (~${percent2(overhead.percent)} ${t('flamegraph.overhead.offrame')})`
-                    : '';
-            parts.push(`${t('flamegraph.overhead')} ${nsPerScopeText()} ns/scope${pctSuffix}`);
-        }
-        if (timerResNs > 0) {
-            parts.push(`${t('flamegraph.timerres')} ${timerResText(timerResNs)} ns`);
-        }
-        return parts.join(' · ');
+    // split so the status footer can give overhead and timer resolution their own tooltips
+    // instead of one blurb covering two different facts.
+    let overheadText = $derived.by(() => {
+        if (PER_SAMPLE_OVERHEAD_NS <= 0) return '';
+        const pctSuffix =
+            overhead.percent > 0
+                ? ` (~${percent2(overhead.percent)} ${t('flamegraph.overhead.offrame')})`
+                : '';
+        return `${t('flamegraph.overhead')} ${nsPerScopeText()} ns/scope${pctSuffix}`;
     });
+    let timerResLine = $derived(
+        timerResNs > 0 ? `${t('flamegraph.timerres')} ${timerResText(timerResNs)} ns` : '',
+    );
 </script>
 
 <svelte:window onkeydown={handleTransportKey} />
@@ -498,22 +584,13 @@
             <span class="dim">{t('flamegraph.source')}</span>
             <select bind:value={source}>
                 <option value={LIVE}>{t('flamegraph.source.live')}</option>
-                {#if imported}<option value={imported.token}>{imported.label}</option>{/if}
+                {#each scrubbable as b (b.token)}<option value={b.token}>{b.label}</option>{/each}
             </select>
         </label>
-        <label class="filebtn">
-            <input type="file" accept=".zip" onchange={openBundle} />
-            {t('flamegraph.source.import')}
+        <label class="filebtn" class:busy={importing}>
+            <input type="file" accept=".zip" onchange={openBundle} disabled={importing} />
+            {importing ? t('comparison.importing') : t('flamegraph.source.import')}
         </label>
-        {#if live}
-            <label class="picker">
-                <span class="dim">{t('flamegraph.rate')}</span>
-                <select bind:value={rateMs}>
-                    {#each RATES as r (r.ms)}<option value={r.ms}>{r.label}</option>{/each}
-                </select>
-            </label>
-        {/if}
-
         <span class="readout mono">
             {#each PERCENTILES as p (p.key)}
                 {@const v = stats?.[p.key] ?? 0}
@@ -561,6 +638,26 @@
                     data-testid="mode-alloc">{t('flamegraph.mode.alloc')}</button
                 >
             </div>
+            <span class="rightpair">
+                <Tooltip text={t('tip.flamegraph.newSession')}>
+                    <button
+                        type="button"
+                        class="clearring"
+                        onclick={() => (askingNewSession = true)}
+                        disabled={startingSession}
+                        data-testid="new-session">{t('flamegraph.newSession')}</button
+                    >
+                </Tooltip>
+                <Tooltip text={t('tip.flamegraph.clearRing')}>
+                    <button
+                        type="button"
+                        class="clearring"
+                        onclick={clearRing}
+                        disabled={clearing}
+                        data-testid="clear-ring">{t('flamegraph.clearRing')}</button
+                    >
+                </Tooltip>
+            </span>
         </div>
     {/if}
 
@@ -570,6 +667,7 @@
             durationsUs={strip.durations_us}
             cutOrdinals={shownCuts}
             {gcOrdinals}
+            slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
             selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
             onSelect={(o) => pauseAt(o)}
         />
@@ -638,6 +736,7 @@
                     bind:this={timeline}
                     {series}
                     {names}
+                    selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
                     bind:selectedNode
                     onContext={openContext}
                 />
@@ -654,7 +753,7 @@
             frameDurationUs={treeScope === 'session'
                 ? sessionTotalUs(sessionRoots)
                 : (frame?.duration_us ?? 0)}
-            baselineUs={treeScope === 'session' ? NO_BASELINE : baselineUs}
+            baselineUs={treeScope === 'session' ? sessionBaselineUs : baselineUs}
             onSelect={(i) => {
                 if (treeScope === 'session' || !currentEntry) return;
                 timeline?.focusNode(currentEntry.nodeStart + i);
@@ -665,24 +764,33 @@
             <summary>{t('nav.instrumentation')}</summary>
             <InstrumentationPanel bind:this={panel} onPatchesChange={(p) => (livePatches = p)} />
         </details>
-    </DataState>
 
-    <p class="foot mono">
-        {t('flamegraph.ringsize')}
-        {count(stats?.frame_count ?? 0)} &middot; {t('flamegraph.keys')} &middot; {t(
-            'flamegraph.keys.transport',
-        )}
-    </p>
-    <p class="foot mono" data-testid="frame-overhead">
-        {#if deltaUs !== null}<span
-                class="delta"
-                class:warn={deltaSeverity(deltaUs) === 1}
-                class:cool={deltaSeverity(deltaUs) === -1}>&Delta; {deltaText(deltaUs)}</span
-            >{overheadLine ? ' · ' : ''}{/if}{#if overheadLine}<Tooltip
-                text={t('flamegraph.overhead.hint')}><span>{overheadLine}</span></Tooltip
-            >{/if}
-    </p>
+        <details class="instr" data-testid="comparison-panel">
+            <summary>{t('comparison.title')}</summary>
+            <ComparisonPanel
+                imports={comparisonSources}
+                onResult={(r) => {
+                    comparison = r;
+                    if (r) treeScope = 'session';
+                }}
+            />
+        </details>
+    </DataState>
 </div>
+
+{#if askingNewSession}
+    <NewSessionDialog onConfirm={confirmNewSession} onCancel={() => (askingNewSession = false)} />
+{/if}
+
+<StatusFooter
+    ringHeld={stats?.frame_count ?? 0}
+    {ringCapacity}
+    {overheadText}
+    {timerResLine}
+    {deltaUs}
+    deltaSeverity={deltaUs !== null ? deltaSeverity(deltaUs) : 0}
+    deltaText={deltaUs !== null ? deltaText(deltaUs) : ''}
+/>
 
 {#if contextMenu}
     <div
@@ -756,6 +864,9 @@
         flex-direction: column;
         min-height: 0;
         font-size: var(--f-body);
+        /* clears both fixed footers (tab bar + status strip) so the last panel is never stuck
+           behind them */
+        padding-bottom: 64px;
     }
     .mono {
         font-family: var(--font-mono);
@@ -838,6 +949,10 @@
     .filebtn:hover {
         border-color: var(--border-strong);
     }
+    .filebtn.busy {
+        opacity: 0.6;
+        cursor: progress;
+    }
     .filebtn:focus-within {
         box-shadow: var(--ring-focus);
     }
@@ -876,8 +991,33 @@
     .modes {
         display: flex;
         align-items: center;
+        gap: var(--s-2);
         padding: 6px 12px;
         border-bottom: 1px solid var(--border-soft);
+    }
+    .rightpair {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-2);
+        margin-left: auto;
+    }
+    .clearring {
+        font: inherit;
+        font-size: var(--f-ui, 12px);
+        color: var(--text-dim);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 3px 10px;
+        cursor: pointer;
+    }
+    .clearring:hover:not(:disabled) {
+        color: var(--text);
+        border-color: var(--border-strong);
+    }
+    .clearring:disabled {
+        opacity: 0.5;
+        cursor: default;
     }
     .seg {
         display: flex;
@@ -972,10 +1112,6 @@
         font-size: var(--f-small);
         color: var(--text-faint);
         padding: var(--s-1) 12px;
-    }
-    .foot .delta {
-        display: inline-block;
-        width: 90px;
     }
     .foot:first-of-type {
         border-top: 1px solid var(--border);

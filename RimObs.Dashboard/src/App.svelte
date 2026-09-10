@@ -2,30 +2,64 @@
     import { onMount, onDestroy } from 'svelte';
     import { api, type StatusResponse } from './lib/api';
     import { Resource } from './lib/poll.svelte';
-    import { router } from './lib/router.svelte';
     import { userPrefs } from './lib/userPrefs.svelte';
-    import Sidebar from './lib/components/Sidebar.svelte';
     import TopBar from './lib/components/TopBar.svelte';
-    import Overview from './routes/Overview.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
-    import Comparison from './routes/Comparison.svelte';
+    import NameSessionPrompt from './lib/components/NameSessionPrompt.svelte';
+    import { sessionsStore } from './lib/sessions.svelte';
 
     const status = new Resource<StatusResponse>(() => api.status(), 2000);
     const DISCONNECT_THRESHOLD = 3;
     let hasBeenConnected = $state(false);
     let closeRequested = $state(false);
 
-    onMount(() => {
-        router.start();
-        status.start();
-    });
+    onMount(() => status.start());
     onDestroy(() => status.stop());
-
-    let route = $derived(router.route);
 
     $effect(() => {
         if (status.data != null && !hasBeenConnected) hasBeenConnected = true;
     });
+
+    // a session is one launch of the game, so an unnamed one that just appeared is the moment
+    // the user knows what they are about to test. asked once per session, and never again once
+    // they turn it off.
+    let promptEnabled = $state(true);
+    let skipped = $state(new Set<string>());
+    let session = $derived(status.data?.session ?? null);
+    let needsName = $derived(
+        promptEnabled && session != null && (session.name ?? '') === '' && !skipped.has(session.id),
+    );
+
+    onMount(async () => {
+        try {
+            promptEnabled = (await api.config()).session.prompt_for_name;
+        } catch {
+            promptEnabled = false;
+        }
+    });
+
+    async function nameSession(name: string): Promise<void> {
+        const id = session?.id;
+        if (!id) return;
+        skipped = new Set(skipped).add(id);
+        await sessionsStore.rename(id, name);
+        void status.refresh();
+    }
+
+    function skipNaming(): void {
+        if (session) skipped = new Set(skipped).add(session.id);
+    }
+
+    async function disablePrompt(): Promise<void> {
+        promptEnabled = false;
+        try {
+            const config = await api.config();
+            config.session.prompt_for_name = false;
+            await api.saveConfig(config);
+        } catch {
+            // the prompt is already off for this page; a failed save only means it returns later.
+        }
+    }
 
     $effect(() => {
         if (
@@ -41,31 +75,28 @@
 </script>
 
 <div class="shell">
-    <Sidebar />
     <TopBar status={status.data} />
     <main class="main" id="main">
-        {#key route.id}
-            <div class="view">
-                {#if route.id === 'overview'}
-                    <Overview status={status.data} />
-                {:else if route.id === 'flamegraph'}
-                    <Flamegraph />
-                {:else if route.id === 'comparison'}
-                    <Comparison />
-                {/if}
-            </div>
-        {/key}
+        <Flamegraph />
     </main>
 </div>
+
+{#if needsName && session}
+    <NameSessionPrompt
+        sessionId={session.id}
+        onName={nameSession}
+        onSkip={skipNaming}
+        onDisable={disablePrompt}
+    />
+{/if}
 
 <style>
     .shell {
         display: grid;
-        grid-template-columns: var(--sb-w) 1fr;
         grid-template-rows: var(--topbar-h) 1fr;
         grid-template-areas:
-            'sidebar topbar'
-            'sidebar main';
+            'topbar'
+            'main';
         height: 100vh;
         overflow: hidden;
     }

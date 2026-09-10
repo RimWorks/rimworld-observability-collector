@@ -20,7 +20,9 @@ public static class StatusEndpoints {
                     schema_version = SchemaVersion.Current,
                     status = "running",
                     version = BuildInfo.Revision,
-                    session = meta is null ? null : SessionsEndpoints.MapSession(meta, isCurrent: true),
+                    session = meta is null
+                        ? null
+                        : SessionsEndpoints.MapSession(meta, isCurrent: true, aggregator.SessionName),
                     receive = ReceiveCounters.Project(aggregator),
                     update = new {
                         available = latest is not null,

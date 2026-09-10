@@ -41,7 +41,7 @@ public static class SessionsCommand {
         }
 
         string sessionsDir = sessionsDirOverride ?? Path.Combine(ConfigDirResolver.Resolve(), "sessions");
-        IReadOnlyList<SessionMeta> sessions = SessionCatalog.List(sessionsDir);
+        IReadOnlyList<StoredSession> sessions = SessionCatalog.List(sessionsDir);
 
         if (format == OutputFormat.Json)
             WriteJson(stdout, sessions, sessionsDir);
@@ -51,21 +51,22 @@ public static class SessionsCommand {
         return 0;
     }
 
-    private static void WriteJson(TextWriter stdout, IReadOnlyList<SessionMeta> sessions, string sessionsDir) {
+    private static void WriteJson(TextWriter stdout, IReadOnlyList<StoredSession> sessions, string sessionsDir) {
         var payload = new {
             sessions_dir = sessionsDir,
             count = sessions.Count,
             sessions = sessions.Select(s => new {
-                session_id = s.SessionId,
-                started_utc_ticks = s.StartedUtcTicks,
-                library_version = s.LibraryVersion,
-                game_version = s.GameVersion,
+                session_id = s.Meta.SessionId,
+                name = s.Name,
+                started_utc_ticks = s.Meta.StartedUtcTicks,
+                library_version = s.Meta.LibraryVersion,
+                game_version = s.Meta.GameVersion,
             }),
         };
         stdout.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
     }
 
-    private static void WriteTable(TextWriter stdout, IReadOnlyList<SessionMeta> sessions, string sessionsDir) {
+    private static void WriteTable(TextWriter stdout, IReadOnlyList<StoredSession> sessions, string sessionsDir) {
         stdout.WriteLine($"Sessions directory: {sessionsDir}");
         if (sessions.Count == 0) {
             stdout.WriteLine("(no sessions)");
@@ -73,19 +74,21 @@ public static class SessionsCommand {
         }
 
         const string idHeader = "SESSION ID";
+        const string nameHeader = "NAME";
         const string startedHeader = "STARTED (UTC)";
         const string libHeader = "LIBRARY";
         const string gameHeader = "GAME";
 
-        int idW = Math.Max(idHeader.Length, sessions.Max(s => s.SessionId?.Length ?? 0));
-        int libW = Math.Max(libHeader.Length, sessions.Max(s => s.LibraryVersion?.Length ?? 0));
-        int gameW = Math.Max(gameHeader.Length, sessions.Max(s => s.GameVersion?.Length ?? 0));
+        int idW = Math.Max(idHeader.Length, sessions.Max(s => s.Meta.SessionId?.Length ?? 0));
+        int nameW = Math.Max(nameHeader.Length, sessions.Max(s => s.Name?.Length ?? 0));
+        int libW = Math.Max(libHeader.Length, sessions.Max(s => s.Meta.LibraryVersion?.Length ?? 0));
+        int gameW = Math.Max(gameHeader.Length, sessions.Max(s => s.Meta.GameVersion?.Length ?? 0));
 
-        stdout.WriteLine($"{Pad(idHeader, idW)}  {Pad(startedHeader, 20)}  {Pad(libHeader, libW)}  {Pad(gameHeader, gameW)}");
-        stdout.WriteLine(new string('-', idW + 2 + 20 + 2 + libW + 2 + gameW));
-        foreach (SessionMeta s in sessions.OrderByDescending(s => s.StartedUtcTicks)) {
-            string started = new DateTime(s.StartedUtcTicks, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm:ss");
-            stdout.WriteLine($"{Pad(s.SessionId, idW)}  {Pad(started, 20)}  {Pad(s.LibraryVersion, libW)}  {Pad(s.GameVersion, gameW)}");
+        stdout.WriteLine($"{Pad(idHeader, idW)}  {Pad(nameHeader, nameW)}  {Pad(startedHeader, 20)}  {Pad(libHeader, libW)}  {Pad(gameHeader, gameW)}");
+        stdout.WriteLine(new string('-', idW + 2 + nameW + 2 + 20 + 2 + libW + 2 + gameW));
+        foreach (StoredSession s in sessions.OrderByDescending(s => s.Meta.StartedUtcTicks)) {
+            string started = new DateTime(s.Meta.StartedUtcTicks, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm:ss");
+            stdout.WriteLine($"{Pad(s.Meta.SessionId, idW)}  {Pad(s.Name, nameW)}  {Pad(started, 20)}  {Pad(s.Meta.LibraryVersion, libW)}  {Pad(s.Meta.GameVersion, gameW)}");
         }
     }
 

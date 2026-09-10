@@ -1,65 +1,43 @@
 <script lang="ts">
-    import { api, ApiError, type SessionInfo, type ComparisonResponse } from '../lib/api';
-    import Card from '../lib/components/Card.svelte';
-    import Icon from '../lib/components/Icon.svelte';
-    import { ns, count, metricKind } from '../lib/format';
-    import { signedNs, signedPercent, deltaTone } from '../lib/comparison';
-    import { t } from '../lib/i18n';
+    import { api, ApiError, type SessionInfo, type ComparisonResponse } from '../api';
+    import Card from './Card.svelte';
+    import Icon from './Icon.svelte';
+    import { ns, count, metricKind } from '../format';
+    import { signedNs, signedPercent, deltaTone } from '../comparison';
+    import { t } from '../i18n';
     import { onMount } from 'svelte';
+    import Tooltip from './Tooltip.svelte';
+    import { sessionLabel } from '../sessionLabel';
+    import { sessionsStore } from '../sessions.svelte';
 
-    type ImportedBundle = { value: string; label: string };
+    // the flamegraph owns the one bundle import, so this panel only reads the sources it is handed.
+    let {
+        imports = [],
+        onResult,
+    }: {
+        imports?: readonly { value: string; label: string }[];
+        onResult?: (result: ComparisonResponse | null) => void;
+    } = $props();
 
-    let sessions = $state<SessionInfo[]>([]);
     let sessionsError = $state('');
-    let imports = $state<ImportedBundle[]>([]);
-    let importing = $state(false);
-    let importError = $state('');
     let base = $state('');
     let head = $state('');
     let result = $state<ComparisonResponse | null>(null);
     let loading = $state(false);
     let error = $state('');
 
-    onMount(async () => {
-        try {
-            const res = await api.sessions();
-            sessions = res.sessions;
-            if (sessions.length > 0) head = sessions[0].id;
-            if (sessions.length > 1) base = sessions[1].id;
-        } catch (e) {
-            sessionsError = e instanceof ApiError ? e.message : String(e);
-        }
-    });
+    // read from the shared store, so a rename in the gear shows up here without a reload.
+    let sessions = $derived(sessionsStore.items);
 
-    async function importBundle(e: Event) {
-        const input = e.currentTarget as HTMLInputElement;
-        const file = input.files?.[0];
-        if (!file) return;
-        importing = true;
-        importError = '';
-        try {
-            const res = await api.importBundle(file);
-            const sessionId = String(res.manifest.session_id ?? file.name);
-            const value = `bundle:${res.token}`;
-            imports = [
-                {
-                    value,
-                    label: t('comparison.importedLabel', '{id} (imported)').replace(
-                        '{id}',
-                        sessionId,
-                    ),
-                },
-                ...imports.filter((b) => b.value !== value),
-            ];
-            if (!base) base = value;
-            else if (!head) head = value;
-        } catch (err) {
-            importError = err instanceof ApiError ? err.message : String(err);
-        } finally {
-            importing = false;
-            input.value = '';
-        }
-    }
+    onMount(async () => {
+        await sessionsStore.load();
+        sessionsError = sessionsStore.error;
+        // read the store, not the derived alias: the derived has not recomputed yet this tick,
+        // so the defaults would be picked from an empty list.
+        const loaded = sessionsStore.items;
+        if (loaded.length > 0) head = loaded[0].id;
+        if (loaded.length > 1) base = loaded[1].id;
+    });
 
     async function runCompare() {
         if (!base || !head || base === head) return;
@@ -72,7 +50,14 @@
             result = null;
         } finally {
             loading = false;
+            onResult?.(result);
         }
+    }
+
+    function clearCompare() {
+        result = null;
+        error = '';
+        onResult?.(null);
     }
 
     let canCompare = $derived(base !== '' && head !== '' && base !== head && !loading);
@@ -81,8 +66,24 @@
     );
 </script>
 
+{#snippet pickInfo()}
+    <Tooltip
+        text={`${t('comparison.importHint')} ${t('comparison.disclaimer')}`}
+        placement="bottom"
+        align="end"
+    >
+        <span
+            class="info-trigger"
+            role="img"
+            aria-label={t('comparison.pickInfo', 'What comparisons mean')}
+        >
+            <Icon name="info" size={14} />
+        </span>
+    </Tooltip>
+{/snippet}
+
 <div class="page">
-    <Card title={t('comparison.pick', 'Select sessions to compare')}>
+    <Card title={t('comparison.pick', 'Select sources to compare')} headerExtra={pickInfo}>
         {#if sessionsError}
             <p class="err">{sessionsError}</p>
         {:else}
@@ -96,7 +97,7 @@
                         <optgroup label={t('comparison.sourceSessions', 'Sessions')}>
                             {#each sessions as s (s.id)}
                                 <option value={s.id}
-                                    >{s.id}{s.is_current
+                                    >{sessionLabel(s)}{s.is_current
                                         ? ` (${t('sessions.current', 'current')})`
                                         : ''}</option
                                 >
@@ -121,7 +122,7 @@
                         <optgroup label={t('comparison.sourceSessions', 'Sessions')}>
                             {#each sessions as s (s.id)}
                                 <option value={s.id}
-                                    >{s.id}{s.is_current
+                                    >{sessionLabel(s)}{s.is_current
                                         ? ` (${t('sessions.current', 'current')})`
                                         : ''}</option
                                 >
@@ -141,27 +142,12 @@
                         ? t('comparison.comparing', 'Comparing…')
                         : t('comparison.run', 'Compare')}
                 </button>
-            </div>
-            <div class="import">
-                <label class="import-btn" class:busy={importing}>
-                    <Icon name="upload" size={16} />
-                    <span
-                        >{importing
-                            ? t('comparison.importing', 'Importing…')
-                            : t('comparison.importBundle', 'Import bundle to compare')}</span
+                {#if result}
+                    <button class="run" onclick={clearCompare} data-testid="clear-compare"
+                        >{t('comparison.clear', 'Clear')}</button
                     >
-                    <input type="file" accept=".zip" onchange={importBundle} disabled={importing} />
-                </label>
-                <span class="import-hint"
-                    >{t(
-                        'comparison.importHint',
-                        'Add an exported .rimobs.zip as a comparison source.',
-                    )}</span
-                >
+                {/if}
             </div>
-            {#if importError}
-                <p class="err">{importError}</p>
-            {/if}
             {#if base !== '' && base === head}
                 <p class="hint">{t('comparison.samePair', 'Pick two different sources.')}</p>
             {/if}
@@ -173,11 +159,6 @@
     {/if}
 
     {#if result}
-        <p class="disclaimer" role="note">
-            <Icon name="alert" size={16} />
-            {t('comparison.disclaimer', result.disclaimer)}
-        </p>
-
         {#if result.warnings.length > 0}
             <Card title={t('comparison.warnings', 'Confidence warnings')}>
                 <ul class="warnings">
@@ -364,7 +345,7 @@
         display: flex;
         flex-direction: column;
         gap: var(--s-4);
-        padding: var(--s-5) var(--rail);
+        padding: var(--s-4) var(--rail) var(--s-5);
     }
     .picker {
         display: flex;
@@ -409,53 +390,9 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
-    .import {
-        display: flex;
-        align-items: center;
-        gap: var(--s-3);
-        margin-top: var(--s-4);
-        flex-wrap: wrap;
-    }
-    .import-btn {
+    .info-trigger {
         display: inline-flex;
-        align-items: center;
-        gap: var(--s-2);
-        padding: var(--s-2) var(--s-3);
-        border: 1px dashed var(--border);
-        border-radius: var(--r-md);
-        color: var(--text-dim);
-        font-size: 0.82rem;
-        cursor: pointer;
-        transition:
-            border-color var(--t-fast) var(--ease-out),
-            color var(--t-fast) var(--ease-out);
-    }
-    .import-btn:hover {
-        border-color: var(--cyan);
-        color: var(--cyan);
-    }
-    .import-btn.busy {
-        opacity: 0.6;
-        cursor: progress;
-    }
-    .import-btn input {
-        display: none;
-    }
-    .import-hint {
-        font-size: 0.78rem;
         color: var(--text-faint);
-    }
-    .disclaimer {
-        display: flex;
-        align-items: center;
-        gap: var(--s-2);
-        margin: 0;
-        padding: var(--s-2) var(--s-4);
-        font-size: 0.82rem;
-        color: var(--text-dim);
-        background: color-mix(in srgb, var(--warn) 8%, transparent);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
     }
     .warnings {
         margin: 0;
@@ -523,16 +460,6 @@
     .num {
         text-align: right;
         justify-self: end;
-    }
-    .name {
-        font-size: 0.84rem;
-        color: var(--text);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        display: flex;
-        align-items: center;
-        gap: var(--s-2);
     }
     .cell {
         font-size: 0.82rem;
@@ -602,7 +529,7 @@
         color: var(--text-faint);
     }
     .hint {
-        margin: 0 0 var(--s-2);
+        margin: var(--s-2) 0 0;
         font-size: 0.8rem;
         color: var(--text-faint);
     }
@@ -611,6 +538,11 @@
         font-size: 0.85rem;
     }
     .name {
+        font-size: 0.84rem;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         min-width: 0;
         display: flex;
         flex-wrap: wrap;
