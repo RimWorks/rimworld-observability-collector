@@ -61,6 +61,43 @@ public sealed class ThreadTableTests {
     }
 
     [Fact]
+    public void A_recycled_id_under_a_new_name_starts_its_busy_time_at_zero() {
+        ThreadTable table = new();
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Worker A"],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+        table.AddBusy(7, 900L);
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Worker B"],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+
+        table.Snapshot().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new ThreadInfo(7, "Worker B", (int)ThreadRole.UnityJob, 0L));
+    }
+
+    [Fact]
+    public void A_recycled_id_under_a_new_role_starts_its_busy_time_at_zero() {
+        ThreadTable table = new();
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Worker"],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+        table.AddBusy(7, 900L);
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Worker"],
+            Roles = [(int)ThreadRole.Mod],
+        });
+
+        table.Snapshot().Should().ContainSingle().Which.BusyTicks.Should().Be(0L);
+    }
+
+    [Fact]
     public void Busy_ticks_accumulate_per_lane() {
         ThreadTable table = new();
         table.Upsert(new ThreadRegistrationsBatch {
