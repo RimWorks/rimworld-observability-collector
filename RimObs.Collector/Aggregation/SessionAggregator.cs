@@ -234,12 +234,6 @@ public sealed class SessionAggregator {
         int allocLen = batch.AllocBytes.Length;
         int threadLen = batch.ThreadIds.Length;
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        Dictionary<int, int> laneByNode = new(n);
-        for (int i = 0; i < n && i < threadLen; i++) {
-            int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
-            if (nodeId != CallTreeBuilder.NoParent)
-                laneByNode[nodeId] = batch.ThreadIds[i];
-        }
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
             long elapsed = batch.ElapsedTicks[i];
@@ -255,7 +249,8 @@ public sealed class SessionAggregator {
             stats.Distribution.Record(nowEpochSeconds, elapsed);
             int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
             int parentNode = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
-            if (i < threadLen && CountsAsLaneBusy(parentId, parentNode, batch.ThreadIds[i], laneByNode))
+            // a nested child is already inside its parent's elapsed, so only roots add busy time.
+            if (i < threadLen && parentId == CallTreeBuilder.NoParent)
                 Threads.AddBusy(batch.ThreadIds[i], elapsed);
 
             long edgeKey = ((long)(uint)parentId << 32) | (uint)id;
@@ -269,12 +264,6 @@ public sealed class SessionAggregator {
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);
     }
-
-    // A child that runs inside a parent on the same lane is already inside the parent's
-    // elapsed, so only roots and children that hopped to another lane add busy time.
-    private static bool CountsAsLaneBusy(int parentId, int parentNodeId, int threadId, Dictionary<int, int> laneByNode) =>
-        parentId == CallTreeBuilder.NoParent
-        || (laneByNode.TryGetValue(parentNodeId, out int parentThread) && parentThread != threadId);
 
     private static void UpdateMin(ref long location, long value) {
         long current;

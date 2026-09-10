@@ -360,7 +360,8 @@ public sealed class FramesEndpointsTests {
             JsonElement pathfinder = threads.Single(t => t.GetProperty("id").GetInt32() == 7);
             pathfinder.GetProperty("name").GetString().Should().Be("Pathfinder");
             pathfinder.GetProperty("role").GetInt32().Should().Be(2);
-            pathfinder.GetProperty("busy_ns").GetInt64().Should().Be(20_000L);
+            // section 20 is nested under 10, so its ticks stay inside the parent's busy time.
+            pathfinder.GetProperty("busy_ns").GetInt64().Should().Be(0L);
         }
         finally {
             await app.StopAsync();
