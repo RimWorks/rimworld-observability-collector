@@ -83,6 +83,10 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         sections!.NodeIds.Should().HaveCount(sections.SectionIds.Length).And.NotContain(-1);
         sections.ParentNodeIds.Should().AllBeEquivalentTo(-1);
 
+        // regression: v9 shipped with ThreadIds never filled, so every batch decoded as v8.
+        sections.ThreadIds.Should().HaveCount(sections.SectionIds.Length)
+            .And.AllBeEquivalentTo(Environment.CurrentManagedThreadId);
+
         // regression: SamplesSent increments after Send returns, so a loopback receiver can see the
         // datagram first. poll instead of reading once. flaked on Linux CI.
         SpinWait.SpinUntil(() => sink.SamplesSent > 0, TimeSpan.FromSeconds(2));

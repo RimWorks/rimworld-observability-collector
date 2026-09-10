@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using RimWorks.RimObs.Transport;
 using FluentAssertions;
 using Xunit;
@@ -139,5 +141,26 @@ public sealed class RingBufferTests {
         ring.Drain(batch, 2).Should().Be(2);
         batch.SectionIds[0].Should().Be(0);
         ring.Drain(batch, 16).Should().Be(3);
+    }
+
+    [Fact]
+    public void Drain_reports_the_thread_that_wrote_each_sample() {
+        SampleRingBuffer ring = new(16);
+        ring.TryWrite(1, -1, 1, -1, 0L, 0L, 1).Should().BeTrue();
+
+        int otherThreadId = 0;
+        Thread other = new(() => {
+            otherThreadId = Environment.CurrentManagedThreadId;
+            ring.TryWrite(2, -1, 2, -1, 0L, 0L, 1).Should().BeTrue();
+        });
+        other.Start();
+        other.Join();
+
+        SampleBatch batch = new SampleBatch(16);
+        ring.Drain(batch, 16).Should().Be(2);
+
+        batch.ThreadIds[0].Should().Be(Environment.CurrentManagedThreadId);
+        batch.ThreadIds[1].Should().Be(otherThreadId);
+        batch.ThreadIds[1].Should().NotBe(batch.ThreadIds[0]);
     }
 }

@@ -1,7 +1,7 @@
 namespace RimWorks.RimObs.Transport;
 
 /// <summary>
-/// The eight parallel arrays a drain fills. Allocated once by the sink and reused, so the
+/// The nine parallel arrays a drain fills. Allocated once by the sink and reused, so the
 /// steady-state drain still allocates nothing.
 /// </summary>
 public sealed class SampleBatch {
@@ -15,6 +15,7 @@ public sealed class SampleBatch {
         NodeIds = new int[capacity];
         ParentNodeIds = new int[capacity];
         AllocBytes = new long[capacity];
+        ThreadIds = new int[capacity];
     }
 
     public int Capacity { get; }
@@ -26,4 +27,5 @@ public sealed class SampleBatch {
     public int[] NodeIds { get; }
     public int[] ParentNodeIds { get; }
     public long[] AllocBytes { get; }
+    public int[] ThreadIds { get; }
 }

@@ -14,6 +14,7 @@ internal sealed class SampleRingBuffer {
         public int NodeId;
         public int ParentNodeId;
         public long AllocBytes;
+        public int ThreadId;
         public long Sequence;
     }
 
@@ -50,6 +51,8 @@ internal sealed class SampleRingBuffer {
         _slots[idx].NodeId = nodeId;
         _slots[idx].ParentNodeId = parentNodeId;
         _slots[idx].AllocBytes = allocBytes;
+        // TryWrite always runs on the producing thread, so the lane is whoever is calling.
+        _slots[idx].ThreadId = Environment.CurrentManagedThreadId;
         Volatile.Write(ref _slots[idx].Sequence, seq);
         return true;
     }
@@ -70,6 +73,7 @@ internal sealed class SampleRingBuffer {
             batch.NodeIds[n] = _slots[idx].NodeId;
             batch.ParentNodeIds[n] = _slots[idx].ParentNodeId;
             batch.AllocBytes[n] = _slots[idx].AllocBytes;
+            batch.ThreadIds[n] = _slots[idx].ThreadId;
             n++;
             expected++;
         }

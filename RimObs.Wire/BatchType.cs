@@ -10,6 +10,7 @@ public enum BatchType : byte {
     SectionRegistrations = 8,
     PatchConflicts = 9,
     TpsFps = 10,
+    ThreadRegistrations = 11,
     Pong = 254,
     Ping = 255,
 }
