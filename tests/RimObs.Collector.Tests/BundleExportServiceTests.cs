@@ -211,8 +211,9 @@ public class BundleExportServiceTests {
     [Fact]
     public async Task Export_FramesEntryCarriesTheWholeRing() {
         SessionAggregator aggregator = BuildAggregator();
-        for (int ordinal = 1; ordinal <= 3; ordinal++)
+        for (int ordinal = 1; ordinal <= 2; ordinal++)
             aggregator.Frames.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
+        aggregator.Frames.Flush();
         BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
 
         BundleExportResult result = await service.ExportAsync(new BundleExportRequest {

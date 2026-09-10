@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RimWorks.RimObs.Collector.Aggregation;
 
@@ -32,35 +33,36 @@ public sealed record FrameRingStats(
     int OldestOrdinal);
 
 /// <summary>
-/// Frames cut out of the sample stream by their ordinal, newest last. Samples arrive in
-/// ordinal order because the library ring drains in write order, so one open frame is enough.
+/// Frames cut out of the sample stream by their ordinal, newest last. The library drains one
+/// thread lane per call, so a frame stays open until <see cref="OpenFrameWindow"/> newer ones land.
 /// </summary>
 public sealed class FrameRing {
     public const int DefaultCapacity = 2000;
 
+    /// <summary>
+    /// How far behind the newest ordinal a frame seals. One sender flush covers about six
+    /// frames per lane, so this leaves every lane room to report before the cut.
+    /// </summary>
+    public const int OpenFrameWindow = 16;
+
     private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
-    private readonly List<int> _openSectionIds = [];
-    private readonly List<int> _openParentIds = [];
-    private readonly List<int> _openNodeIds = [];
-    private readonly List<int> _openParentNodeIds = [];
-    private readonly List<long> _openStartTicks = [];
-    private readonly List<long> _openElapsedTicks = [];
-    private readonly List<long> _openAllocBytes = [];
-    private readonly List<int> _openThreadIds = [];
+    private readonly SortedDictionary<int, OpenFrame> _open = [];
+    private readonly int _window;
     private int _next;
     private int _count;
-    private int _openOrdinal = -1;
+    private int _newestOrdinal;
+    private int _sealedThrough;
     private long _preFrameSamples;
     private long _lateSamples;
-    private bool _openHasThreadIds;
 
     public FrameRing()
         : this(DefaultCapacity) {
     }
 
-    public FrameRing(int capacity) {
+    public FrameRing(int capacity, int openFrameWindow = OpenFrameWindow) {
         _buffer = new FrameSnapshot[Math.Max(1, capacity)];
+        _window = Math.Max(1, openFrameWindow);
     }
 
     public int Capacity => _buffer.Length;
@@ -95,24 +97,33 @@ public sealed class FrameRing {
                 _preFrameSamples++;
                 return;
             }
-            if (frameOrdinal < _openOrdinal) {
+            if (frameOrdinal <= _sealedThrough) {
                 _lateSamples++;
                 return;
             }
-            if (frameOrdinal != _openOrdinal) {
-                SealOpen();
-                _openOrdinal = frameOrdinal;
-            }
-            _openSectionIds.Add(sectionId);
-            _openParentIds.Add(parentId);
-            _openNodeIds.Add(nodeId);
-            _openParentNodeIds.Add(parentNodeId);
-            _openStartTicks.Add(startTicks);
-            _openElapsedTicks.Add(elapsedTicks);
-            _openAllocBytes.Add(allocBytes);
-            _openThreadIds.Add(threadId);
+            if (!_open.TryGetValue(frameOrdinal, out OpenFrame? open))
+                _open[frameOrdinal] = open = new OpenFrame();
+            open.SectionIds.Add(sectionId);
+            open.ParentIds.Add(parentId);
+            open.NodeIds.Add(nodeId);
+            open.ParentNodeIds.Add(parentNodeId);
+            open.StartTicks.Add(startTicks);
+            open.ElapsedTicks.Add(elapsedTicks);
+            open.AllocBytes.Add(allocBytes);
+            open.ThreadIds.Add(threadId);
             if (threadId != 0)
-                _openHasThreadIds = true;
+                open.HasThreadIds = true;
+            if (frameOrdinal > _newestOrdinal) {
+                _newestOrdinal = frameOrdinal;
+                SealThrough(_newestOrdinal - _window);
+            }
+        }
+    }
+
+    /// <summary>Seals every open frame, so a stopped stream still lands its newest frames.</summary>
+    public void Flush() {
+        lock (_gate) {
+            SealThrough(int.MaxValue);
         }
     }
 
@@ -304,24 +315,36 @@ public sealed class FrameRing {
         lock (_gate) {
             _next = 0;
             _count = 0;
-            _openOrdinal = -1;
+            _newestOrdinal = 0;
+            _sealedThrough = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
-            ClearOpen();
+            _open.Clear();
         }
     }
 
-    private void SealOpen() {
-        if (_openOrdinal < 0 || _openSectionIds.Count == 0) {
-            ClearOpen();
-            return;
+    // seals open frames up to and including `watermark`, oldest first so the ring stays ascending.
+    private void SealThrough(int watermark) {
+        while (_open.Count > 0) {
+            int ordinal = _open.Keys.First();
+            if (ordinal > watermark)
+                return;
+            OpenFrame open = _open[ordinal];
+            _open.Remove(ordinal);
+            _sealedThrough = ordinal;
+            Seal(ordinal, open);
         }
+    }
+
+    private void Seal(int ordinal, OpenFrame open) {
+        if (open.SectionIds.Count == 0)
+            return;
 
         long start = long.MaxValue;
         long end = long.MinValue;
-        for (int i = 0; i < _openStartTicks.Count; i++) {
-            long nodeStart = _openStartTicks[i];
-            long nodeEnd = nodeStart + _openElapsedTicks[i];
+        for (int i = 0; i < open.StartTicks.Count; i++) {
+            long nodeStart = open.StartTicks[i];
+            long nodeEnd = nodeStart + open.ElapsedTicks[i];
             if (nodeStart < start)
                 start = nodeStart;
             if (nodeEnd > end)
@@ -329,33 +352,32 @@ public sealed class FrameRing {
         }
 
         _buffer[_next] = new FrameSnapshot(
-            _openOrdinal,
+            ordinal,
             start,
             end,
-            [.. _openSectionIds],
-            [.. _openParentIds],
-            [.. _openNodeIds],
-            [.. _openParentNodeIds],
-            [.. _openStartTicks],
-            [.. _openElapsedTicks],
-            [.. _openAllocBytes],
+            [.. open.SectionIds],
+            [.. open.ParentIds],
+            [.. open.NodeIds],
+            [.. open.ParentNodeIds],
+            [.. open.StartTicks],
+            [.. open.ElapsedTicks],
+            [.. open.AllocBytes],
             // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
-            _openHasThreadIds ? [.. _openThreadIds] : []);
+            open.HasThreadIds ? [.. open.ThreadIds] : []);
         _next = (_next + 1) % _buffer.Length;
         if (_count < _buffer.Length)
             _count++;
-        ClearOpen();
     }
 
-    private void ClearOpen() {
-        _openSectionIds.Clear();
-        _openParentIds.Clear();
-        _openNodeIds.Clear();
-        _openParentNodeIds.Clear();
-        _openStartTicks.Clear();
-        _openElapsedTicks.Clear();
-        _openAllocBytes.Clear();
-        _openThreadIds.Clear();
-        _openHasThreadIds = false;
+    private sealed class OpenFrame {
+        public readonly List<int> SectionIds = [];
+        public readonly List<int> ParentIds = [];
+        public readonly List<int> NodeIds = [];
+        public readonly List<int> ParentNodeIds = [];
+        public readonly List<long> StartTicks = [];
+        public readonly List<long> ElapsedTicks = [];
+        public readonly List<long> AllocBytes = [];
+        public readonly List<int> ThreadIds = [];
+        public bool HasThreadIds;
     }
 }

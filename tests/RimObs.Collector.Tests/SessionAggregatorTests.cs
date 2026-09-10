@@ -69,17 +69,7 @@ public sealed class SessionAggregatorTests {
             ParentNodeIds = [-1],
             AllocBytes = [512L],
         });
-        // a frame seals when the next ordinal arrives.
-        agg.OnSectionBatch(new SectionBatch {
-            SectionIds = [7],
-            ElapsedTicks = [100L],
-            StartTimestamps = [400L],
-            ParentIds = [-1],
-            FrameOrdinals = [2],
-            NodeIds = [2],
-            ParentNodeIds = [-1],
-            AllocBytes = [0L],
-        });
+        agg.Frames.Flush();
 
         agg.Frames.FindByOrdinal(1)!.NodeAllocBytes.Should().Equal(512L);
     }
@@ -238,7 +228,8 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [500L, 400L],
             FrameOrdinals = [5000, 5001],
         });
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5000);
+        aggregator.Frames.Flush();
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5001);
 
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
         aggregator.OnSectionBatch(new SectionBatch {
@@ -248,8 +239,9 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [50L, 40L],
             FrameOrdinals = [1, 2],
         });
+        aggregator.Frames.Flush();
 
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
         aggregator.Frames.LateSamples.Should().Be(0);
     }
 
@@ -266,9 +258,10 @@ public sealed class SessionAggregatorTests {
         });
 
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
+        aggregator.Frames.Flush();
 
-        aggregator.Frames.Count.Should().Be(1);
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
+        aggregator.Frames.Count.Should().Be(2);
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
     }
 
     [Fact]
@@ -281,8 +274,9 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [500L, 200L, 400L],
             FrameOrdinals = [1, 1, 2],
         });
+        aggregator.Frames.Flush();
 
-        FrameSnapshot? frame = aggregator.Frames.Latest();
+        FrameSnapshot? frame = aggregator.Frames.FindByOrdinal(1);
 
         frame.Should().NotBeNull();
         frame!.CaptureOrdinal.Should().Be(1);

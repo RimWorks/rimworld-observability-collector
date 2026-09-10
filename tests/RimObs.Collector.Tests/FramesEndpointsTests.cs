@@ -37,12 +37,13 @@ public sealed class FramesEndpointsTests {
             AnchorTimestamp = 0L,
         });
         aggregator.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 20, 10],
-            ParentIds = [-1, 10, -1],
-            StartTimestamps = [100L, 150L, 700L],
-            ElapsedTicks = [500L, 200L, 400L],
-            FrameOrdinals = [1, 1, 2],
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
         });
+        aggregator.Frames.Flush();
         await app.StartAsync();
 
         try {
@@ -74,12 +75,13 @@ public sealed class FramesEndpointsTests {
             AnchorTimestamp = 1000L,
         });
         aggregator.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 20, 10],
-            ParentIds = [-1, 10, -1],
-            StartTimestamps = [1100L, 1150L, 1700L],
-            ElapsedTicks = [500L, 200L, 400L],
-            FrameOrdinals = [1, 1, 2],
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            StartTimestamps = [1100L, 1150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
         });
+        aggregator.Frames.Flush();
         await app.StartAsync();
 
         try {
@@ -116,14 +118,15 @@ public sealed class FramesEndpointsTests {
             AnchorTimestamp = 0L,
         });
         aggregator.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 20, 10],
-            ParentIds = [-1, 10, -1],
-            NodeIds = [500, 501, 502],
-            ParentNodeIds = [-1, 500, -1],
-            StartTimestamps = [100L, 150L, 700L],
-            ElapsedTicks = [500L, 200L, 400L],
-            FrameOrdinals = [1, 1, 2],
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            NodeIds = [500, 501],
+            ParentNodeIds = [-1, 500],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
         });
+        aggregator.Frames.Flush();
         await app.StartAsync();
 
         try {
@@ -219,12 +222,13 @@ public sealed class FramesEndpointsTests {
             AnchorTimestamp = 0L,
         });
         aggregator.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 10, 10, 10, 10, 10],
-            ParentIds = [-1, -1, -1, -1, -1, -1],
-            StartTimestamps = [100L, 1100L, 2100L, 3100L, 4100L, 5100L],
-            ElapsedTicks = [500L, 500L, 500L, 500L, 500L, 500L],
-            FrameOrdinals = [1, 2, 3, 4, 5, 6],
+            SectionIds = [10, 10, 10, 10, 10],
+            ParentIds = [-1, -1, -1, -1, -1],
+            StartTimestamps = [100L, 1100L, 2100L, 3100L, 4100L],
+            ElapsedTicks = [500L, 500L, 500L, 500L, 500L],
+            FrameOrdinals = [1, 2, 3, 4, 5],
         });
+        aggregator.Frames.Flush();
     }
 
     private static int[] Ordinals(JsonDocument doc) {
@@ -337,9 +341,10 @@ public sealed class FramesEndpointsTests {
             ParentNodeIds = [-1, 1, -1],
             StartTimestamps = [100L, 150L, 700L],
             ElapsedTicks = [500L, 200L, 400L],
-            FrameOrdinals = [1, 1, 2],
+            FrameOrdinals = [1, 1, 1],
             ThreadIds = [1, 7, 1],
         });
+        aggregator.Frames.Flush();
         await app.StartAsync();
 
         try {
@@ -348,7 +353,7 @@ public sealed class FramesEndpointsTests {
             using JsonDocument doc = JsonDocument.Parse(body);
 
             JsonElement threadIds = doc.RootElement.GetProperty("frame").GetProperty("nodes").GetProperty("thread_ids");
-            threadIds.EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1, 7);
+            threadIds.EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1, 7, 1);
 
             JsonElement[] threads = [.. doc.RootElement.GetProperty("threads").EnumerateArray()];
             threads.Length.Should().Be(2);
@@ -380,12 +385,13 @@ public sealed class FramesEndpointsTests {
             AnchorTimestamp = 0L,
         });
         aggregator.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 20, 10],
-            ParentIds = [-1, 10, -1],
-            StartTimestamps = [100L, 150L, 700L],
-            ElapsedTicks = [500L, 200L, 400L],
-            FrameOrdinals = [1, 1, 2],
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
         });
+        aggregator.Frames.Flush();
         await app.StartAsync();
 
         try {
