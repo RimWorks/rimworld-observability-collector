@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using RimWorks.RimObs.Transport;
 using FluentAssertions;
@@ -203,6 +204,42 @@ public sealed class RingBufferTests {
 
         set.LaneCount.Should().Be(1);
         set.Dropped.Should().Be(16);
+    }
+
+    [Fact]
+    public void Reaping_a_lane_reports_the_thread_id_it_freed() {
+        SampleRingSet set = new(16);
+        List<int> reaped = new();
+        set.LaneReaped = id => reaped.Add(id);
+
+        int workerId = 0;
+        Thread worker = new(() => {
+            workerId = Environment.CurrentManagedThreadId;
+            set.TryWrite(1, -1, 0, -1, 0, 0, 1);
+        });
+        worker.Start();
+        worker.Join();
+
+        SampleBatch batch = new SampleBatch(16);
+        while (set.Drain(batch, 16) > 0) { }
+
+        reaped.Should().Equal(workerId);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Steady_state_writes_allocate_nothing() {
+        SampleRingSet set = new(16384);
+        SampleBatch batch = new SampleBatch(256);
+        set.TryWrite(0, -1, 0, -1, 0L, 0L, 1);
+        set.Drain(batch, 256);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 10_000; i++)
+            set.TryWrite(i, -1, i, -1, i, 1L, 1, 0L);
+        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        delta.Should().Be(0);
     }
 
     [Fact]

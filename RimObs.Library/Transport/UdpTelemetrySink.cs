@@ -75,6 +75,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         _ownerId = ownerId ?? throw new ArgumentNullException(nameof(ownerId));
         _client = new UdpClient(AddressFamily.InterNetwork);
         _endpoint = new IPEndPoint(IPAddress.Parse(host), port);
+        _ring.LaneReaped = ForgetLane;
         _sender = new Thread(SenderLoop) {
             Name = "RimObs.UdpSender",
             IsBackground = true,
@@ -326,6 +327,14 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             _threadRegistrationRoles[_threadRegistrationStaged] = (int)RoleFor(id, name);
             _threadRegistrationStaged++;
         }
+    }
+
+    /// <summary>
+    /// Drops a reaped lane's id so a thread that later inherits it announces its own name and role
+    /// instead of the dead thread's. Runs on the sender thread, inside <see cref="FlushSamples"/>.
+    /// </summary>
+    private void ForgetLane(int threadId) {
+        _knownThreadIds.Remove(threadId);
     }
 
     private ThreadRole RoleFor(int threadId, string name) {

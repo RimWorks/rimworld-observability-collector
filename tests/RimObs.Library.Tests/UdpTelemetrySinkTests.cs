@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -182,6 +183,97 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         lanes.Should().NotBeNull();
         lanes!.Names.Should().Equal("SomeMod.Background");
         lanes.Roles.Should().Equal((int)ThreadRole.Mod);
+    }
+
+    /// <summary>
+    /// Starts a named thread that writes one sample, waits for it to exit, and returns the managed
+    /// thread id it ran on. The Thread object dies with this frame so a GC can recycle that id.
+    /// </summary>
+    private static int RunProducer(UdpTelemetrySink sink, int sectionId, string name) {
+        int id = 0;
+        Thread producer = new(() => {
+            id = Environment.CurrentManagedThreadId;
+            sink.RecordSection(sectionId, parentId: -1, nodeId: 1, parentNodeId: -1, startTimestamp: 1, elapsedTicks: 100, allocBytes: 0L);
+        }) {
+            Name = name,
+            IsBackground = true,
+        };
+        producer.Start();
+        producer.Join(TimeSpan.FromSeconds(5));
+        return id;
+    }
+
+    [Fact]
+    public void A_recycled_thread_id_is_announced_again_under_its_new_lane_name() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 250;
+
+        List<(int Id, string Name)> announced = new();
+        using CancellationTokenSource stop = new();
+        Thread listener = new(() => {
+            IPEndPoint any = new(IPAddress.Any, 0);
+            while (!stop.IsCancellationRequested) {
+                try {
+                    byte[] bytes = receiver.Receive(ref any);
+                    TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
+                    if (envelope.BatchType != BatchType.ThreadRegistrations)
+                        continue;
+                    ThreadRegistrationsBatch lanes = WireCodec.Deserialize<ThreadRegistrationsBatch>(envelope.Payload);
+                    lock (announced) {
+                        for (int i = 0; i < lanes.ThreadIds.Length; i++)
+                            announced.Add((lanes.ThreadIds[i], lanes.Names[i]));
+                    }
+                }
+                catch (SocketException) {
+                }
+                catch (ObjectDisposedException) {
+                    return;
+                }
+            }
+        }) {
+            IsBackground = true,
+        };
+        listener.Start();
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        sink.Start();
+        SectionHandle handle = SectionRegistry.Register("test.recycled-lane");
+
+        List<(int Id, string Name)> produced = new();
+        for (int i = 0; i < 4; i++) {
+            string name = $"Lane.Recycled{i}";
+            produced.Add((RunProducer(sink, handle.Id, name), name));
+            // the sender needs a drain pass to reap the dead lane; only then does the Thread object
+            // drop out of the lane array and the runtime hand its id to the next thread.
+            Thread.Sleep(400);
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+
+        Thread.Sleep(400);
+        stop.Cancel();
+        listener.Join(TimeSpan.FromSeconds(2));
+
+        (int Id, string Name)? reuse = null;
+        for (int i = 1; i < produced.Count && reuse == null; i++) {
+            for (int j = 0; j < i; j++) {
+                if (produced[j].Id == produced[i].Id) {
+                    reuse = produced[i];
+                    break;
+                }
+            }
+        }
+
+        reuse.Should().NotBeNull("the runtime should hand a dead thread's managed id to a later thread");
+
+        // regression: the sink deduped announcements by thread id forever, so a recycled id kept the
+        // dead thread's name and role on the collector side.
+        lock (announced)
+            announced.Should().Contain(reuse!.Value);
     }
 
     [Fact]

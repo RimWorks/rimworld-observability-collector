@@ -109,6 +109,12 @@ internal sealed class SampleRingSet {
         _lane = new ThreadLocal<SampleRingBuffer>(AddLane);
     }
 
+    /// <summary>
+    /// Called on the draining thread when a dead thread's lane is dropped, so a consumer can forget
+    /// state it keyed on that managed thread id. The runtime hands recycled ids to new threads.
+    /// </summary>
+    public Action<int>? LaneReaped { get; set; }
+
     public int LaneCapacity => _laneCapacity;
     public int LaneCount => Volatile.Read(ref _lanes).Length;
 
@@ -188,5 +194,6 @@ internal sealed class SampleRingSet {
         }
         while (Interlocked.CompareExchange(ref _lanes, shrunk, old) != old);
         Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped);
+        LaneReaped?.Invoke(lane.Owner.ManagedThreadId);
     }
 }
