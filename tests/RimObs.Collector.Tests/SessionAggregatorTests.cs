@@ -708,21 +708,31 @@ public sealed class SessionAggregatorSubsystemTests {
     }
 
     [Fact]
-    public void OnSectionBatch_counts_a_child_that_ran_on_another_lane() {
+    public void OnSectionBatch_skips_a_child_whose_parent_arrived_in_an_earlier_batch() {
         SessionAggregator agg = new();
 
         agg.OnSectionBatch(new SectionBatch {
-            SectionIds = [10, 20],
-            ParentIds = [-1, 10],
-            NodeIds = [1, 2],
-            ParentNodeIds = [-1, 1],
-            StartTimestamps = [100L, 150L],
-            ElapsedTicks = [500L, 200L],
-            FrameOrdinals = [1, 1],
-            ThreadIds = [1, 7],
+            SectionIds = [10],
+            ParentIds = [-1],
+            NodeIds = [1],
+            ParentNodeIds = [-1],
+            StartTimestamps = [100L],
+            ElapsedTicks = [500L],
+            FrameOrdinals = [1],
+            ThreadIds = [1],
+        });
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [20],
+            ParentIds = [10],
+            NodeIds = [2],
+            ParentNodeIds = [1],
+            StartTimestamps = [150L],
+            ElapsedTicks = [200L],
+            FrameOrdinals = [1],
+            ThreadIds = [1],
         });
 
         agg.Threads.Snapshot().Single(t => t.Id == 1).BusyTicks.Should().Be(500L);
-        agg.Threads.Snapshot().Single(t => t.Id == 7).BusyTicks.Should().Be(200L);
     }
 }
