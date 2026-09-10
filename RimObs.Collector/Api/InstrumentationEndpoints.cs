@@ -48,6 +48,27 @@ public static class InstrumentationEndpoints {
             });
         });
 
+        // a dry run, so the dashboard can say how wide a filter is before it reaches the game.
+        endpoints.MapPost("/api/v1/instrumentation/auto/preview", async (HttpContext ctx, SessionMetaRegistry registry) => {
+            if (!registry.IsAvailable)
+                return Unavailable();
+            (ControlAutoPreviewRequest? req, IResult? error) = await RequestBody.Read<ControlAutoPreviewRequest>(ctx, "auto preview");
+            if (error is not null)
+                return error;
+            ControlClient client = new(registry.ControlPort, registry.ControlSecret);
+            ControlAutoPreviewResponse res;
+            try {
+                res = await client.AutoPreviewAsync(req!);
+            }
+            catch (ControlClientException ex) {
+                return ControlFailed(ex);
+            }
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                preview = res,
+            });
+        });
+
         endpoints.MapPost("/api/v1/instrumentation/patch", async (HttpContext ctx, SessionMetaRegistry registry, DynamicPatchStore store) => {
             if (!registry.IsAvailable)
                 return Unavailable();

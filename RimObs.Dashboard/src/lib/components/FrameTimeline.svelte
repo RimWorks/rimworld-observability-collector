@@ -652,7 +652,7 @@
         color: var(--cyan);
     }
     .reset:disabled {
-        opacity: 0.4;
+        color: var(--text-ghost);
         cursor: default;
     }
     canvas {
@@ -703,7 +703,7 @@
     }
     .meta span + span::before {
         content: ' · ';
-        color: var(--border-strong);
+        color: var(--text-ghost);
     }
     .tip {
         position: fixed;

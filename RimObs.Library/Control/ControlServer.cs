@@ -73,6 +73,7 @@ internal sealed class ControlServer {
         if (method == "POST" && path == "/patch") { HandlePatch(ctx); return; }
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
         if (method == "GET" && path == "/auto") { HandleAutoInstrument(ctx); return; }
+        if (method == "POST" && path == "/auto/preview") { HandleAutoPreview(ctx); return; }
         if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
         if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
         if (method == "DELETE" && path.StartsWith("/patch/", StringComparison.Ordinal)) {
@@ -156,6 +157,35 @@ internal sealed class ControlServer {
             SkippedOther = AutoInstrumentRunner.SkippedOther,
             Refused = AutoInstrumentRunner.Refused,
             Pending = AutoInstrumentRunner.Pending,
+        }));
+    }
+
+    /// <summary>
+    /// Counts a filter list against the loaded assemblies and patches nothing. Runs on the game
+    /// thread because the scan reads the section catalog the patcher writes.
+    /// </summary>
+    private static void HandleAutoPreview(HttpListenerContext ctx) {
+        byte[] body = ReadBody(ctx);
+        ControlAutoPreviewRequest req = WireCodec.Deserialize<ControlAutoPreviewRequest>(body);
+
+        AutoInstrumentPlan? plan = null;
+        ControlOp op = new ControlOp(
+            ControlOpKind.Patch,
+            () => plan = AutoInstrumentRunner.Preview(req.Filters, req.Ignore));
+        ControlServices.Queue.Enqueue(op);
+        if (!op.Wait(TimeSpan.FromSeconds(10)) || plan is null) {
+            ctx.Response.StatusCode = (int)HttpStatusCode.GatewayTimeout;
+            return;
+        }
+
+        WriteResponse(ctx, WireCodec.Serialize(new ControlAutoPreviewResponse {
+            Matched = plan.Matched,
+            Eligible = plan.Eligible,
+            SkippedTrivial = plan.SkippedTrivial,
+            SkippedIgnored = plan.SkippedIgnored,
+            SkippedBlocklisted = plan.SkippedBlocklisted,
+            SkippedAlreadyInstrumented = plan.SkippedAlreadyInstrumented,
+            SkippedOverCap = plan.SkippedOverCap,
         }));
     }
 

@@ -3,6 +3,7 @@
     import {
         buildBars,
         barIndexAt,
+        stepOrdinal,
         DEFAULT_STRIP_SLOTS,
         clampTooltipX,
         gridLines,
@@ -77,7 +78,7 @@
                 bad: read('--bad', '#f25d63'),
                 badDeep: read('--bad-deep', '#c2393e'),
                 selected: read('--text', '#d4dded'),
-                hover: read('--text-dim', '#9aa8c0'),
+                hover: read('--text-dim', '#93a1ba'),
                 grid: read('--border-soft', '#1c2535'),
                 line: read('--border', '#28344a'),
                 cut: read('--text-faint', '#8a98b3'),
@@ -127,6 +128,29 @@
         if (i >= 0) onSelect?.(bars[i].ordinal);
     }
 
+    // the strip is a one-dimensional pick over the ring, which is what a slider is. the role
+    // buys arrow keys and a spoken ordinal without inventing a widget.
+    function handleKeydown(e: KeyboardEvent): void {
+        const step =
+            e.key === 'ArrowLeft'
+                ? -1
+                : e.key === 'ArrowRight'
+                  ? 1
+                  : e.key === 'PageUp'
+                    ? -10
+                    : e.key === 'PageDown'
+                      ? 10
+                      : e.key === 'Home'
+                        ? -bars.length
+                        : e.key === 'End'
+                          ? bars.length
+                          : 0;
+        if (step === 0) return;
+        e.preventDefault();
+        const next = stepOrdinal(bars, selectedOrdinal, step);
+        if (next !== null) onSelect?.(next);
+    }
+
     function handleMove(e: MouseEvent): void {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         hoverX = e.clientX - rect.left;
@@ -134,6 +158,7 @@
     }
 
     let hovered = $derived<StripBar | null>(bars[hoverIndex] ?? null);
+    let current = $derived(bars.find((b) => b.ordinal === selectedOrdinal) ?? null);
     let tooltipLeft = $derived(clampTooltipX(hoverX, tooltipWidth, widthPx));
     let budgetMs = $derived((FRAME_BUDGET_US / 1000).toFixed(1));
 </script>
@@ -158,15 +183,22 @@
             {/each}
         </div>
         <div class="canvaswrap" bind:this={hostEl}>
-            <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
             <canvas
                 bind:this={canvasEl}
                 style="width:100%;height:100%"
                 onclick={handleClick}
+                onkeydown={handleKeydown}
                 onmousemove={handleMove}
                 onmouseleave={() => (hoverIndex = -1)}
-                role="img"
+                tabindex="0"
+                role="slider"
                 aria-label={t('strip.title')}
+                aria-valuemin={bars[0]?.ordinal ?? 0}
+                aria-valuemax={bars[bars.length - 1]?.ordinal ?? 0}
+                aria-valuenow={current?.ordinal ?? undefined}
+                aria-valuetext={current
+                    ? `${current.ordinal} · ${ns(current.durationUs * 1000)}`
+                    : undefined}
             ></canvas>
             {#if hovered}
                 <div
@@ -237,7 +269,7 @@
     }
     .axis em {
         right: 6px;
-        color: var(--border-strong);
+        color: var(--text-ghost);
     }
     .canvaswrap {
         position: relative;
@@ -266,6 +298,10 @@
         width: 100%;
         height: 100%;
         cursor: pointer;
+        outline: none;
+    }
+    canvas:focus-visible {
+        box-shadow: var(--ring-focus);
     }
     .hover-tip {
         position: absolute;

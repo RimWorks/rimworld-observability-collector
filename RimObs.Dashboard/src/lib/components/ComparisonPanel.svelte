@@ -387,7 +387,7 @@
         border-color: var(--cyan);
     }
     .run:disabled {
-        opacity: 0.5;
+        color: var(--text-ghost);
         cursor: not-allowed;
     }
     .info-trigger {

@@ -150,7 +150,7 @@
         font-weight: 600;
     }
     .actions .primary:disabled {
-        opacity: 0.45;
+        opacity: var(--o-disabled);
         cursor: default;
     }
 </style>

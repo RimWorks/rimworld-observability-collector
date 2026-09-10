@@ -62,6 +62,18 @@ internal static class AutoInstrumentRunner {
         return plan;
     }
 
+    /// <summary>
+    /// Counts what these filters would do without patching anything. Shares Combine and Scan
+    /// with <see cref="ApplyFilters"/>, so the number shown can never drift from the number
+    /// applied.
+    /// </summary>
+    public static AutoInstrumentPlan Preview(
+        string? filters, string? ignore, IEnumerable<Assembly>? assemblies = null
+    ) {
+        MethodPattern[] patterns = Combine(filters, ignore);
+        return AutoInstrumentScanner.Scan(assemblies ?? AssemblyIndex.Enumerate(), patterns);
+    }
+
     /// <summary>Include lines and ignore lines as one list. Ignore lines are forced negative.</summary>
     private static MethodPattern[] Combine(string? filters, string? ignore) {
         MethodPattern[] included = MethodPattern.ParseAll(filters);

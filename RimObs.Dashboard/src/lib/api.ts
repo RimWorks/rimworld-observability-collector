@@ -283,6 +283,22 @@ export interface InstrumentationAutoResponse {
     auto: AutoInstrumentCounters;
 }
 
+/** What a filter list would do. Eligible is the count that would take a timing scope. */
+export interface AutoPreviewCounts {
+    matched: number;
+    eligible: number;
+    skippedTrivial: number;
+    skippedIgnored: number;
+    skippedBlocklisted: number;
+    skippedAlreadyInstrumented: number;
+    skippedOverCap: number;
+}
+
+export interface InstrumentationAutoPreviewResponse {
+    schema_version: number;
+    preview: AutoPreviewCounts;
+}
+
 export type ExportBundleResult =
     | { kind: 'ok'; blob: Blob }
     | { kind: 'over_cap'; estimatedBytes: number; capBytes: number }
@@ -529,6 +545,23 @@ export const api = {
     instrumentationPatches: () =>
         get<InstrumentationPatchesResponse>('/api/v1/instrumentation/patches'),
     instrumentationAuto: () => get<InstrumentationAutoResponse>('/api/v1/instrumentation/auto'),
+    instrumentationAutoPreview: async (
+        filters: string,
+        ignore: string,
+    ): Promise<AutoPreviewCounts> => {
+        const res = await fetch('/api/v1/instrumentation/auto/preview', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                accept: 'application/json',
+                ...authHeaders(),
+            },
+            body: JSON.stringify({ filters, ignore }),
+        });
+        if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+        const body = (await res.json()) as InstrumentationAutoPreviewResponse;
+        return body.preview;
+    },
     instrumentationPatch: async (req: {
         typeFullName: string;
         methodName: string;

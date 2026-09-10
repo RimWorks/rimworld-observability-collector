@@ -45,6 +45,10 @@ public static class WireCodec {
                 return Serialize(v);
             case ControlPatchListResponse v:
                 return Serialize(v);
+            case ControlAutoPreviewRequest v:
+                return Serialize(v);
+            case ControlAutoPreviewResponse v:
+                return Serialize(v);
             case ControlAutoInstrumentResponse v:
                 return Serialize(v);
             default:
@@ -237,6 +241,27 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    public static byte[] Serialize(ControlAutoPreviewRequest value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(2);
+        writer.WriteString(value.Filters);
+        writer.WriteString(value.Ignore);
+        return writer.ToArray();
+    }
+
+    public static byte[] Serialize(ControlAutoPreviewResponse value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(7);
+        writer.WriteInt32(value.Matched);
+        writer.WriteInt32(value.Eligible);
+        writer.WriteInt32(value.SkippedTrivial);
+        writer.WriteInt32(value.SkippedIgnored);
+        writer.WriteInt32(value.SkippedBlocklisted);
+        writer.WriteInt32(value.SkippedAlreadyInstrumented);
+        writer.WriteInt32(value.SkippedOverCap);
+        return writer.ToArray();
+    }
+
     public static byte[] Serialize(ControlAutoInstrumentResponse value) {
         WireBufferWriter writer = new WireBufferWriter();
         writer.WriteArrayHeader(7);
@@ -271,6 +296,8 @@ public static class WireCodec {
         [typeof(ControlPatchResponse)] = data => ReadControlPatchResponse(data),
         [typeof(ControlPatchListResponse)] = data => ReadControlPatchListResponse(data),
         [typeof(ControlAutoInstrumentResponse)] = data => ReadControlAutoInstrumentResponse(data),
+        [typeof(ControlAutoPreviewRequest)] = data => ReadControlAutoPreviewRequest(data),
+        [typeof(ControlAutoPreviewResponse)] = data => ReadControlAutoPreviewResponse(data),
     };
 
     public static T Deserialize<T>(byte[] data) where T : class {
@@ -510,6 +537,29 @@ public static class WireCodec {
             };
         }
         return new ControlPatchListResponse { Patches = patches };
+    }
+
+    private static ControlAutoPreviewRequest ReadControlAutoPreviewRequest(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlAutoPreviewRequest {
+            Filters = reader.ReadString() ?? string.Empty,
+            Ignore = reader.ReadString() ?? string.Empty,
+        };
+    }
+
+    private static ControlAutoPreviewResponse ReadControlAutoPreviewResponse(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlAutoPreviewResponse {
+            Matched = reader.ReadInt32(),
+            Eligible = reader.ReadInt32(),
+            SkippedTrivial = reader.ReadInt32(),
+            SkippedIgnored = reader.ReadInt32(),
+            SkippedBlocklisted = reader.ReadInt32(),
+            SkippedAlreadyInstrumented = reader.ReadInt32(),
+            SkippedOverCap = reader.ReadInt32(),
+        };
     }
 
     private static ControlAutoInstrumentResponse ReadControlAutoInstrumentResponse(byte[] data) {

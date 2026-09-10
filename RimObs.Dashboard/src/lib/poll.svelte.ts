@@ -1,5 +1,13 @@
 export type LoadState = 'loading' | 'ok' | 'error';
 
+/**
+ * `?freeze=1` loads every panel once and then stops polling, so a screenshot tool or a
+ * design scanner can wait for the network to go quiet instead of timing out on us.
+ */
+export function isFrozen(search: string = globalThis.location?.search ?? ''): boolean {
+    return new URLSearchParams(search).has('freeze');
+}
+
 export class Resource<T> {
     data = $state<T | null>(null);
     state = $state<LoadState>('loading');
@@ -33,7 +41,7 @@ export class Resource<T> {
 
     start() {
         void this.refresh();
-        if (this.intervalMs > 0) {
+        if (this.intervalMs > 0 && !isFrozen()) {
             this.timer = setInterval(() => void this.refresh(), this.intervalMs);
         }
     }

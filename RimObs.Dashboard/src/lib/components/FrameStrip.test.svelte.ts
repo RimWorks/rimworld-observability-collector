@@ -153,3 +153,63 @@ describe('FrameStrip selection', () => {
         expect(onSelect).not.toHaveBeenCalled();
     });
 });
+
+// clicking a bar picks a frame; before this the keyboard had no way to do the same thing,
+// while the flame timeline right below it had a full arrow model.
+describe('FrameStrip keyboard selection', () => {
+    function strip(selectedOrdinal: number | null, onSelect = vi.fn()) {
+        render(FrameStrip, {
+            ordinals: ORDINALS,
+            durationsUs: DURATIONS,
+            slots: FULL,
+            selectedOrdinal,
+            onSelect,
+        });
+        return { canvas: document.querySelector('canvas') as HTMLCanvasElement, onSelect };
+    }
+
+    it('is reachable by tab and announces itself as a slider', () => {
+        const { canvas } = strip(5);
+        expect(canvas.getAttribute('tabindex')).toBe('0');
+        expect(canvas.getAttribute('role')).toBe('slider');
+        expect(canvas.getAttribute('aria-valuenow')).toBe('5');
+        expect(canvas.getAttribute('aria-valuemin')).toBe('0');
+        expect(canvas.getAttribute('aria-valuemax')).toBe('9');
+    });
+
+    it('steps one frame per arrow key', async () => {
+        const { canvas, onSelect } = strip(5);
+        await fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+        expect(onSelect).toHaveBeenCalledWith(6);
+        await fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+        expect(onSelect).toHaveBeenLastCalledWith(4);
+    });
+
+    it('jumps ten frames per page key and clamps at the ends', async () => {
+        const { canvas, onSelect } = strip(5);
+        await fireEvent.keyDown(canvas, { key: 'PageDown' });
+        expect(onSelect).toHaveBeenCalledWith(9);
+        await fireEvent.keyDown(canvas, { key: 'PageUp' });
+        expect(onSelect).toHaveBeenLastCalledWith(0);
+    });
+
+    it('sends Home to the oldest frame and End to the newest', async () => {
+        const { canvas, onSelect } = strip(5);
+        await fireEvent.keyDown(canvas, { key: 'Home' });
+        expect(onSelect).toHaveBeenCalledWith(0);
+        await fireEvent.keyDown(canvas, { key: 'End' });
+        expect(onSelect).toHaveBeenLastCalledWith(9);
+    });
+
+    it('ignores keys it does not handle', async () => {
+        const { canvas, onSelect } = strip(5);
+        await fireEvent.keyDown(canvas, { key: 'a' });
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('starts at the newest frame when nothing is selected yet', async () => {
+        const { canvas, onSelect } = strip(null);
+        await fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+        expect(onSelect).toHaveBeenCalledWith(9);
+    });
+});

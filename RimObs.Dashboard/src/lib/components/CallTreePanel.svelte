@@ -33,6 +33,7 @@
         instrumentation,
         comparison,
         patchOwners = new Map<string, string[]>(),
+        open = $bindable(false),
     }: {
         nodes: readonly TreeNode[];
         names: Map<number, { name: string; subsystem: string | null }>;
@@ -48,6 +49,8 @@
         comparison?: Snippet;
         /** other mods patching each section's target method, keyed by section name */
         patchOwners?: Map<string, string[]>;
+        /** the route shrinks the flame stage to match, so the drawer never covers it */
+        open?: boolean;
     } = $props();
 
     function ownersFor(sectionId: number): string[] {
@@ -118,6 +121,9 @@
     type TabId = (typeof TABS)[number]['id'] | (typeof SIDE_TABS)[number]['id'];
     // the drawer is shut on load and never restores a tab, so the flame owns the viewport first
     let activeTab = $state<TabId | null>(null);
+    $effect(() => {
+        open = activeTab !== null;
+    });
 
     let rows = $derived(
         (inverted ? buildInvertedRows : buildTreeRows)(nodes, {
@@ -485,7 +491,7 @@
         box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
     }
     .drawer {
-        height: 45vh;
+        height: var(--drawer-h);
         overflow: auto;
         border-bottom: 1px solid var(--border);
     }

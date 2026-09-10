@@ -18,6 +18,8 @@
         rememberIgnore,
     } from '../autoInstrumentDefaults';
     import { MIN_DEPTH, MAX_DEPTH, clampDepth } from '../captureDepth';
+    import { previewBand, isDirty, type PreviewBand } from '../autoPreview';
+    import type { AutoPreviewCounts } from '../api';
     import { MAX_SESSION_NAME, sessionLabel } from '../sessionLabel';
     import { sessionsStore } from '../sessions.svelte';
     import BundleExportForm from './BundleExportForm.svelte';
@@ -124,6 +126,48 @@
         } catch {
             config = null;
         }
+    }
+
+    // the filters used to reach the live game on blur, so a wide pattern stalled loading before
+    // you could see how wide it was. now blur only counts; Apply is what patches.
+    let draftFilters = $state<string | null>(null);
+    let draftIgnore = $state<string | null>(null);
+    let preview = $state<AutoPreviewCounts | null>(null);
+    let previewing = $state(false);
+    let previewFailed = $state(false);
+
+    let editedFilters = $derived(draftFilters ?? filtersValue);
+    let editedIgnore = $derived(draftIgnore ?? ignoreValue);
+    let dirty = $derived(
+        isDirty(editedFilters, editedIgnore, auto?.filters ?? '', auto?.ignore ?? ''),
+    );
+    let band = $derived<PreviewBand>(previewBand(preview?.eligible ?? 0));
+
+    async function runPreview(): Promise<void> {
+        previewing = true;
+        previewFailed = false;
+        try {
+            preview = await api.instrumentationAutoPreview(editedFilters, editedIgnore);
+        } catch {
+            preview = null;
+            previewFailed = true;
+        } finally {
+            previewing = false;
+        }
+    }
+
+    async function applyFilters(): Promise<void> {
+        const f = editedFilters;
+        const g = editedIgnore;
+        rememberFilters(f);
+        rememberIgnore(g);
+        await save((c) => {
+            c.auto_instrument.filters = f;
+            c.auto_instrument.ignore = g;
+        });
+        draftFilters = null;
+        draftIgnore = null;
+        preview = null;
     }
 
     let autoStatus = $state<AutoInstrumentCounters | null>(null);
@@ -307,12 +351,9 @@
                     spellcheck="false"
                     placeholder={t('settings.autoInstrument.filters.placeholder')}
                     disabled={config === null || saving || !auto?.enabled}
-                    value={filtersValue}
-                    onchange={(e) => {
-                        const v = e.currentTarget.value;
-                        rememberFilters(v);
-                        void save((c) => (c.auto_instrument.filters = v));
-                    }}
+                    value={editedFilters}
+                    oninput={(e) => (draftFilters = e.currentTarget.value)}
+                    onblur={() => void runPreview()}
                     aria-label={t('settings.autoInstrument.filters')}
                     data-testid="auto-filters"></textarea>
             </div>
@@ -327,14 +368,41 @@
                     spellcheck="false"
                     placeholder={t('settings.autoInstrument.ignore.placeholder')}
                     disabled={config === null || saving || !auto?.enabled}
-                    value={ignoreValue}
-                    onchange={(e) => {
-                        const v = e.currentTarget.value;
-                        rememberIgnore(v);
-                        void save((c) => (c.auto_instrument.ignore = v));
-                    }}
+                    value={editedIgnore}
+                    oninput={(e) => (draftIgnore = e.currentTarget.value)}
+                    onblur={() => void runPreview()}
                     aria-label={t('settings.autoInstrument.ignore')}
                     data-testid="auto-ignore"></textarea>
+            </div>
+
+            <div class="field preview">
+                <p class="count {band}" data-testid="auto-preview">
+                    {#if previewing}
+                        {t('settings.autoInstrument.preview.checking')}
+                    {:else if previewFailed}
+                        {t('settings.autoInstrument.preview.failed')}
+                    {:else if preview === null}
+                        &nbsp;
+                    {:else if preview.matched === 0}
+                        {t('settings.autoInstrument.preview.none')}
+                    {:else}
+                        {t('settings.autoInstrument.preview')
+                            .replace('{eligible}', count(preview.eligible))
+                            .replace('{matched}', count(preview.matched))}
+                        {#if band === 'bad'}
+                            <span class="heavy">{t('settings.autoInstrument.preview.heavy')}</span>
+                        {/if}
+                    {/if}
+                </p>
+                <Tooltip text={t('tip.settings.autoInstrument.apply')} align="stretch">
+                    <button
+                        type="button"
+                        class="apply"
+                        onclick={() => void applyFilters()}
+                        disabled={config === null || saving || !auto?.enabled || !dirty}
+                        data-testid="auto-apply">{t('settings.autoInstrument.apply')}</button
+                    >
+                </Tooltip>
             </div>
 
             <label class="switch">
@@ -660,8 +728,45 @@
     .text:hover:not(:disabled) {
         border-color: var(--border-strong);
     }
+    .preview {
+        gap: var(--s-2);
+    }
+    .count {
+        margin: 0;
+        font-size: 0.76rem;
+        color: var(--text-dim);
+        min-height: 1.1em;
+    }
+    .count.warn {
+        color: var(--warn);
+    }
+    .count.bad {
+        color: var(--bad);
+    }
+    .heavy {
+        display: block;
+        color: var(--text-dim);
+    }
+    .apply {
+        font: inherit;
+        font-size: 0.78rem;
+        color: var(--text);
+        background: var(--bg-surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 3px 10px;
+        cursor: pointer;
+    }
+    .apply:hover:not(:disabled) {
+        border-color: var(--cyan);
+        color: var(--cyan);
+    }
+    .apply:disabled {
+        color: var(--text-ghost);
+        cursor: default;
+    }
     .text:disabled {
-        opacity: 0.45;
+        color: var(--text-ghost);
         cursor: not-allowed;
     }
     .text::placeholder {

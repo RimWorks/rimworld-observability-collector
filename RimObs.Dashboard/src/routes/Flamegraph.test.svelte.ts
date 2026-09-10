@@ -956,14 +956,15 @@ describe('Flamegraph page', () => {
     it('keeps a frame on screen while the pinned fetch is in flight', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
-        const canvas = screen.getAllByRole('img')[0];
+        const stripCanvas = () => screen.getByTestId('frame-strip').querySelector('canvas');
+        const canvas = stripCanvas();
 
         await fireEvent.click(screen.getByTestId('pause'));
 
         expect(screen.queryByText(/no frames yet/i)).toBeNull();
         expect(screen.getByTestId('frame-duration')).toBeInTheDocument();
         await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
-        expect(screen.getAllByRole('img')[0]).toBe(canvas);
+        expect(stripCanvas()).toBe(canvas);
     });
 
     // stepping reads a specific ordinal, so the card must follow the step, not the poller.
@@ -1252,6 +1253,7 @@ describe('Flamegraph clear history', () => {
         await screen.findByTestId('clear-ring');
 
         await fireEvent.click(screen.getByTestId('clear-ring'));
+        await fireEvent.click(screen.getByTestId('clear-ring'));
 
         const posted = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
             .map((c) => ({ url: requestUrl(c[0] as RequestInfo), init: c[1] as RequestInit }))
@@ -1268,6 +1270,7 @@ describe('Flamegraph clear history', () => {
         await fireEvent.click(screen.getByTestId('pause'));
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
 
+        await fireEvent.click(screen.getByTestId('clear-ring'));
         await fireEvent.click(screen.getByTestId('clear-ring'));
 
         expect(screen.queryByTestId('paused-badge')).toBeNull();
@@ -1466,5 +1469,86 @@ describe('Flamegraph frame history selection', () => {
             const calls = vi.mocked(drawStrip).mock.calls;
             expect(calls.at(-1)?.[2].selectedOrdinal).toBe(4319);
         });
+    });
+});
+
+// the ring is the only copy of what you just captured, and this button sits next to
+// New session in identical styling. one wrong click used to be unrecoverable.
+describe('Flamegraph clear history confirm', () => {
+    it('arms on the first click and names the frame count', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const btn = screen.getByTestId('clear-ring');
+        expect(btn.textContent).toContain('Clear history');
+
+        await fireEvent.click(btn);
+
+        expect(btn.textContent).toContain('2,000');
+        expect(btn.textContent).toContain('frames?');
+    });
+
+    it('does not call the api until the second click', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const clears = () =>
+            vi
+                .mocked(globalThis.fetch)
+                .mock.calls.filter((c) =>
+                    requestUrl(c[0] as RequestInfo).includes('/api/v1/frames/clear'),
+                ).length;
+
+        await fireEvent.click(screen.getByTestId('clear-ring'));
+        expect(clears()).toBe(0);
+
+        await fireEvent.click(screen.getByTestId('clear-ring'));
+        await waitFor(() => expect(clears()).toBeGreaterThan(0));
+    });
+
+    it('disarms when the button loses focus', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const btn = screen.getByTestId('clear-ring');
+
+        await fireEvent.click(btn);
+        expect(btn.textContent).toContain('frames?');
+        await fireEvent.blur(btn);
+
+        expect(btn.textContent).toContain('Clear history');
+    });
+});
+
+// the drawer used to be a fixed 45vh panel over a fixed 600px stage, so opening the call tree
+// hid the flame it describes on any laptop.
+describe('Flamegraph stage and drawer share the viewport', () => {
+    it('leaves the stage at full height while the drawer is shut', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        expect(document.querySelector('.stage')?.classList.contains('split')).toBe(false);
+    });
+
+    it('shrinks the stage when a tab opens the drawer', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await openTree();
+
+        await waitFor(() =>
+            expect(document.querySelector('.stage')?.classList.contains('split')).toBe(true),
+        );
+    });
+
+    it('restores the stage when the drawer closes', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await openTree();
+        await waitFor(() =>
+            expect(document.querySelector('.stage')?.classList.contains('split')).toBe(true),
+        );
+
+        await fireEvent.click(screen.getByTestId('tree-close'));
+
+        await waitFor(() =>
+            expect(document.querySelector('.stage')?.classList.contains('split')).toBe(false),
+        );
     });
 });

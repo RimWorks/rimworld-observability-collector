@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Resource } from './poll.svelte';
+import { Resource, isFrozen } from './poll.svelte';
 
 afterEach(() => vi.useRealTimers());
 
@@ -107,5 +107,42 @@ describe('Resource start/stop', () => {
         expect(started).toBe(2);
 
         res.stop();
+    });
+});
+
+// a scanner or a screenshot tool waits for the network to go quiet, and a 3s poll never lets
+// it. freeze keeps the first load, which is what makes the capture worth looking at.
+describe('isFrozen', () => {
+    it('is off with no query string', () => {
+        expect(isFrozen('')).toBe(false);
+    });
+
+    it('is on for a bare freeze flag', () => {
+        expect(isFrozen('?freeze')).toBe(true);
+    });
+
+    it('is on for freeze=1 alongside other params', () => {
+        expect(isFrozen('?lang=de&freeze=1')).toBe(true);
+    });
+
+    it('ignores a param that merely starts with freeze', () => {
+        expect(isFrozen('?freezer=1')).toBe(false);
+    });
+});
+
+describe('Resource.start when frozen', () => {
+    it('loads once and schedules no interval', async () => {
+        const spy = vi.spyOn(globalThis, 'setInterval');
+        vi.stubGlobal('location', { search: '?freeze=1' } as Location);
+        let calls = 0;
+        const res = new Resource(async () => ++calls, 50);
+
+        res.start();
+        await vi.waitFor(() => expect(calls).toBe(1));
+
+        expect(spy).not.toHaveBeenCalled();
+        res.stop();
+        vi.unstubAllGlobals();
+        spy.mockRestore();
     });
 });

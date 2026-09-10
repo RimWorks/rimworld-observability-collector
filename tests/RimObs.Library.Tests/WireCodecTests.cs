@@ -634,7 +634,39 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(18);
+        AllWireTypes().Count.Should().Be(20);
+    }
+
+    // the preview is only trustworthy if every counter survives the wire, so this asserts the
+    // field order rather than just that a value came back.
+    [Fact]
+    public void Auto_preview_response_round_trips_every_counter() {
+        ControlAutoPreviewResponse sent = new() {
+            Matched = 22411,
+            Eligible = 12003,
+            SkippedTrivial = 9001,
+            SkippedIgnored = 700,
+            SkippedBlocklisted = 400,
+            SkippedAlreadyInstrumented = 200,
+            SkippedOverCap = 107,
+        };
+
+        ControlAutoPreviewResponse back =
+            WireCodec.Deserialize<ControlAutoPreviewResponse>(WireCodec.Serialize(sent));
+
+        back.Should().BeEquivalentTo(sent);
+    }
+
+    [Fact]
+    public void Auto_preview_request_round_trips_both_filter_lists() {
+        ControlAutoPreviewRequest sent = new() {
+            Filters = "Assembly-CSharp!Verse.Map::*",
+            Ignore = "Assembly-CSharp!Verse.Log::*",
+        };
+
+        ControlAutoPreviewRequest back =
+            WireCodec.Deserialize<ControlAutoPreviewRequest>(WireCodec.Serialize(sent));
+
+        back.Should().BeEquivalentTo(sent);
     }
 }
-

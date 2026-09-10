@@ -50,6 +50,23 @@ function mockConfig(doc: Record<string, unknown> = configDoc()) {
     let current = doc;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : (input as Request).url;
+        if (url.includes('/api/v1/instrumentation/auto/preview')) {
+            return new Response(
+                JSON.stringify({
+                    schema_version: 1,
+                    preview: {
+                        matched: 22411,
+                        eligible: 12003,
+                        skippedTrivial: 9001,
+                        skippedIgnored: 700,
+                        skippedBlocklisted: 400,
+                        skippedAlreadyInstrumented: 200,
+                        skippedOverCap: 107,
+                    },
+                }),
+                { status: 200 },
+            );
+        }
         if (url.includes('/api/v1/config')) {
             if (init?.method === 'POST') current = JSON.parse(init.body as string);
             return new Response(JSON.stringify(current), { status: 200 });
@@ -384,29 +401,128 @@ describe('SettingsPopover profiling controls', () => {
         expect((screen.getByTestId('auto-ignore') as HTMLTextAreaElement).disabled).toBe(true);
     });
 
-    it('posts the filter and ignore lists once auto-instrumentation is on', async () => {
+    // typing used to write straight to the live collector, so a filter as wide as
+    // Assembly-CSharp!* reached the game before you could see it matched 22,000 methods.
+    it('writes nothing to the collector while you type a filter', async () => {
         await open(
             configDoc({
                 auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
             }),
         );
 
-        await fireEvent.change(screen.getByTestId('auto-filters'), {
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
             target: { value: 'Assembly-CSharp!Verse.Map::*' },
         });
-        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        await fireEvent.blur(screen.getByTestId('auto-filters'));
 
-        await fireEvent.change(screen.getByTestId('auto-ignore'), {
+        expect(configPosts()).toHaveLength(0);
+    });
+
+    it('counts the match on blur without patching anything', async () => {
+        await open(
+            configDoc({
+                auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
+            }),
+        );
+
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!Verse.Map::*' },
+        });
+        await fireEvent.blur(screen.getByTestId('auto-filters'));
+
+        await waitFor(() =>
+            expect(
+                vi
+                    .mocked(globalThis.fetch)
+                    .mock.calls.filter((c) =>
+                        String(c[0]).includes('/api/v1/instrumentation/auto/preview'),
+                    ),
+            ).not.toHaveLength(0),
+        );
+        expect(configPosts()).toHaveLength(0);
+    });
+
+    // the first cut of this read preview.Eligible while the collector sends camelCase, so the
+    // line rendered blank. asserting the fetch fired was not enough; assert the number lands.
+    it('renders the counted number, not just the request', async () => {
+        await open(
+            configDoc({
+                auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
+            }),
+        );
+
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!*' },
+        });
+        await fireEvent.blur(screen.getByTestId('auto-filters'));
+
+        const line = await screen.findByTestId('auto-preview');
+        await waitFor(() => expect(line.textContent).toContain('12,003'));
+        expect(line.textContent).toContain('22,411');
+    });
+
+    it('marks a wide filter as the expensive one', async () => {
+        await open(
+            configDoc({
+                auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
+            }),
+        );
+
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!*' },
+        });
+        await fireEvent.blur(screen.getByTestId('auto-filters'));
+
+        const line = await screen.findByTestId('auto-preview');
+        await waitFor(() => expect(line.classList.contains('bad')).toBe(true));
+        expect(line.textContent).toContain('stall loading');
+    });
+
+    it('posts both lists in one write when Apply is pressed', async () => {
+        await open(
+            configDoc({
+                auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
+            }),
+        );
+
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!Verse.Map::*' },
+        });
+        await fireEvent.input(screen.getByTestId('auto-ignore'), {
             target: { value: 'Assembly-CSharp!Verse.Log::*' },
         });
-        await waitFor(() => expect(configPosts()).toHaveLength(2));
+        await fireEvent.click(screen.getByTestId('auto-apply'));
 
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
         expect(configPosts()[0]).toMatchObject({
-            auto_instrument: { filters: 'Assembly-CSharp!Verse.Map::*' },
+            auto_instrument: {
+                filters: 'Assembly-CSharp!Verse.Map::*',
+                ignore: 'Assembly-CSharp!Verse.Log::*',
+            },
         });
-        expect(configPosts()[1]).toMatchObject({
-            auto_instrument: { ignore: 'Assembly-CSharp!Verse.Log::*' },
+    });
+
+    // an empty list on the collector is seeded with a suggested default, which legitimately
+    // leaves Apply live. both lists are set here so nothing is seeded and clean means clean.
+    it('leaves Apply disabled until the filters differ from what is applied', async () => {
+        await open(
+            configDoc({
+                auto_instrument: {
+                    enabled: true,
+                    filters: 'Assembly-CSharp!Verse.Map::*',
+                    ignore: 'Assembly-CSharp!Verse.Log::*',
+                    mute_trivial: true,
+                },
+            }),
+        );
+
+        expect(screen.getByTestId('auto-apply')).toBeDisabled();
+
+        await fireEvent.input(screen.getByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!*' },
         });
+
+        await waitFor(() => expect(screen.getByTestId('auto-apply')).not.toBeDisabled());
     });
 
     it('posts the auto-mute toggle', async () => {

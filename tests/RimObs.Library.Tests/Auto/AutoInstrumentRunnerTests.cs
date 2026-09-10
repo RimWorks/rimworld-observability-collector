@@ -138,6 +138,51 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
         AutoInstrumentRunner.Pump();
     }
 
+    // the whole point of the preview is that the count the dashboard shows is the count that
+    // gets applied, so these assert Preview against ApplyFilters on the same filters.
+    [Fact]
+    public void Preview_reports_the_same_counts_ApplyFilters_would() {
+        AutoInstrumentPlan preview = AutoInstrumentRunner.Preview(
+            "RimObsTest.AutoFixtures.AutoTargets", ignore: null, s_Here);
+
+        AutoInstrumentPlan applied = Apply("RimObsTest.AutoFixtures.AutoTargets");
+
+        preview.Matched.Should().Be(applied.Matched);
+        preview.Eligible.Should().Be(applied.Eligible);
+        preview.SkippedTrivial.Should().Be(applied.SkippedTrivial);
+    }
+
+    [Fact]
+    public void Preview_patches_nothing_and_queues_nothing() {
+        AutoInstrumentRunner.Preview("RimObsTest.AutoFixtures.AutoTargets", ignore: null, s_Here);
+
+        AutoInstrumentRunner.Pending.Should().Be(0);
+        AutoInstrumentRunner.Instrumented.Should().Be(0);
+        AutoInstrumentRunner.Matched.Should().Be(0);
+    }
+
+    [Fact]
+    public void Preview_counts_an_ignore_line_as_skipped_rather_than_eligible() {
+        AutoInstrumentPlan wide = AutoInstrumentRunner.Preview(
+            "RimObsTest.AutoFixtures.AutoTargets", ignore: null, s_Here);
+
+        AutoInstrumentPlan narrowed = AutoInstrumentRunner.Preview(
+            "RimObsTest.AutoFixtures.AutoTargets",
+            "RimObsTest.AutoFixtures.AutoTargets::Worthwhile",
+            s_Here);
+
+        narrowed.SkippedIgnored.Should().BeGreaterThan(0);
+        narrowed.Eligible.Should().BeLessThan(wide.Eligible);
+    }
+
+    [Fact]
+    public void Preview_on_an_empty_filter_matches_nothing() {
+        AutoInstrumentPlan plan = AutoInstrumentRunner.Preview(null, null, s_Here);
+
+        plan.Matched.Should().Be(0);
+        plan.Eligible.Should().Be(0);
+    }
+
     private static AutoInstrumentPlan Apply(string filters) =>
         AutoInstrumentRunner.ApplyFilters(filters, ignore: null, autoMute: true, "test.owner", s_Here);
 

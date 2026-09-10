@@ -291,6 +291,7 @@
     // status footer just needs a number to divide the held count by.
     let ringCapacity = $derived(liveConfig.ringCapacity);
     let treeScope = $state<'frame' | 'session'>('frame');
+    let treeOpen = $state(false);
     let startingSession = $state(false);
     let askingNewSession = $state(false);
 
@@ -314,6 +315,19 @@
     // throws away the capture history the strip draws from. resumes through the one gate first,
     // because a paused view is pinned to a frame the collector is about to forget, and the cuts
     // go too: they mark gaps in a history that no longer exists.
+    // one click arms, the second clears. the ring is the only copy of what you just captured,
+    // and this button sits next to New session in identical styling.
+    let confirmingClear = $state(false);
+
+    function askClearRing(): void {
+        if (!confirmingClear) {
+            confirmingClear = true;
+            return;
+        }
+        confirmingClear = false;
+        void clearRing();
+    }
+
     async function clearRing(): Promise<void> {
         clearing = true;
         try {
@@ -716,9 +730,17 @@
                     <button
                         type="button"
                         class="clearring"
-                        onclick={clearRing}
+                        class:armed={confirmingClear}
+                        onclick={askClearRing}
+                        onblur={() => (confirmingClear = false)}
                         disabled={clearing}
-                        data-testid="clear-ring">{t('flamegraph.clearRing')}</button
+                        data-testid="clear-ring"
+                        >{confirmingClear
+                            ? t('flamegraph.clearRing.confirm').replace(
+                                  '{n}',
+                                  count(stats?.frame_count ?? 0),
+                              )
+                            : t('flamegraph.clearRing')}</button
                     >
                 </Tooltip>
             </span>
@@ -878,7 +900,7 @@
             {searchStatusText}
         </div>
 
-        <div class="stage">
+        <div class="stage" class:split={treeOpen}>
             <div class="gutter">
                 <div class="lane">GC &mdash;</div>
                 <div class="lane main">
@@ -909,6 +931,7 @@
                 ? sessionTotalUs(sessionRoots)
                 : (frame?.duration_us ?? 0)}
             baselineUs={treeScope === 'session' ? sessionBaselineUs : baselineUs}
+            bind:open={treeOpen}
             instrumentation={instrumentationPanel}
             comparison={comparisonPanel}
             onSelect={(i) => {
@@ -1166,8 +1189,12 @@
         color: var(--text);
         border-color: var(--border-strong);
     }
+    .clearring.armed {
+        color: var(--bad);
+        border-color: var(--bad);
+    }
     .clearring:disabled {
-        opacity: 0.5;
+        color: var(--text-ghost);
         cursor: default;
     }
     .seg {
@@ -1362,9 +1389,8 @@
         color: var(--text);
     }
     .find .step:disabled {
-        color: var(--text-faint);
+        color: var(--text-ghost);
         cursor: default;
-        opacity: 0.5;
     }
     .find .step svg {
         width: 12px;
@@ -1398,7 +1424,7 @@
     }
     .cell + .cell::before {
         content: ' · ';
-        color: var(--border-strong);
+        color: var(--text-ghost);
     }
 
     .stage {
@@ -1409,6 +1435,12 @@
         height: 600px;
         overflow: auto;
         resize: vertical;
+    }
+    /* the drawer explains the flame, so it must not cover it. the stage keeps its resize
+       handle, which is the splitter: drag it back up if you want the flame bigger. */
+    .stage.split {
+        height: min(600px, calc(100vh - var(--drawer-h) - var(--chrome-h)));
+        min-height: 160px;
     }
     .gutter {
         border-right: 1px solid var(--border);

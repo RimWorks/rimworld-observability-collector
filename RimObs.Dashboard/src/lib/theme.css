@@ -22,6 +22,11 @@
     --text: #d4dded;
     --text-dim: #93a1ba;
     --text-faint: #8a98b3;
+    /* dimmest text that still clears 4.5:1 on every surface, for axis units and separators */
+    --text-ghost: #75849f;
+    /* only for filled buttons, where the fill still reads. an outline button dimmed this
+       way loses its label against its own background, so those set a colour instead. */
+    --o-disabled: 0.6;
 
     --cyan: #39c4d4;
     --cyan-soft: #6fe0ec;
@@ -74,6 +79,10 @@
     --topbar-h: 58px;
     /* the always-on status strip. the tab footer stacks on top of it, so both read it. */
     --status-h: 24px;
+    --drawer-h: 45vh;
+    /* topbar, strip, transport bar, tab bar and status strip: everything the stage shares
+       the viewport with when the drawer is open */
+    --chrome-h: 320px;
 
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
     --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);

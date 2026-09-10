@@ -252,7 +252,7 @@
         background: color-mix(in srgb, var(--cyan) 20%, var(--bg-elev));
     }
     .primary:disabled {
-        opacity: 0.55;
+        opacity: var(--o-disabled);
         cursor: progress;
     }
     @media (max-width: 900px) {
