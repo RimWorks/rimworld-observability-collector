@@ -287,21 +287,6 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
-    /// <summary>Test-only: lets a test build a payload from an older schema version.</summary>
-    internal static byte[] SerializeSectionBatchV8(SectionBatch value) {
-        WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(8);
-        WriteInt32Array(writer, value.SectionIds);
-        WriteInt64Array(writer, value.ElapsedTicks);
-        WriteInt64Array(writer, value.StartTimestamps);
-        WriteInt32Array(writer, value.ParentIds);
-        WriteInt32Array(writer, value.FrameOrdinals);
-        WriteInt32Array(writer, value.NodeIds);
-        WriteInt32Array(writer, value.ParentNodeIds);
-        WriteInt64Array(writer, value.AllocBytes);
-        return writer.ToArray();
-    }
-
     // One entry per wire type. A dispatch chain here was 17 sequential type compares and
     // the most complex method in the codec.
     private static readonly Dictionary<Type, Func<byte[], object>> s_Readers = new() {

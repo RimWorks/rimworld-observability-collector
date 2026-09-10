@@ -33,12 +33,6 @@
         <None Include="..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
-    <ItemGroup>
-        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-            <_Parameter1>RimObs.Library.Tests</_Parameter1>
-        </AssemblyAttribute>
-    </ItemGroup>
-
     <!-- Revision used to live in a committed BuildInfo.cs that semantic-release rewrote and
          pushed back to main. Generating it from $(Version) keeps one source of truth and
          means the release never has to commit to a protected branch. -->

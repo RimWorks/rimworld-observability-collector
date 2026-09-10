@@ -690,18 +690,28 @@ public sealed class WireCodecTests {
     // tolerance the codec already gives v5 through v8.
     [Fact]
     public void Section_batch_from_a_v8_payload_decodes_with_no_thread_ids() {
-        SectionBatch v8 = new() {
-            SectionIds = [10],
-            ElapsedTicks = [5L],
-            StartTimestamps = [1L],
-            ParentIds = [-1],
-            FrameOrdinals = [4321],
-            NodeIds = [1],
-            ParentNodeIds = [-1],
-            AllocBytes = [0L],
-        };
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(8);
+        writer.WriteArrayHeader(1);
+        writer.Write(10);
+        writer.WriteArrayHeader(1);
+        writer.Write(5L);
+        writer.WriteArrayHeader(1);
+        writer.Write(1L);
+        writer.WriteArrayHeader(1);
+        writer.Write(-1);
+        writer.WriteArrayHeader(1);
+        writer.Write(4321);
+        writer.WriteArrayHeader(1);
+        writer.Write(1);
+        writer.WriteArrayHeader(1);
+        writer.Write(-1);
+        writer.WriteArrayHeader(1);
+        writer.Write(0L);
+        writer.Flush();
 
-        SectionBatch back = WireCodec.Deserialize<SectionBatch>(WireCodec.SerializeSectionBatchV8(v8));
+        SectionBatch back = WireCodec.Deserialize<SectionBatch>(buffer.WrittenSpan.ToArray());
 
         back.SectionIds.Should().Equal(10);
         back.ThreadIds.Should().BeEmpty();
