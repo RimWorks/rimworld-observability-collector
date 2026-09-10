@@ -183,6 +183,29 @@ public sealed class RingBufferTests {
     }
 
     [Fact]
+    public void Lanes_of_exited_threads_are_reaped_once_drained() {
+        SampleRingSet set = new(4);
+        set.TryWrite(1, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+
+        for (int t = 0; t < 8; t++) {
+            Thread worker = new(() => {
+                for (int i = 0; i < 6; i++)
+                    set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+            });
+            worker.Start();
+            worker.Join();
+        }
+
+        set.LaneCount.Should().Be(9);
+
+        SampleBatch batch = new SampleBatch(16);
+        while (set.Drain(batch, 16) > 0) { }
+
+        set.LaneCount.Should().Be(1);
+        set.Dropped.Should().Be(16);
+    }
+
+    [Fact]
     public void Drain_walks_every_lane_round_robin() {
         SampleRingSet set = new(16);
         set.TryWrite(1, -1, 0, -1, 0, 0, 1).Should().BeTrue();

@@ -88,10 +88,21 @@ internal sealed class SampleRingBuffer {
 /// its own lane instead of eating the capacity the main thread needs.
 /// </summary>
 internal sealed class SampleRingSet {
+    private sealed class Lane {
+        public Lane(SampleRingBuffer ring, Thread owner) {
+            Ring = ring;
+            Owner = owner;
+        }
+
+        public SampleRingBuffer Ring { get; }
+        public Thread Owner { get; }
+    }
+
     private readonly int _laneCapacity;
     private readonly ThreadLocal<SampleRingBuffer> _lane;
-    private SampleRingBuffer[] _lanes = Array.Empty<SampleRingBuffer>();
+    private Lane[] _lanes = Array.Empty<Lane>();
     private int _cursor;
+    private long _reapedDropped;
 
     public SampleRingSet(int laneCapacity) {
         _laneCapacity = laneCapacity;
@@ -103,10 +114,10 @@ internal sealed class SampleRingSet {
 
     public long Dropped {
         get {
-            SampleRingBuffer[] lanes = Volatile.Read(ref _lanes);
-            long total = 0;
+            Lane[] lanes = Volatile.Read(ref _lanes);
+            long total = Interlocked.Read(ref _reapedDropped);
             for (int i = 0; i < lanes.Length; i++)
-                total += lanes[i].Dropped;
+                total += lanes[i].Ring.Dropped;
             return total;
         }
     }
@@ -118,32 +129,64 @@ internal sealed class SampleRingSet {
 
     /// <summary>
     /// Drains the next non-empty lane, round-robin, so a hot lane cannot starve the others.
-    /// Returns 0 only when every lane is empty.
+    /// Returns 0 only when every lane is empty. Drops a drained lane whose owner has exited.
     /// </summary>
     public int Drain(SampleBatch batch, int maxCount) {
-        SampleRingBuffer[] lanes = Volatile.Read(ref _lanes);
+        Lane[] lanes = Volatile.Read(ref _lanes);
         for (int i = 0; i < lanes.Length; i++) {
             int idx = (_cursor + i) % lanes.Length;
-            int n = lanes[idx].Drain(batch, maxCount);
+            Lane lane = lanes[idx];
+            int n = lane.Ring.Drain(batch, maxCount);
             if (n > 0) {
                 _cursor = (idx + 1) % lanes.Length;
                 return n;
             }
+            if (!lane.Owner.IsAlive)
+                Reap(lane);
         }
         return 0;
     }
 
+    /// <summary>
+    /// Name of the thread that owns the lane, or empty if it is unnamed or already reaped.
+    /// </summary>
+    public string NameFor(int threadId) {
+        Lane[] lanes = Volatile.Read(ref _lanes);
+        for (int i = 0; i < lanes.Length; i++) {
+            if (lanes[i].Owner.ManagedThreadId == threadId)
+                return lanes[i].Owner.Name ?? string.Empty;
+        }
+        return string.Empty;
+    }
+
     private SampleRingBuffer AddLane() {
         SampleRingBuffer ring = new(_laneCapacity);
-        SampleRingBuffer[] old;
-        SampleRingBuffer[] grown;
+        Lane lane = new(ring, Thread.CurrentThread);
+        Lane[] old;
+        Lane[] grown;
         do {
             old = Volatile.Read(ref _lanes);
-            grown = new SampleRingBuffer[old.Length + 1];
+            grown = new Lane[old.Length + 1];
             Array.Copy(old, grown, old.Length);
-            grown[old.Length] = ring;
+            grown[old.Length] = lane;
         }
         while (Interlocked.CompareExchange(ref _lanes, grown, old) != old);
         return ring;
+    }
+
+    private void Reap(Lane lane) {
+        Lane[] old;
+        Lane[] shrunk;
+        do {
+            old = Volatile.Read(ref _lanes);
+            int at = Array.IndexOf(old, lane);
+            if (at < 0)
+                return;
+            shrunk = new Lane[old.Length - 1];
+            Array.Copy(old, shrunk, at);
+            Array.Copy(old, at + 1, shrunk, at, old.Length - at - 1);
+        }
+        while (Interlocked.CompareExchange(ref _lanes, shrunk, old) != old);
+        Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped);
     }
 }
