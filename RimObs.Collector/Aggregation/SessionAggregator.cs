@@ -49,6 +49,7 @@ public sealed class SessionAggregator {
     public long TotalMetricObservations => Interlocked.Read(ref _totalMetricObservations);
     public int MetricCount => _metrics.Count;
     public FrameRing Frames => _frames;
+    public ThreadTable Threads { get; } = new();
 
     // the live session's label. held here as well as in SQLite so /status reflects a rename
     // immediately, rather than waiting on the next persistence flush.
@@ -118,6 +119,8 @@ public sealed class SessionAggregator {
             SectionRegistrationObserver?.Invoke(id, name);
         }
     }
+
+    public void OnThreadRegistrations(ThreadRegistrationsBatch batch) => Threads.Upsert(batch);
 
     public void OnPatchConflicts(PatchConflictsBatch batch) {
         int n = Math.Min(
@@ -228,6 +231,7 @@ public sealed class SessionAggregator {
         int nodeIdLen = batch.NodeIds.Length;
         int parentNodeIdLen = batch.ParentNodeIds.Length;
         int allocLen = batch.AllocBytes.Length;
+        int threadLen = batch.ThreadIds.Length;
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
@@ -242,6 +246,8 @@ public sealed class SessionAggregator {
             UpdateMin(ref stats.MinElapsedTicks, elapsed);
             UpdateMax(ref stats.MaxElapsedTicks, elapsed);
             stats.Distribution.Record(nowEpochSeconds, elapsed);
+            if (i < threadLen)
+                Threads.AddBusy(batch.ThreadIds[i], elapsed);
 
             int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
             long edgeKey = ((long)(uint)parentId << 32) | (uint)id;

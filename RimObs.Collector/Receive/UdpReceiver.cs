@@ -98,6 +98,9 @@ public sealed class UdpReceiver : BackgroundService {
                 case BatchType.Sections:
                     _aggregator.OnSectionBatch(WireCodec.Deserialize<SectionBatch>(envelope.Payload));
                     break;
+                case BatchType.ThreadRegistrations:
+                    _aggregator.OnThreadRegistrations(WireCodec.Deserialize<ThreadRegistrationsBatch>(envelope.Payload));
+                    break;
                 case BatchType.MetricRegistrations:
                     _aggregator.OnMetricRegistrations(WireCodec.Deserialize<MetricRegistrationsBatch>(envelope.Payload));
                     break;

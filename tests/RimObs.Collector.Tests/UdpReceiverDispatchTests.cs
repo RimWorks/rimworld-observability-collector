@@ -197,6 +197,44 @@ public sealed class UdpReceiverDispatchTests {
         pong.SessionId.Should().Be("live-session-42");
     }
 
+    // regression: batch_type=11 fell through to the "not implemented" branch, so every lane
+    // name the library sent was logged and dropped.
+    [Fact]
+    public void Dispatch_thread_registrations_names_the_lane() {
+        SessionAggregator agg = new();
+        UdpReceiver receiver = NewReceiver(agg);
+        byte[] envelope = SerializeEnvelope(BatchType.ThreadRegistrations, WireCodec.Serialize(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Unity Job 3"],
+            Roles = [(int)ThreadRole.UnityJob],
+        }));
+
+        receiver.Dispatch(envelope);
+
+        agg.Threads.Snapshot().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new ThreadInfo(7, "Unity Job 3", (int)ThreadRole.UnityJob, 0L));
+    }
+
+    [Fact]
+    public void Dispatch_sections_adds_busy_ticks_to_the_lane_that_produced_them() {
+        SessionAggregator agg = new();
+        UdpReceiver receiver = NewReceiver(agg);
+        receiver.Dispatch(SerializeEnvelope(BatchType.ThreadRegistrations, WireCodec.Serialize(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["Unity Job 3"],
+            Roles = [(int)ThreadRole.UnityJob],
+        })));
+
+        receiver.Dispatch(SerializeEnvelope(BatchType.Sections, WireCodec.Serialize(new SectionBatch {
+            SectionIds = [1, 1],
+            ElapsedTicks = [100, 50],
+            StartTimestamps = [0, 200],
+            ThreadIds = [7, 7],
+        })));
+
+        agg.Threads.Snapshot().Should().ContainSingle().Which.BusyTicks.Should().Be(150L);
+    }
+
     [Fact]
     public void Dispatch_non_ping_batch_returns_null() {
         SessionAggregator agg = new();
