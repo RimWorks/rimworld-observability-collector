@@ -22,6 +22,9 @@ public sealed class ControlClient {
     public async Task<ControlPatchListResponse> ListAsync() =>
         await Roundtrip<ControlPatchListResponse>(HttpMethod.Get, "/patches", null);
 
+    public async Task<ControlAutoInstrumentResponse> AutoInstrumentAsync() =>
+        await Roundtrip<ControlAutoInstrumentResponse>(HttpMethod.Get, "/auto", null);
+
     /// <summary>Asks the game to restart itself, optionally saving the colony first.</summary>
     public async Task RestartGameAsync(bool save) {
         HttpRequestMessage req = new(HttpMethod.Post, $"/session/restart-game?save={(save ? "true" : "false")}");

@@ -15,6 +15,12 @@ internal sealed class CollectorConfigDocument {
     [DataMember(Name = "sections")]
     public CollectorSectionsConfig? Sections { get; set; }
 
+    [DataMember(Name = "sampling")]
+    public CollectorSamplingConfig? Sampling { get; set; }
+
+    [DataMember(Name = "auto_instrument")]
+    public CollectorAutoInstrumentConfig? AutoInstrument { get; set; }
+
     public static CollectorConfigDocument? TryParse(string json) {
         if (string.IsNullOrWhiteSpace(json))
             return null;

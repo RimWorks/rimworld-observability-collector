@@ -9,6 +9,9 @@ import {
 } from './frameStrip';
 import { FRAME_BUDGET_US } from './frameCost';
 
+/** css px a marked bar never draws narrower than, so a click or hover is always visible */
+export const MARK_MIN_W = 2;
+
 export interface StripTheme {
     background: string;
     good: string;
@@ -16,6 +19,7 @@ export interface StripTheme {
     bad: string;
     badDeep: string;
     selected: string;
+    hover: string;
     grid: string;
     line: string;
     cut: string;
@@ -27,6 +31,8 @@ export interface StripDrawOptions {
     heightPx: number;
     dpr: number;
     selectedOrdinal: number | null;
+    /** the bar under the cursor, marked the same way the selection is */
+    hoveredOrdinal?: number | null;
     /** ordinals a pause cut the history at, drawn as a dashed rule */
     cutOrdinals?: readonly number[];
     /** frame ordinals a GC fired in, drawn as ticks hanging below the baseline */
@@ -42,6 +48,7 @@ export function drawStrip(
     opts: StripDrawOptions,
 ): void {
     const { widthPx: w, heightPx: h, dpr, selectedOrdinal, theme } = opts;
+    const hoveredOrdinal = opts.hoveredOrdinal ?? null;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, w, h);
@@ -71,11 +78,21 @@ export function drawStrip(
         const bar = bars[i];
         if (bar.height <= 0) continue;
         const barH = Math.max(1, bar.height * barAreaHeight);
-        ctx.fillStyle =
-            bar.ordinal === selectedOrdinal
-                ? theme.selected
-                : barColor(bar.durationUs, FRAME_BUDGET_US, theme);
-        ctx.fillRect(i * bw, barAreaHeight - barH, fillW, barH);
+        const selected = bar.ordinal === selectedOrdinal;
+        const hovered = !selected && bar.ordinal === hoveredOrdinal;
+        ctx.fillStyle = selected
+            ? theme.selected
+            : hovered
+              ? theme.hover
+              : barColor(bar.durationUs, FRAME_BUDGET_US, theme);
+        // a full ring puts 2000 bars in ~1400px, so a marked bar is a sub-pixel sliver at its
+        // own width and the click or hover reads as having done nothing.
+        ctx.fillRect(
+            i * bw,
+            barAreaHeight - barH,
+            selected || hovered ? Math.max(fillW, MARK_MIN_W) : fillW,
+            barH,
+        );
     }
 
     // a pause leaves a hole in the history; mark where it was so the jump is not read as data.

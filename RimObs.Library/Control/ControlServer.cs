@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
+using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Wire;
 using RimWorks.RimObs.Wire.Control;
 
@@ -71,6 +72,7 @@ internal sealed class ControlServer {
         if (method == "POST" && path == "/search") { HandleSearch(ctx); return; }
         if (method == "POST" && path == "/patch") { HandlePatch(ctx); return; }
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
+        if (method == "GET" && path == "/auto") { HandleAutoInstrument(ctx); return; }
         if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
         if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
         if (method == "DELETE" && path.StartsWith("/patch/", StringComparison.Ordinal)) {
@@ -143,6 +145,18 @@ internal sealed class ControlServer {
         foreach ((int id, string sig, int sec, PatchStatus status) in PatchRegistry.Snapshot())
             entries.Add(new ControlPatchEntry { PatchId = id, Signature = sig, SectionId = sec, Status = status });
         WriteResponse(ctx, WireCodec.Serialize(new ControlPatchListResponse { Patches = entries.ToArray() }));
+    }
+
+    private static void HandleAutoInstrument(HttpListenerContext ctx) {
+        WriteResponse(ctx, WireCodec.Serialize(new ControlAutoInstrumentResponse {
+            Matched = AutoInstrumentRunner.Matched,
+            Instrumented = AutoInstrumentRunner.Instrumented,
+            Muted = AutoInstrumentRunner.Muted,
+            SkippedTrivial = AutoInstrumentRunner.SkippedTrivial,
+            SkippedOther = AutoInstrumentRunner.SkippedOther,
+            Refused = AutoInstrumentRunner.Refused,
+            Pending = AutoInstrumentRunner.Pending,
+        }));
     }
 
     private static void HandleUnpatch(HttpListenerContext ctx, string path) {

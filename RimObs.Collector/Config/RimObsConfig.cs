@@ -13,6 +13,7 @@ public sealed class RimObsConfig {
     public SectionsOptions Sections { get; set; } = new();
     public StorageOptions Storage { get; set; } = new();
     public SamplingOptions Sampling { get; set; } = new();
+    public AutoInstrumentOptions AutoInstrument { get; set; } = new();
     public TransportOptions Transport { get; set; } = new();
     public AttributionOptions Attribution { get; set; } = new();
     public PrivacyOptions Privacy { get; set; } = new();

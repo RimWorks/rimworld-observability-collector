@@ -119,10 +119,9 @@ public sealed class RimObsMod : Mod {
 
             Log.InfoTo(LogChannels.Collector, "dashboard at {Url}", new object?[] { CollectorRuntimeInfo.DashboardUrl });
 
-            RimObsSettings settings = _settings;
             InstrumentationInstall.Schedule(
                 LongEventHandler.ExecuteWhenFinished,
-                () => InstallInstrumentation(declared, port, settings));
+                () => InstallInstrumentation(declared, port));
         }
         catch (Exception ex) {
             Log.ErrorTo(LogChannels.Bootstrap, ex, "bootstrap failed");
@@ -157,7 +156,7 @@ public sealed class RimObsMod : Mod {
 
     // Runs on the main thread once the loading long event finishes, not in the constructor.
     // See InstrumentationInstall for why.
-    private static void InstallInstrumentation(ProfilingXmlLoader.LoadResult declared, int port, RimObsSettings settings) {
+    private static void InstallInstrumentation(ProfilingXmlLoader.LoadResult declared, int port) {
         try {
             PatchBackends.SelectBest();
             if (PatchBackends.Active == null) {
@@ -169,6 +168,7 @@ public sealed class RimObsMod : Mod {
             ObservedSectionScanner.ScanResult attrs = LoadObservedSections();
             FrameTickPatches.InstallAll();
             SessionLifecyclePatches.InstallAll();
+            UnityPhasePack.InstallAll();
             s_Sink?.SetPatchConflicts(PatchConflictRecorder.BuildBatch());
             Profiler.SetEnabled(true);
             GcObserverHost.Start();
@@ -176,32 +176,11 @@ public sealed class RimObsMod : Mod {
             // AllocationSamplerHost is opt-in: the GC.GetTotalMemory delta heuristic costs
             // something on every poll. mod authors start it themselves. PRD §35.18, §11.2.
             StartConfigPoll(CollectorHost, port);
-            ApplyAutoInstrumentation(settings);
             LogBootstrapSummary(declared, attrs);
         }
         catch (Exception ex) {
             Log.ErrorTo(LogChannels.Patching, ex, "instrumentation install failed");
         }
-    }
-
-    // the scan blocks, so it runs here inside the loading long event. the patching it queues
-    // does not: AutoInstrumentRunner.Pump spends at most 4 ms of each frame.
-    private static void ApplyAutoInstrumentation(RimObsSettings settings) {
-        if (!settings.AutoInstrumentEnabled || string.IsNullOrEmpty(settings.AutoInstrumentFilters))
-            return;
-
-        AutoInstrumentPlan plan = AutoInstrumentRunner.ApplyFilters(
-            settings.AutoInstrumentFilters, settings.AutoMuteTrivial, CollectorRuntimeInfo.OwnerId);
-
-        Log.InfoTo(
-            LogChannels.Patching,
-            "auto-instrumentation matched {Matched}, queued {Queued}, skipped {Trivial} trivial, "
-                + "{Already} already instrumented, {Blocked} blocklisted, {OverCap} over cap",
-            new object?[] {
-                plan.Matched, plan.Eligible, plan.SkippedTrivial,
-                plan.SkippedAlreadyInstrumented, plan.SkippedBlocklisted, plan.SkippedOverCap,
-            }
-        );
     }
 
     // no patching library is a hard dependency, so RimWorld warns about none of them. this

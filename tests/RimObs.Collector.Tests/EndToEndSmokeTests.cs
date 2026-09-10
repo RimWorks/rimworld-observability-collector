@@ -766,6 +766,12 @@ public sealed class EndToEndSmokeTests {
             root.GetProperty("privacy").GetProperty("include_assembly_versions_and_patches").GetBoolean().Should().BeTrue();
             root.GetProperty("i18n").GetProperty("default_language").GetString().Should().Be("en");
             root.GetProperty("exporters").GetProperty("prometheus_port").GetInt32().Should().Be(7879);
+            root.GetProperty("sampling").GetProperty("max_capture_depth").GetInt32().Should().Be(8);
+            JsonElement auto = root.GetProperty("auto_instrument");
+            auto.GetProperty("enabled").GetBoolean().Should().BeFalse();
+            auto.GetProperty("filters").GetString().Should().BeEmpty();
+            auto.GetProperty("ignore").GetString().Should().BeEmpty();
+            auto.GetProperty("mute_trivial").GetBoolean().Should().BeTrue();
         }
         finally {
             await app.StopAsync();
@@ -1259,6 +1265,58 @@ public sealed class EndToEndSmokeTests {
             noSub.Should().NotBeNull();
             noSub!.Value.GetProperty("name").GetString().Should().Be("core.tick");
             noSub.Value.GetProperty("subsystem").ValueKind.Should().Be(JsonValueKind.Null);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    // the library reads these back off /api/v1/config, so a key that does not round-trip is a
+    // setting the dashboard can appear to change and the game never sees.
+    [Fact]
+    public async Task Config_post_round_trips_capture_depth_and_auto_instrument_and_clamps_the_depth() {
+        int port = PickFreePort();
+        Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-bearer-token-3");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/config") {
+                Content = new StringContent(
+                    """
+                    {
+                      "schema_version": 1,
+                      "sampling": { "max_capture_depth": 999 },
+                      "auto_instrument": {
+                        "enabled": true,
+                        "filters": "Assembly-CSharp!Verse.*",
+                        "ignore": "Assembly-CSharp!Verse.Log::*",
+                        "mute_trivial": false
+                      }
+                    }
+                    """,
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+            post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+            post.Headers.Add("Authorization", $"Bearer {token.Value}");
+            (await http.SendAsync(post)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+            string after = await http.GetStringAsync("/api/v1/config");
+            using JsonDocument doc = JsonDocument.Parse(after);
+            doc.RootElement.GetProperty("sampling").GetProperty("max_capture_depth")
+                .GetInt32().Should().Be(64);
+            JsonElement auto = doc.RootElement.GetProperty("auto_instrument");
+            auto.GetProperty("enabled").GetBoolean().Should().BeTrue();
+            auto.GetProperty("filters").GetString().Should().Be("Assembly-CSharp!Verse.*");
+            auto.GetProperty("ignore").GetString().Should().Be("Assembly-CSharp!Verse.Log::*");
+            auto.GetProperty("mute_trivial").GetBoolean().Should().BeFalse();
         }
         finally {
             await app.StopAsync();

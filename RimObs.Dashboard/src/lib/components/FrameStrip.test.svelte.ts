@@ -129,3 +129,27 @@ describe('FrameStrip axis', () => {
         expect(rule('.axis')).toContain('position: relative');
     });
 });
+
+describe('FrameStrip selection', () => {
+    it('reports the clicked frame ordinal', async () => {
+        const onSelect = vi.fn();
+        render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: FULL, onSelect });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+
+        await fireEvent.click(canvas, { clientX: 100, clientY: 10 });
+
+        expect(onSelect).toHaveBeenCalledWith(5);
+    });
+
+    it('ignores a click past the newest frame of a part-filled ring', async () => {
+        const onSelect = vi.fn();
+        render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: 200, onSelect });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+
+        await fireEvent.click(canvas, { clientX: 150, clientY: 10 });
+
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+});

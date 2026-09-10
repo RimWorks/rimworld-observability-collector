@@ -268,6 +268,21 @@ export interface InstrumentationPatchResult {
     };
 }
 
+export interface AutoInstrumentCounters {
+    matched: number;
+    instrumented: number;
+    muted: number;
+    skippedTrivial: number;
+    skippedOther: number;
+    refused: number;
+    pending: number;
+}
+
+export interface InstrumentationAutoResponse {
+    schema_version: number;
+    auto: AutoInstrumentCounters;
+}
+
 export type ExportBundleResult =
     | { kind: 'ok'; blob: Blob }
     | { kind: 'over_cap'; estimatedBytes: number; capBytes: number }
@@ -407,7 +422,14 @@ function authHeaders(): Record<string, string> {
  */
 export interface RimObsConfig {
     schema_version: number;
-    sampling: { frame_ring_capacity: number; [key: string]: unknown };
+    sampling: { frame_ring_capacity: number; max_capture_depth: number; [key: string]: unknown };
+    auto_instrument: {
+        enabled: boolean;
+        filters: string;
+        ignore: string;
+        mute_trivial: boolean;
+        [key: string]: unknown;
+    };
     session: { pending_name: string; prompt_for_name: boolean; [key: string]: unknown };
     [key: string]: unknown;
 }
@@ -506,6 +528,7 @@ export const api = {
         ),
     instrumentationPatches: () =>
         get<InstrumentationPatchesResponse>('/api/v1/instrumentation/patches'),
+    instrumentationAuto: () => get<InstrumentationAutoResponse>('/api/v1/instrumentation/auto'),
     instrumentationPatch: async (req: {
         typeFullName: string;
         methodName: string;

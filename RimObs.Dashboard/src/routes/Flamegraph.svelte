@@ -40,6 +40,8 @@
     import { flattenCallNodes, sessionTotalUs } from '../lib/sessionTree';
     import type { CallTreeResponse } from '../lib/api';
     import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
+    import { liveConfig } from '../lib/liveConfig.svelte';
+    import { sectionSearch } from '../lib/sectionSearchState.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { ns, count, bytes, gradeFromShare } from '../lib/format';
     import {
@@ -158,6 +160,9 @@
     }
 
     async function showOrdinal(ordinal: number | null): Promise<void> {
+        // every user-driven selection funnels through here, and live-follow never does, so
+        // this is the one place a refit belongs.
+        timeline?.refit();
         pinnedOrdinal = ordinal;
         if (ordinal === null) {
             pinnedRes = null;
@@ -284,7 +289,7 @@
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     // read once: the ring capacity only moves when someone edits it in Settings, and the
     // status footer just needs a number to divide the held count by.
-    let ringCapacity = $state<number | null>(null);
+    let ringCapacity = $derived(liveConfig.ringCapacity);
     let treeScope = $state<'frame' | 'session'>('frame');
     let startingSession = $state(false);
     let askingNewSession = $state(false);
@@ -348,7 +353,7 @@
             })
             .catch(() => undefined);
         api.config()
-            .then((c) => (ringCapacity = c.sampling.frame_ring_capacity))
+            .then((c) => liveConfig.setRingCapacity(c.sampling.frame_ring_capacity))
             .catch(() => undefined);
         patchesRes.start();
         sectionsRes.start();
@@ -422,7 +427,66 @@
     }
 
     let selectedNode = $state(-1);
-    let timeline = $state<{ focusNode: (i: number) => void } | null>(null);
+    let timeline = $state<{
+        focusNode: (i: number) => void;
+        refit: () => void;
+        stepMatch: (delta: 1 | -1) => number | null;
+    } | null>(null);
+
+    // stepping while live is futile: the next poll moves the frame out from under whatever you
+    // just landed on. so a step pins the frame it found.
+    function stepToMatch(delta: 1 | -1): void {
+        const ordinal = timeline?.stepMatch(delta) ?? null;
+        if (ordinal !== null && ordinal !== pinnedOrdinal) pauseAt(ordinal);
+    }
+    let searchInputEl = $state<HTMLInputElement | null>(null);
+
+    let searchScopeText = $derived(
+        sectionSearch.scope === 'frame'
+            ? t('flamegraph.search.nodes')
+            : t('flamegraph.search.nodesInFrames').replace('{m}', String(sectionSearch.frameCount)),
+    );
+
+    let searchStatusText = $derived.by(() => {
+        if (!sectionSearch.active) return '';
+        const base = `${sectionSearch.nodeCount} ${searchScopeText}`;
+        if (sectionSearch.unsampledCount === 0) return base;
+        const only = t('flamegraph.search.registeredOnly').replace(
+            '{n}',
+            String(sectionSearch.unsampledCount),
+        );
+        return `${base}, ${only}`;
+    });
+
+    function handleSearchKeydown(event: KeyboardEvent): void {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            stepToMatch(event.shiftKey ? -1 : 1);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            sectionSearch.clear();
+            searchInputEl?.blur();
+        }
+    }
+
+    // '/' or ctrl/cmd+f focuses search; neither is bound by the canvas or the transport bar.
+    function handleSearchHotkey(event: KeyboardEvent): boolean {
+        const el = event.target as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'))
+            return false;
+        if (event.key === '/' || ((event.ctrlKey || event.metaKey) && event.key === 'f')) {
+            event.preventDefault();
+            searchInputEl?.focus();
+            return true;
+        }
+        return false;
+    }
+
+    // one svelte:window per component, so search gets first refusal and transport takes the rest.
+    function handleWindowKey(event: KeyboardEvent): void {
+        if (handleSearchHotkey(event)) return;
+        handleTransportKey(event);
+    }
     // while pinned the page reads a specific ordinal instead of whatever the poller last saw.
     let liveRes = $derived(
         pinned ? (pinnedRes ?? framesRes?.data ?? null) : (framesRes?.data ?? null),
@@ -541,7 +605,7 @@
     );
 </script>
 
-<svelte:window onkeydown={handleTransportKey} />
+<svelte:window onkeydown={handleWindowKey} />
 
 <div class="profiler">
     <div class="bar">
@@ -698,30 +762,121 @@
         emptyHint={t('flamegraph.empty.hint')}
     >
         <p class="avg mono" data-testid="frame-drops">
-            <span class="cell">{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span><span
-                class="cell"
-                >{t('flamegraph.duration')}
-                <b
-                    class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
-                    data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
-                ></span
-            ><span class="cell"
-                >{t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b></span
-            ><span class="cell">{t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b></span
-            ><span class="cell"
-                >{t('flamegraph.dropped.late')}
-                <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
-                    >{count(dropped.late_samples)}</b
-                ></span
-            ><span class="cell"
-                >{t('flamegraph.dropped.preframe')}
-                <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
-            ><span class="cell"
-                >{t('flamegraph.dropped.orphans')}
-                <b class:warn={orphanCount > 0} data-testid="drop-orphans">{count(orphanCount)}</b
+            <span class="stats">
+                <span class="cell">{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
+                ><span class="cell"
+                    >{t('flamegraph.duration')}
+                    <b
+                        class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
+                        data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
+                    ></span
+                ><span class="cell"
+                    >{t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b></span
+                ><span class="cell"
+                    >{t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b></span
+                ><span class="cell"
+                    >{t('flamegraph.dropped.late')}
+                    <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
+                        >{count(dropped.late_samples)}</b
+                    ></span
+                ><span class="cell"
+                    >{t('flamegraph.dropped.preframe')}
+                    <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
+                ><span class="cell"
+                    >{t('flamegraph.dropped.orphans')}
+                    <b class:warn={orphanCount > 0} data-testid="drop-orphans"
+                        >{count(orphanCount)}</b
+                    ></span
                 ></span
             >
+            <span class="find" data-testid="section-search">
+                <label class="lbl" for="section-search-input">{t('flamegraph.search.label')}</label>
+                <span class="box">
+                    <svg class="glass" viewBox="0 0 12 12" aria-hidden="true">
+                        <circle cx="5" cy="5" r="3.25" /><path d="M7.4 7.4 10 10" />
+                    </svg>
+                    <input
+                        id="section-search-input"
+                        type="search"
+                        class="q"
+                        bind:this={searchInputEl}
+                        bind:value={sectionSearch.query}
+                        onkeydown={handleSearchKeydown}
+                        placeholder={t('flamegraph.search.placeholder')}
+                        data-testid="section-search-input"
+                    />
+                </span>
+                <span class="seg" role="group" aria-label={t('flamegraph.search.scopeLabel')}>
+                    <button
+                        type="button"
+                        aria-pressed={sectionSearch.scope === 'frame'}
+                        onclick={() => (sectionSearch.scope = 'frame')}
+                        data-testid="section-search-scope-frame"
+                        >{t('flamegraph.search.thisFrame')}</button
+                    ><button
+                        type="button"
+                        aria-pressed={sectionSearch.scope === 'window'}
+                        onclick={() => (sectionSearch.scope = 'window')}
+                        data-testid="section-search-scope-window"
+                        >{t('flamegraph.search.allFrames')}</button
+                    >
+                </span>
+                <label class="check">
+                    <input
+                        type="checkbox"
+                        bind:checked={sectionSearch.filterMode}
+                        data-testid="section-search-filter"
+                    />
+                    {t('flamegraph.search.hideNonMatches')}
+                </label>
+                <span class="tally">
+                    <span class="cell"
+                        ><b class:none={sectionSearch.nodeCount === 0}>{sectionSearch.nodeCount}</b>
+                        {searchScopeText}</span
+                    ><span
+                        class="cell dim"
+                        class:empty={sectionSearch.unsampledCount === 0}
+                        data-testid="section-search-unsampled"
+                        >{t('flamegraph.search.notSampled').replace(
+                            '{n}',
+                            String(sectionSearch.unsampledCount),
+                        )}</span
+                    >
+                </span>
+                <button
+                    type="button"
+                    class="step"
+                    onclick={() => stepToMatch(-1)}
+                    disabled={sectionSearch.occurrenceCount === 0}
+                    aria-label={t('flamegraph.search.prev')}
+                    data-testid="section-search-prev"
+                >
+                    <svg viewBox="0 0 12 12" aria-hidden="true"
+                        ><path d="M7.5 2.5 4 6l3.5 3.5" /></svg
+                    >
+                </button>
+                <button
+                    type="button"
+                    class="step"
+                    onclick={() => stepToMatch(1)}
+                    disabled={sectionSearch.occurrenceCount === 0}
+                    aria-label={t('flamegraph.search.next')}
+                    data-testid="section-search-next"
+                >
+                    <svg viewBox="0 0 12 12" aria-hidden="true"
+                        ><path d="M4.5 2.5 8 6l-3.5 3.5" /></svg
+                    >
+                </button>
+            </span>
         </p>
+        <div
+            class="sr-only"
+            aria-live="polite"
+            aria-atomic="true"
+            data-testid="section-search-status"
+        >
+            {searchStatusText}
+        </div>
 
         <div class="stage">
             <div class="gutter">
@@ -754,19 +909,23 @@
                 ? sessionTotalUs(sessionRoots)
                 : (frame?.duration_us ?? 0)}
             baselineUs={treeScope === 'session' ? sessionBaselineUs : baselineUs}
+            instrumentation={instrumentationPanel}
+            comparison={comparisonPanel}
             onSelect={(i) => {
                 if (treeScope === 'session' || !currentEntry) return;
                 timeline?.focusNode(currentEntry.nodeStart + i);
             }}
         />
+    </DataState>
 
-        <details class="instr" data-testid="instrumentation-panel">
-            <summary>{t('nav.instrumentation')}</summary>
+    {#snippet instrumentationPanel()}
+        <div class="footerpanel" data-testid="instrumentation-panel">
             <InstrumentationPanel bind:this={panel} onPatchesChange={(p) => (livePatches = p)} />
-        </details>
+        </div>
+    {/snippet}
 
-        <details class="instr" data-testid="comparison-panel">
-            <summary>{t('comparison.title')}</summary>
+    {#snippet comparisonPanel()}
+        <div class="footerpanel" data-testid="comparison-panel">
             <ComparisonPanel
                 imports={comparisonSources}
                 onResult={(r) => {
@@ -774,8 +933,8 @@
                     if (r) treeScope = 'session';
                 }}
             />
-        </details>
-    </DataState>
+        </div>
+    {/snippet}
 </div>
 
 {#if askingNewSession}
@@ -842,16 +1001,8 @@
         background: var(--bg-surface);
         color: var(--cyan);
     }
-    .instr {
-        border-top: 1px solid var(--border);
-    }
-    .instr summary {
-        padding: var(--s-2) var(--rail);
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-dim);
-        cursor: pointer;
+    .footerpanel {
+        padding: var(--s-3) var(--rail) var(--s-5);
     }
     .profiler {
         --f: 1.08;
@@ -1062,10 +1213,184 @@
     }
 
     .avg {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-height: 44px;
         padding: 6px 12px;
         font-size: var(--f-small);
         color: var(--text-dim);
         border-bottom: 1px solid var(--border-soft);
+    }
+    /* the cells stay one inline run so `.cell + .cell::before` keeps drawing the separators. */
+    .stats {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .find {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+        flex: none;
+    }
+    .find .lbl {
+        color: var(--text-dim);
+        white-space: nowrap;
+    }
+    /* a real field: bordered and filled, because a borderless input on a bar of labels reads
+       as one more label. */
+    .find .box {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--bg-surface);
+        transition: border-color var(--t-fast) var(--ease-out);
+    }
+    .find .box:hover {
+        border-color: var(--border-strong);
+    }
+    .find .box:focus-within {
+        border-color: var(--cyan);
+    }
+    .find .glass {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        fill: none;
+        stroke: var(--text-dim);
+        stroke-width: 1;
+        stroke-linecap: round;
+    }
+    .find .box:focus-within .glass {
+        stroke: var(--cyan);
+    }
+    .find .q {
+        width: 16ch;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: var(--text);
+        caret-color: var(--cyan);
+    }
+    .find .q:focus {
+        outline: none;
+    }
+    .find .q::placeholder {
+        color: var(--text-faint);
+    }
+    .find .q::-webkit-search-cancel-button {
+        display: none;
+    }
+    /* both options visible: a lone toggle cannot say what its other state is. */
+    .find .seg {
+        display: flex;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .find .seg button {
+        height: 28px;
+        padding: 0 10px;
+        border: 0;
+        background: var(--bg-surface);
+        font: inherit;
+        color: var(--text-dim);
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background var(--t-fast) var(--ease-out);
+    }
+    .find .seg button + button {
+        border-left: 1px solid var(--border);
+    }
+    .find .seg button:hover {
+        background: var(--bg-surface-2);
+        color: var(--text);
+    }
+    .find .seg button[aria-pressed='true'] {
+        background: var(--bg-elev);
+        color: var(--text);
+        box-shadow: inset 0 -2px 0 var(--cyan);
+    }
+    .find .check {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 28px;
+        color: var(--text-dim);
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .find .check:hover {
+        color: var(--text);
+    }
+    .find b.none {
+        color: var(--text-dim);
+    }
+    /* fixed box with steady digits: the count changes several times a second while live and
+       everything beside it used to slide with it. */
+    .find .tally {
+        min-width: 24ch;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .find .tally .empty {
+        visibility: hidden;
+    }
+    .find .step {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--bg-surface);
+        color: var(--text-dim);
+        cursor: pointer;
+    }
+    .find .step:hover:not(:disabled) {
+        background: var(--bg-surface-2);
+        color: var(--text);
+    }
+    .find .step:disabled {
+        color: var(--text-faint);
+        cursor: default;
+        opacity: 0.5;
+    }
+    .find .step svg {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .find .step svg {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
     .avg b {
         color: var(--text);

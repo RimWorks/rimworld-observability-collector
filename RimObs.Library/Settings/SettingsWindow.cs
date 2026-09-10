@@ -48,7 +48,7 @@ public static class SettingsWindow {
         }
 
         listing.GapLine();
-        DrawInstrumentation(listing, settings);
+        DrawInstrumentation(listing);
         listing.GapLine();
 
         IReadOnlyList<StatusLine> lines = status.BuildLines();
@@ -64,27 +64,10 @@ public static class SettingsWindow {
         listing.End();
     }
 
-    private static void DrawInstrumentation(Listing_Standard listing, RimObsSettings settings) {
-        listing.CheckboxLabeled(
-            "Auto-instrumentation",
-            ref settings.AutoInstrumentEnabled,
-            "Adds a scope to every method a filter matches. Patching drips in over the first few seconds.");
-
-        listing.Label("Filters, one per line: Assembly!Type.Full.Name::Method, * and ? wildcards");
-        settings.AutoInstrumentFilters = listing.TextEntry(settings.AutoInstrumentFilters, 4);
-
-        listing.CheckboxLabeled(
-            "Auto-mute trivial scopes",
-            ref settings.AutoMuteTrivial,
-            "Drops instrumented scopes whose measured self time never beats the cost of measuring them.");
-
-        if (listing.ButtonText("Apply filters")) {
-            AutoInstrumentRunner.ApplyFilters(
-                settings.AutoInstrumentEnabled ? settings.AutoInstrumentFilters : string.Empty,
-                settings.AutoMuteTrivial,
-                CollectorRuntimeInfo.OwnerId);
-        }
-
+    // the filter boxes live in the dashboard's settings pane, which is the only surface that
+    // can show what a pattern matched before you commit to patching it.
+    private static void DrawInstrumentation(Listing_Standard listing) {
+        listing.Label("Auto-instrumentation is configured in the dashboard, under Profiling.");
         listing.Label($"Auto-instrumentation: {AutoInstrumentRunner.BuildSummary()}");
     }
 }

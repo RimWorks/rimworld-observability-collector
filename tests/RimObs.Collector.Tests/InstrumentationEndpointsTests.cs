@@ -30,6 +30,63 @@ public class InstrumentationEndpointsTests {
         }
     }
 
+    [Fact]
+    public async Task Auto_returns_503_when_control_port_is_zero() {
+        int port = PickFreePort();
+        WebApplication app = Program.BuildApp([], port);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new System.Uri($"http://127.0.0.1:{port}") };
+            HttpResponseMessage res = await http.GetAsync("/api/v1/instrumentation/auto");
+            res.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Auto_returns_the_runner_counters_from_the_control_server() {
+        int port = PickFreePort();
+        using StubControlServer stub = new("s");
+        stub.OnAuto = () => new ControlAutoInstrumentResponse {
+            Matched = 10,
+            Instrumented = 4,
+            Muted = 1,
+            SkippedTrivial = 3,
+            SkippedOther = 2,
+            Refused = 0,
+            Pending = 0,
+        };
+        stub.Start();
+
+        RimWorks.RimObs.Collector.Security.CollectorToken token =
+            RimWorks.RimObs.Collector.Security.CollectorToken.FromExplicitValue("test-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            app.Services.GetRequiredService<SessionMetaRegistry>().OnSessionMeta(new SessionMeta {
+                SessionId = "s1",
+                ControlPort = stub.Port,
+                ControlSecret = "s",
+            });
+
+            using HttpClient http = new() { BaseAddress = new System.Uri($"http://127.0.0.1:{port}") };
+            HttpResponseMessage res = await http.GetAsync("/api/v1/instrumentation/auto");
+
+            res.StatusCode.Should().Be(HttpStatusCode.OK);
+            string body = await res.Content.ReadAsStringAsync();
+            body.Should().Contain("\"matched\":10");
+            body.Should().Contain("\"instrumented\":4");
+            body.Should().Contain("\"skippedTrivial\":3");
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
     // the row id and the library's patch id are separate counters. deleting row 2 must unpatch
     // whatever the library called that patch, not live patch 2.
     [Fact]

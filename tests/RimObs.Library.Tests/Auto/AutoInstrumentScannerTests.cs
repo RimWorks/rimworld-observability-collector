@@ -98,4 +98,39 @@ public class AutoInstrumentScannerTests {
         plan.Targets.Should().HaveCount(1);
         plan.SkippedOverCap.Should().Be(2);
     }
+
+    [Fact]
+    public void An_ignore_line_beats_an_include_that_also_matches() {
+        AutoInstrumentPlan plan = Scan(
+            "RimObsTest.AutoFixtures.AutoTargets\n!RimObsTest.AutoFixtures.*::Also*");
+
+        plan.SkippedIgnored.Should().Be(1);
+        plan.Matched.Should().Be(3);
+        plan.Targets.Select(m => m.Name).Should().NotContain("AlsoWorthwhile");
+    }
+
+    [Fact]
+    public void An_ignore_line_wins_even_when_it_is_listed_first() {
+        AutoInstrumentPlan plan = Scan(
+            "!RimObsTest.AutoFixtures.*::Also*\nRimObsTest.AutoFixtures.AutoTargets");
+
+        plan.Targets.Select(m => m.Name).Should().NotContain("AlsoWorthwhile");
+    }
+
+    [Fact]
+    public void Ignore_lines_alone_match_nothing() {
+        AutoInstrumentPlan plan = Scan("!RimObsTest.AutoFixtures.*");
+
+        plan.Matched.Should().Be(0);
+        plan.Targets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void An_ignore_line_can_carve_a_type_out_of_a_namespace_wildcard() {
+        AutoInstrumentPlan plan = Scan(
+            "RimObsTest.AutoFixtures.*\n!RimObsTest.AutoFixtures.OtherAutoTargets");
+
+        plan.Targets.Select(m => m.Name).Should().NotContain("Elsewhere");
+        plan.Targets.Select(m => m.Name).Should().Contain("Worthwhile");
+    }
 }

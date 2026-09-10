@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using FluentAssertions;
 using RimObsTest.AutoFixtures;
@@ -92,7 +93,7 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
     [Fact]
     public void Auto_mute_off_still_arms_but_leaves_the_decision_disabled() {
         AutoInstrumentRunner.ApplyFilters(
-            "RimObsTest.AutoFixtures.AutoTargets::ThirdWorthwhile", autoMute: false, "test.owner", s_Here);
+            "RimObsTest.AutoFixtures.AutoTargets::ThirdWorthwhile", ignore: null, autoMute: false, "test.owner", s_Here);
 
         AutoMute.Armed.Should().BeTrue();
         AutoMute.Enabled.Should().BeFalse();
@@ -138,5 +139,106 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
     }
 
     private static AutoInstrumentPlan Apply(string filters) =>
-        AutoInstrumentRunner.ApplyFilters(filters, autoMute: true, "test.owner", s_Here);
+        AutoInstrumentRunner.ApplyFilters(filters, ignore: null, autoMute: true, "test.owner", s_Here);
+
+    // the config poll runs on its own thread, so it parks the settings and Pump applies them.
+    // the scan itself cannot be asserted here: AssemblyIndex drops every RimObs.* assembly,
+    // which is where the fixture types live. ApplyFilters is covered directly above instead.
+    [Fact]
+    public void Pump_consumes_a_parked_request_and_does_not_replay_it() {
+        AutoInstrumentRequest.Set(
+            enabled: true, filters: "Verse.*", ignore: null, muteTrivial: true);
+        AutoInstrumentRequest.HasPending.Should().BeTrue();
+
+        AutoInstrumentRunner.Pump();
+        AutoInstrumentRequest.HasPending.Should().BeFalse();
+
+        AutoInstrumentRunner.Pump();
+        AutoInstrumentRequest.HasPending.Should().BeFalse();
+    }
+
+    // the enabled toggle used to collapse into an empty filter string, so off and on-with-no-
+    // filters parked the same snapshot and the second one was deduped away.
+    [Fact]
+    public void Turning_the_filter_off_unpatches_what_it_applied() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        Drain();
+        AutoInstrumentRunner.Instrumented.Should().Be(1);
+
+        AutoInstrumentRequest.Set(enabled: false, filters: null, ignore: null, muteTrivial: true);
+        Drain();
+
+        PatchRegistry.Snapshot().Should().BeEmpty();
+        _sink.Samples.Clear();
+        AutoTargets.Worthwhile(4);
+        _sink.Samples.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void An_unpatch_is_queued_for_the_budget_not_run_inline() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+
+        AutoInstrumentRunner.ApplyFilters(null, ignore: null, autoMute: true, "test.owner", s_Here);
+
+        AutoInstrumentRunner.Pending.Should().Be(3);
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+
+        Drain();
+        PatchRegistry.Snapshot().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_narrower_filter_drops_only_what_stopped_matching() {
+        Apply("RimObsTest.AutoFixtures.*");
+        Drain();
+        int keptId = PatchIdFor("Worthwhile");
+
+        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        Drain();
+
+        PatchRegistry.Snapshot().Should().HaveCount(1);
+        PatchIdFor("Worthwhile").Should().Be(keptId);
+    }
+
+    [Fact]
+    public void Re_enabling_the_same_filter_patches_the_reverted_targets_again() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        Drain();
+        AutoInstrumentRunner.ApplyFilters(null, ignore: null, autoMute: true, "test.owner", s_Here);
+        Drain();
+        PatchRegistry.Snapshot().Should().BeEmpty();
+
+        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        Drain();
+
+        AutoInstrumentRunner.Instrumented.Should().Be(1);
+        _sink.Samples.Clear();
+        AutoTargets.Worthwhile(4);
+        _sink.Samples.Should().HaveCount(1);
+    }
+
+    // a plan queued a frame ago must not keep patching after the user turned the filter off.
+    [Fact]
+    public void A_request_that_wants_nothing_drops_the_queue_before_it_patches() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        AutoInstrumentRunner.Pending.Should().Be(3);
+
+        AutoInstrumentRequest.Set(enabled: false, filters: null, ignore: null, muteTrivial: true);
+        Drain();
+
+        AutoInstrumentRunner.Instrumented.Should().Be(0);
+        PatchRegistry.Snapshot().Should().BeEmpty();
+    }
+
+    private static int PatchIdFor(string methodName) =>
+        PatchRegistry.Snapshot().Single(row => row.Signature.Contains(":" + methodName + "(")).Id;
+
+    [Fact]
+    public void Pump_with_nothing_parked_scans_nothing() {
+        AutoInstrumentRunner.Pump();
+
+        AutoInstrumentRunner.Matched.Should().Be(0);
+        AutoInstrumentRunner.BuildSummary().Should().Be("off");
+    }
 }

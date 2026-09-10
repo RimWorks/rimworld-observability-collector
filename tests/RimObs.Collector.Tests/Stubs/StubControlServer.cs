@@ -16,6 +16,7 @@ public sealed class StubControlServer : System.IDisposable {
     public System.Func<ControlPatchRequest, ControlPatchResponse>? OnPatch { get; set; }
     public System.Func<ControlPatchListResponse>? OnList { get; set; }
     public System.Func<int, bool>? OnUnpatch { get; set; }
+    public System.Func<ControlAutoInstrumentResponse>? OnAuto { get; set; }
 
     // set to mimic the library refusing or timing out; the body carries the reason like it does.
     public int? PatchHttpStatus { get; set; }
@@ -95,6 +96,10 @@ public sealed class StubControlServer : System.IDisposable {
                 return;
             }
             Write(ctx, WireCodec.Serialize(OnList?.Invoke() ?? new ControlPatchListResponse()));
+            return;
+        }
+        if (method == "GET" && path == "/auto") {
+            Write(ctx, WireCodec.Serialize(OnAuto?.Invoke() ?? new ControlAutoInstrumentResponse()));
             return;
         }
         if (method == "DELETE" && path.StartsWith("/patch/", System.StringComparison.Ordinal)) {

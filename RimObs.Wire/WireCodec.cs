@@ -45,6 +45,8 @@ public static class WireCodec {
                 return Serialize(v);
             case ControlPatchListResponse v:
                 return Serialize(v);
+            case ControlAutoInstrumentResponse v:
+                return Serialize(v);
             default:
                 throw new NotSupportedException($"WireCodec cannot serialize {typeof(T)}.");
         }
@@ -235,6 +237,19 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    public static byte[] Serialize(ControlAutoInstrumentResponse value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(7);
+        writer.WriteInt32(value.Matched);
+        writer.WriteInt32(value.Instrumented);
+        writer.WriteInt32(value.Muted);
+        writer.WriteInt32(value.SkippedTrivial);
+        writer.WriteInt32(value.SkippedOther);
+        writer.WriteInt32(value.Refused);
+        writer.WriteInt32(value.Pending);
+        return writer.ToArray();
+    }
+
     // One entry per wire type. A dispatch chain here was 17 sequential type compares and
     // the most complex method in the codec.
     private static readonly Dictionary<Type, Func<byte[], object>> s_Readers = new() {
@@ -255,6 +270,7 @@ public static class WireCodec {
         [typeof(ControlPatchRequest)] = data => ReadControlPatchRequest(data),
         [typeof(ControlPatchResponse)] = data => ReadControlPatchResponse(data),
         [typeof(ControlPatchListResponse)] = data => ReadControlPatchListResponse(data),
+        [typeof(ControlAutoInstrumentResponse)] = data => ReadControlAutoInstrumentResponse(data),
     };
 
     public static T Deserialize<T>(byte[] data) where T : class {
@@ -494,6 +510,20 @@ public static class WireCodec {
             };
         }
         return new ControlPatchListResponse { Patches = patches };
+    }
+
+    private static ControlAutoInstrumentResponse ReadControlAutoInstrumentResponse(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlAutoInstrumentResponse {
+            Matched = reader.ReadInt32(),
+            Instrumented = reader.ReadInt32(),
+            Muted = reader.ReadInt32(),
+            SkippedTrivial = reader.ReadInt32(),
+            SkippedOther = reader.ReadInt32(),
+            Refused = reader.ReadInt32(),
+            Pending = reader.ReadInt32(),
+        };
     }
 
     private static ControlMethodDescriptor ReadControlMethodDescriptor(WireBufferReader reader) {

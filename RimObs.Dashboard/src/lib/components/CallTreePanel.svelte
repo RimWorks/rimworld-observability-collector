@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { Snippet } from 'svelte';
     import {
         buildTreeRows,
         buildInvertedRows,
@@ -29,6 +30,8 @@
         onSelect,
         scope = $bindable('frame'),
         percentiles = new Map<number, { p50Us: number; p95Us: number; p99Us: number }>(),
+        instrumentation,
+        comparison,
         patchOwners = new Map<string, string[]>(),
     }: {
         nodes: readonly TreeNode[];
@@ -40,6 +43,9 @@
         scope?: 'frame' | 'session';
         /** per-section percentiles over the whole session; empty in frame scope */
         percentiles?: Map<number, { p50Us: number; p95Us: number; p99Us: number }>;
+        /** panels that live in the footer but whose state belongs to the route */
+        instrumentation?: Snippet;
+        comparison?: Snippet;
         /** other mods patching each section's target method, keyed by section name */
         patchOwners?: Map<string, string[]>;
     } = $props();
@@ -103,7 +109,13 @@
         { id: 'alloc', label: 'tree.tab.alloc' },
         { id: 'vram', label: 'tree.tab.vram' },
     ] as const;
-    type TabId = (typeof TABS)[number]['id'];
+    // these two used to be their own <details> further down the page. they are panels, not views
+    // of the frame, so they sit apart from the frame tabs rather than beside them.
+    const SIDE_TABS = [
+        { id: 'instrumentation', label: 'nav.instrumentation' },
+        { id: 'comparison', label: 'comparison.title' },
+    ] as const;
+    type TabId = (typeof TABS)[number]['id'] | (typeof SIDE_TABS)[number]['id'];
     // the drawer is shut on load and never restores a tab, so the flame owns the viewport first
     let activeTab = $state<TabId | null>(null);
 
@@ -206,8 +218,20 @@
             >
         {/each}
         <span class="chip" data-testid="thread-chip">
-            <i></i>MainThread
+            <i></i>{scope === 'session' ? t('tree.scope.session') : 'MainThread'}
             <b class="mono">{ns(frameDurationUs * 1000)}</b>
+        </span>
+        <span class="side">
+            {#each SIDE_TABS as tab (tab.id)}
+                <button
+                    type="button"
+                    class="tab"
+                    class:on={activeTab === tab.id}
+                    aria-expanded={activeTab === tab.id}
+                    onclick={() => selectTab(tab.id)}
+                    data-testid="tab-{tab.id}">{t(tab.label)}</button
+                >
+            {/each}
         </span>
         {#if activeTab !== null}
             <button
@@ -222,38 +246,51 @@
 
     {#if activeTab !== null}
         <div class="drawer" data-testid="tree-drawer">
-            <div class="bar">
-                <span class="seg" role="group" aria-label={t('tree.scope')}>
-                    {#each SCOPES as s (s.id)}
-                        <button
-                            type="button"
-                            class:on={scope === s.id}
-                            onclick={() => (scope = s.id)}
-                            data-testid="scope-{s.id}">{t(s.label)}</button
-                        >
-                    {/each}
-                </span>
-                <input
-                    type="search"
-                    bind:value={search}
-                    placeholder={t('tree.search')}
-                    aria-label={t('tree.search')}
-                    data-testid="tree-search"
-                />
-                <label><input type="checkbox" bind:checked={inverted} /> {t('tree.inverted')}</label
-                >
-                <label
-                    ><input type="checkbox" bind:checked={foldRecursion} /> {t('tree.fold')}</label
-                >
-                <button type="button" onclick={expandAll} data-testid="expand-all"
-                    >{t('tree.expandAll')}</button
-                >
-                <button type="button" onclick={() => expanded.clear()} data-testid="collapse-all">
-                    {t('tree.collapseAll')}
-                </button>
-            </div>
+            {#if activeTab !== 'instrumentation' && activeTab !== 'comparison'}
+                <div class="bar">
+                    <span class="seg" role="group" aria-label={t('tree.scope')}>
+                        {#each SCOPES as s (s.id)}
+                            <button
+                                type="button"
+                                class:on={scope === s.id}
+                                onclick={() => (scope = s.id)}
+                                data-testid="scope-{s.id}">{t(s.label)}</button
+                            >
+                        {/each}
+                    </span>
+                    <input
+                        type="search"
+                        bind:value={search}
+                        placeholder={t('tree.search')}
+                        aria-label={t('tree.search')}
+                        data-testid="tree-search"
+                    />
+                    <label
+                        ><input type="checkbox" bind:checked={inverted} />
+                        {t('tree.inverted')}</label
+                    >
+                    <label
+                        ><input type="checkbox" bind:checked={foldRecursion} />
+                        {t('tree.fold')}</label
+                    >
+                    <button type="button" onclick={expandAll} data-testid="expand-all"
+                        >{t('tree.expandAll')}</button
+                    >
+                    <button
+                        type="button"
+                        onclick={() => expanded.clear()}
+                        data-testid="collapse-all"
+                    >
+                        {t('tree.collapseAll')}
+                    </button>
+                </div>
+            {/if}
 
-            {#if activeTab === 'pie'}
+            {#if activeTab === 'instrumentation'}
+                {@render instrumentation?.()}
+            {:else if activeTab === 'comparison'}
+                {@render comparison?.()}
+            {:else if activeTab === 'pie'}
                 {#if slices.length === 0}
                     <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>
                 {:else}
@@ -452,8 +489,13 @@
         overflow: auto;
         border-bottom: 1px solid var(--border);
     }
-    .close {
+    .side {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-1);
         margin-left: auto;
+    }
+    .close {
         font: inherit;
         font-size: 1rem;
         line-height: 1;

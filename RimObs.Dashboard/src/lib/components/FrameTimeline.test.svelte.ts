@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import FrameTimeline from './FrameTimeline.svelte';
 import { layoutFrame, quadIndexForNode } from '../frameLayout';
 import { fitView } from '../frameView';
+import { sectionSearch } from '../sectionSearchState.svelte';
 import { buildFrameTree, type FrameData } from '../frameTree';
 import { buildSeries, EMPTY_SERIES } from '../frameSeries';
 import { drawTimeline } from '../frameDraw';
@@ -714,5 +715,284 @@ describe('FrameTimeline', () => {
             const notPrevented = await fireEvent.keyDown(canvas, { key });
             expect(notPrevented).toBe(false);
         }
+    });
+});
+
+// the window holds many frames. landing on all of them showed a span in seconds where the user
+// expects one frame of milliseconds, which happened whenever the selection scrolled out.
+describe('FrameTimeline span when the selection is gone', () => {
+    it('rests on one frame, not the whole window, for an unknown ordinal', async () => {
+        render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+            selectedOrdinal: 999_999,
+        });
+
+        const range = await screen.findByTestId('frame-range');
+        expect(range.textContent).not.toMatch(/\ds\b/);
+    });
+});
+
+// live-follow advances selectedOrdinal on every poll. the refit used to be an effect keyed on
+// that, so a zoom survived about 250ms. the older zoom test passes no ordinal at all, so it
+// stayed green through the whole bug.
+describe('FrameTimeline zoom under live-follow', () => {
+    it('keeps the zoom while the followed ordinal advances', async () => {
+        const { rerender } = render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+            selectedOrdinal: 1234,
+        });
+        const canvas = screen.getByRole('application');
+        await fireEvent.keyDown(canvas, { key: '+' });
+        const zoomed = screen.getByTestId('frame-range').textContent;
+
+        for (const ordinal of [1235, 1236, 1237]) {
+            await rerender({
+                series: buildSeries([{ ...FRAME, capture_ordinal: ordinal }]),
+                names: NAMES,
+                selectedOrdinal: ordinal,
+            });
+        }
+
+        expect(screen.getByTestId('frame-range').textContent).toBe(zoomed);
+    });
+});
+
+// the ruler measured from series.startUs, so it read the offset into the accumulated window
+// rather than a position in the frame. on a window a few seconds long every label said "s".
+describe('FrameTimeline ruler', () => {
+    const secondsApart = [
+        { ...FRAME, capture_ordinal: 1, start_us: 1_000, end_us: 17_200 },
+        { ...FRAME, capture_ordinal: 2, start_us: 4_000_000, end_us: 4_016_200 },
+    ];
+
+    it('labels ticks from the start of the view, not the start of the window', () => {
+        render(FrameTimeline, {
+            series: buildSeries(secondsApart),
+            names: NAMES,
+            selectedOrdinal: 2,
+        });
+
+        const labels = [...screen.getByTestId('frame-ruler').querySelectorAll('span')].map(
+            (s) => s.textContent ?? '',
+        );
+
+        expect(labels[0]).toMatch(/^0/);
+        for (const label of labels) expect(label).not.toMatch(/\ds\b/);
+    });
+});
+
+describe('FrameTimeline section search', () => {
+    const NAMES_WITH_CULL = new Map([
+        ...NAMES,
+        [161, { name: 'Unity.Camera.Cull', subsystem: 'render' }],
+    ]);
+
+    // two independent roots, so filtering can actually remove a whole branch: root 10/child
+    // 30 matches "TickList", root 20/child 40 does not.
+    const MULTI_ROOT_FRAME: FrameData = {
+        capture_ordinal: 1,
+        start_us: 0,
+        end_us: 10_000,
+        duration_us: 10_000,
+        node_count: 4,
+        nodes: {
+            section_ids: [10, 30, 20, 40],
+            parent_ids: [-1, 10, -1, 20],
+            node_ids: [1, 2, 3, 4],
+            parent_node_ids: [-1, 1, -1, 3],
+            start_us: [0, 100, 5000, 5100],
+            dur_us: [1000, 500, 1000, 500],
+        },
+    };
+
+    // the box lives on the flamegraph's stats bar now, so the query arrives through the store
+    // rather than an input inside this component.
+    async function typeQuery(text: string): Promise<void> {
+        sectionSearch.query = text;
+        await waitForFrame();
+    }
+
+    beforeEach(() => {
+        sectionSearch.query = '';
+        sectionSearch.filterMode = false;
+    });
+
+    it('highlights a section that has a node in the current frame', async () => {
+        render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+            selectedOrdinal: FRAME.capture_ordinal,
+        });
+        await typeQuery('TickList');
+        // the count is nodes now, and this frame carries two of section 30.
+        expect(sectionSearch.nodeCount).toBe(2);
+        expect(sectionSearch.frameCount).toBe(1);
+        expect(sectionSearch.unsampledCount).toBe(0);
+        const [, , opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(opts.matchSectionIds?.has(30)).toBe(true);
+    });
+
+    // the whole point of catalog scope: a registered section with zero nodes in this frame
+    // is a distinct, labelled result, not a silent "0 matches".
+    it('shows a catalog-only match as registered but not sampled', async () => {
+        render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES_WITH_CULL,
+            selectedOrdinal: FRAME.capture_ordinal,
+        });
+        await typeQuery('Cull');
+        // registered but never sampled, so it contributes no nodes and one unsampled hit.
+        expect(sectionSearch.nodeCount).toBe(0);
+        expect(sectionSearch.unsampledCount).toBe(1);
+    });
+
+    it('reports zero matches and no occurrences to step through', async () => {
+        render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+            selectedOrdinal: FRAME.capture_ordinal,
+        });
+        await typeQuery('doesnotexist');
+        expect(sectionSearch.nodeCount).toBe(0);
+        expect(sectionSearch.unsampledCount).toBe(0);
+        expect(sectionSearch.occurrenceCount).toBe(0);
+    });
+
+    it('filter mode hides the branch with no match', async () => {
+        render(FrameTimeline, {
+            series: buildSeries([MULTI_ROOT_FRAME]),
+            names: NAMES,
+            selectedOrdinal: MULTI_ROOT_FRAME.capture_ordinal,
+        });
+        await typeQuery('TickList');
+        const before = vi.mocked(drawTimeline).mock.calls.at(-1)![1].length;
+
+        sectionSearch.filterMode = true;
+        await waitForFrame();
+        const after = vi.mocked(drawTimeline).mock.calls.at(-1)![1].length;
+
+        expect(after).toBeLessThan(before);
+    });
+
+    it('next wraps to the first match after the last', async () => {
+        const repeated: FrameData = {
+            ...FRAME,
+            nodes: {
+                section_ids: [30, 30, 10],
+                parent_ids: [10, 10, -1],
+                node_ids: [2, 3, 1],
+                parent_node_ids: [1, 1, -1],
+                start_us: [1100, 1600, 1000],
+                dur_us: [400, 900, 16200],
+            },
+        };
+        const { component } = render(FrameTimeline, {
+            series: buildSeries([repeated]),
+            names: NAMES,
+            selectedOrdinal: repeated.capture_ordinal,
+        });
+        await typeQuery('TickList');
+
+        component.stepMatch(1);
+        await waitForFrame();
+        const first = screen.getByRole('status').textContent;
+        component.stepMatch(1);
+        await waitForFrame();
+        const second = screen.getByRole('status').textContent;
+        expect(second).not.toBe(first);
+        component.stepMatch(1);
+        await waitForFrame();
+        expect(screen.getByRole('status').textContent).toBe(first);
+    });
+
+    // the window accumulates a new frame every poll while live-following, and the ordinal
+    // advances with it. neither may disturb the query or its highlight.
+    it('keeps the query and its highlight across a live poll', async () => {
+        const { rerender } = render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+            selectedOrdinal: FRAME.capture_ordinal,
+        });
+        await typeQuery('TickList');
+        expect(sectionSearch.nodeCount).toBe(2);
+
+        const polled: FrameData = { ...FRAME, capture_ordinal: FRAME.capture_ordinal + 1 };
+        await rerender({
+            series: buildSeries([FRAME, polled]),
+            names: NAMES,
+            selectedOrdinal: polled.capture_ordinal,
+        });
+        await waitForFrame();
+
+        expect(sectionSearch.query).toBe('TickList');
+        // window scope, so the second buffered frame's nodes join the count
+        expect(sectionSearch.nodeCount).toBe(4);
+        expect(sectionSearch.frameCount).toBe(2);
+        const [, , opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(opts.matchSectionIds?.has(30)).toBe(true);
+    });
+});
+
+// the count used to describe the whole buffer while the canvas showed one frame. scope makes
+// the two agree, and it drives the count, the dimming range and what next/prev walks.
+describe('FrameTimeline search scope', () => {
+    const TWO_FRAMES = [
+        FRAME,
+        { ...FRAME, capture_ordinal: FRAME.capture_ordinal + 1, start_us: 20_000, end_us: 36_200 },
+    ];
+
+    beforeEach(() => {
+        sectionSearch.query = '';
+        sectionSearch.scope = 'window';
+    });
+
+    it('window scope counts nodes across every buffered frame', async () => {
+        render(FrameTimeline, {
+            series: buildSeries(TWO_FRAMES),
+            names: NAMES,
+            selectedOrdinal: TWO_FRAMES[1].capture_ordinal,
+        });
+        sectionSearch.query = 'TickList';
+        await waitForFrame();
+
+        expect(sectionSearch.nodeCount).toBe(4);
+        expect(sectionSearch.frameCount).toBe(2);
+    });
+
+    it('frame scope counts only the selected frame and bounds the dimming to it', async () => {
+        render(FrameTimeline, {
+            series: buildSeries(TWO_FRAMES),
+            names: NAMES,
+            selectedOrdinal: TWO_FRAMES[1].capture_ordinal,
+        });
+        sectionSearch.query = 'TickList';
+        sectionSearch.scope = 'frame';
+        await waitForFrame();
+
+        expect(sectionSearch.nodeCount).toBe(2);
+        expect(sectionSearch.frameCount).toBe(1);
+        const [, , opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(opts.matchRange).toEqual({ startUs: 20_000, endUs: 36_200 });
+    });
+
+    it('frame scope drops the not-sampled tally, which is a registry question', async () => {
+        const withCull = new Map([
+            ...NAMES,
+            [161, { name: 'Unity.Camera.Cull', subsystem: 'render' }],
+        ]);
+        render(FrameTimeline, {
+            series: buildSeries(TWO_FRAMES),
+            names: withCull,
+            selectedOrdinal: TWO_FRAMES[1].capture_ordinal,
+        });
+        sectionSearch.query = 'Cull';
+        await waitForFrame();
+        expect(sectionSearch.unsampledCount).toBe(1);
+
+        sectionSearch.scope = 'frame';
+        await waitForFrame();
+        expect(sectionSearch.unsampledCount).toBe(0);
     });
 });

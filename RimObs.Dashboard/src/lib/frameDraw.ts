@@ -13,9 +13,19 @@ const MIN_LABEL_CHARS = 10;
 const ELLIPSIS = '\u2026';
 const FOCUS_RING_PX = 2;
 const GAP_ALPHA = 0.55;
+const MATCH_RING_PX = 1.5;
+// non-matches read as background noise once a search is active, without losing their shape.
+const SEARCH_DIM_ALPHA = 0.32;
 
-const SUBSYSTEM_TOKENS = ['--sub-tick', '--sub-ai', '--sub-render', '--sub-ui'];
-const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui'];
+const SUBSYSTEM_TOKENS = [
+    '--sub-tick',
+    '--sub-ai',
+    '--sub-render',
+    '--sub-ui',
+    '--sub-engine',
+    '--sub-idle',
+];
+const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui', 'engine', 'idle'];
 
 export interface DrawTheme {
     background: string;
@@ -25,6 +35,7 @@ export interface DrawTheme {
     hue: Record<string, string>;
     hueNone: string;
     font: string;
+    match: string;
 }
 
 export interface DrawOptions {
@@ -39,6 +50,10 @@ export interface DrawOptions {
     focusIndex: number;
     /** only gaps the ordinals say are missing frames get a band; idle time reads as empty. */
     gaps?: { startUs: number; endUs: number; missing: number }[];
+    /** section search: present (even empty) means a query is active and non-matches dim. */
+    matchSectionIds?: ReadonlySet<number> | null;
+    /** frame-scoped search: a quad outside this span is not a match even if its section is. */
+    matchRange?: { startUs: number; endUs: number } | null;
 }
 
 export function readTheme(el: Element): DrawTheme {
@@ -55,6 +70,7 @@ export function readTheme(el: Element): DrawTheme {
         hue,
         hueNone: read('--sub-none', '#5c6b85'),
         font: `500 11px ${read('--font-mono', 'monospace')}`,
+        match: read('--cyan', '#39c4d4'),
     };
 }
 
@@ -136,6 +152,8 @@ export function drawTimeline(
     const minLabelPx = charPx * MIN_LABEL_CHARS;
     let labelRow = -1;
     let labelEnd = 0;
+    const matchIds = opts.matchSectionIds;
+    const searchActive = matchIds != null;
 
     for (let i = 0; i < quads.length; i++) {
         const q = quads[i];
@@ -149,11 +167,27 @@ export function drawTimeline(
         const w = Math.max(right - x, MIN_QUAD_PX);
 
         const isFocused = i === opts.focusIndex;
+        const inRange =
+            !opts.matchRange ||
+            (q.endUs > opts.matchRange.startUs && q.startUs < opts.matchRange.endUs);
+        const isMatch = searchActive && inRange && matchIds.has(q.sectionId);
+        ctx.globalAlpha = searchActive && !isMatch ? SEARCH_DIM_ALPHA : 1;
         const fill = quadFill(q, opts, i === opts.hoverIndex || isFocused);
         ctx.fillStyle = fill;
         ctx.fillRect(x, y, w, ROW_HEIGHT - 1);
 
         const ink = inkOn(fill, theme);
+
+        if (isMatch) {
+            ctx.strokeStyle = theme.match;
+            ctx.lineWidth = MATCH_RING_PX;
+            ctx.strokeRect(
+                x + MATCH_RING_PX / 2,
+                y + MATCH_RING_PX / 2,
+                Math.max(w - MATCH_RING_PX, 0),
+                ROW_HEIGHT - 1 - MATCH_RING_PX,
+            );
+        }
 
         if (isFocused) {
             ctx.strokeStyle = ink;

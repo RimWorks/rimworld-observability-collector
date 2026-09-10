@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import Flamegraph from './Flamegraph.svelte';
+import { sectionSearch } from '../lib/sectionSearchState.svelte';
 
 // under fake timers the rAF draw loop actually fires, and jsdom has no 2d context to give it.
 vi.mock('../lib/stripDraw', () => ({ drawStrip: vi.fn() }));
@@ -268,6 +269,12 @@ function mockFetch(
 async function openTree() {
     await screen.findByTestId('tab-tree');
     await fireEvent.click(screen.getByTestId('tab-tree'));
+}
+
+// instrumentation and comparison moved out of their own <details> and into the same footer
+async function openFooterTab(id: 'instrumentation' | 'comparison') {
+    await screen.findByTestId(`tab-${id}`);
+    await fireEvent.click(screen.getByTestId(`tab-${id}`));
 }
 
 function jsonResponse(body: unknown) {
@@ -918,12 +925,13 @@ describe('Flamegraph page', () => {
         await openTree();
         await waitFor(() => expect(screen.getAllByTestId('tree-delta').length).toBeGreaterThan(0));
 
-        const panel = screen.getByTestId('comparison-panel') as HTMLDetailsElement;
-        panel.open = true;
-        await fireEvent(panel, new Event('toggle'));
+        await openFooterTab('comparison');
         await waitFor(() => expect(screen.getByRole('button', { name: 'Compare' })).toBeEnabled());
 
         await fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+
+        // the scope toolbar belongs to the tree, so it is not on screen while compare is open
+        await openTree();
 
         // the result flips the tree to session scope, where the delta is now measurable
         await waitFor(() => expect(screen.getByTestId('scope-session')).toHaveClass('on'));
@@ -1016,6 +1024,7 @@ describe('Flamegraph page', () => {
     it('carries the instrumentation panel and its active patches', async () => {
         mockFetch();
         render(Flamegraph);
+        await openFooterTab('instrumentation');
         await waitFor(() => expect(screen.getByTestId('instrumentation-panel')).toBeTruthy());
 
         const rows = await screen.findAllByTestId('active-patches');
@@ -1040,6 +1049,7 @@ describe('Flamegraph page', () => {
     it('shows no context menu until a bar is right-clicked', async () => {
         mockFetch();
         render(Flamegraph);
+        await openFooterTab('instrumentation');
         await waitFor(() => expect(screen.getByTestId('instrumentation-panel')).toBeTruthy());
 
         expect(screen.queryByTestId('flame-context')).toBeNull();
@@ -1261,5 +1271,200 @@ describe('Flamegraph clear history', () => {
         await fireEvent.click(screen.getByTestId('clear-ring'));
 
         expect(screen.queryByTestId('paused-badge')).toBeNull();
+    });
+});
+
+// instrumentation and comparison used to be two <details> stacked under the flamegraph, which
+// pushed the page down and read as part of the frame. they are footer panels now.
+describe('Flamegraph footer panels', () => {
+    it('offers instrumentation and comparison as footer tabs', async () => {
+        mockFetch();
+        render(Flamegraph);
+
+        expect(await screen.findByTestId('tab-instrumentation')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-comparison')).toBeInTheDocument();
+    });
+
+    it('keeps both panels out of the page until their tab is picked', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await screen.findByTestId('tab-instrumentation');
+
+        expect(screen.queryByTestId('instrumentation-panel')).toBeNull();
+        expect(screen.queryByTestId('comparison-panel')).toBeNull();
+    });
+
+    it('shows the comparison panel only on its own tab', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await openFooterTab('comparison');
+
+        expect(await screen.findByTestId('comparison-panel')).toBeInTheDocument();
+        expect(screen.queryByTestId('instrumentation-panel')).toBeNull();
+    });
+
+    // the scope and search controls describe the frame tree, so they have no meaning next to
+    // the instrumentation panel.
+    it('hides the tree toolbar while a panel tab is open', async () => {
+        mockFetch();
+        render(Flamegraph);
+        await openFooterTab('instrumentation');
+
+        expect(screen.queryByTestId('scope-session')).toBeNull();
+        expect(screen.queryByTestId('tree-search')).toBeNull();
+    });
+});
+
+// "sampled" is judged against the frame on screen, so this count flips several times a second
+// while live-following. it used to be wrapped in an {#if}, which mounted and unmounted the cell
+// and slid the search box and its buttons out from under the cursor.
+describe('Flamegraph search control layout', () => {
+    beforeEach(() => {
+        sectionSearch.query = '';
+        sectionSearch.filterMode = false;
+        sectionSearch.nodeCount = 0;
+        sectionSearch.unsampledCount = 0;
+    });
+
+    it('keeps the not-sampled cell mounted whether or not anything is unsampled', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        sectionSearch.query = 'Tick';
+        sectionSearch.unsampledCount = 0;
+        await waitFor(() => expect(screen.getByTestId('section-search-unsampled')).toBeTruthy());
+        const hiddenWhenZero = screen.getByTestId('section-search-unsampled');
+        expect(hiddenWhenZero.classList.contains('empty')).toBe(true);
+
+        sectionSearch.unsampledCount = 2;
+        await waitFor(() =>
+            expect(screen.getByTestId('section-search-unsampled').classList.contains('empty')).toBe(
+                false,
+            ),
+        );
+        // same node, never remounted, so nothing beside it moved
+        expect(screen.getByTestId('section-search-unsampled')).toBe(hiddenWhenZero);
+    });
+
+    it('gives the input a resting affordance so it reads as a field, not a label', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+        const input = screen.getByTestId('section-search-input');
+        expect(input.tagName).toBe('INPUT');
+        expect(input.getAttribute('placeholder')).toBeTruthy();
+        expect(screen.getByTestId('section-search').querySelector('svg.glass')).toBeTruthy();
+    });
+});
+
+// each of these pins a rule this control has already broken once. the labels went ambiguous
+// because a lone toggle cannot show its other state, and the input read as static text.
+describe('Flamegraph search control affordance', () => {
+    beforeEach(() => {
+        sectionSearch.query = '';
+        sectionSearch.scope = 'window';
+        sectionSearch.filterMode = false;
+    });
+
+    it('gives the input a visible label, not just a placeholder', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        const input = screen.getByTestId('section-search-input');
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        expect(input.id).toBeTruthy();
+        expect(label?.textContent?.trim()).toBeTruthy();
+    });
+
+    it('shows both scope options so the choice explains itself', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        const frame = screen.getByTestId('section-search-scope-frame');
+        const window_ = screen.getByTestId('section-search-scope-window');
+        expect(frame.textContent?.trim()).toBeTruthy();
+        expect(window_.textContent?.trim()).toBeTruthy();
+        expect(frame.getAttribute('aria-pressed')).toBe('false');
+        expect(window_.getAttribute('aria-pressed')).toBe('true');
+
+        await fireEvent.click(frame);
+        await waitFor(() => expect(sectionSearch.scope).toBe('frame'));
+        expect(frame.getAttribute('aria-pressed')).toBe('true');
+        expect(window_.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('labels the filter checkbox with what it does', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        const box = screen.getByTestId('section-search-filter') as HTMLInputElement;
+        expect(box.type).toBe('checkbox');
+        expect(box.closest('label')?.textContent?.trim()).toBeTruthy();
+
+        await fireEvent.click(box);
+        await waitFor(() => expect(sectionSearch.filterMode).toBe(true));
+    });
+
+    it('gives the steppers accessible names since they are icon-only', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        expect(screen.getByTestId('section-search-prev').getAttribute('aria-label')).toBeTruthy();
+        expect(screen.getByTestId('section-search-next').getAttribute('aria-label')).toBeTruthy();
+    });
+});
+
+// stepping while live-following lands on a frame the next poll immediately replaces, so a
+// step has to pin the frame it found.
+describe('Flamegraph search stepping pauses', () => {
+    beforeEach(() => {
+        sectionSearch.query = '';
+        sectionSearch.scope = 'window';
+        sectionSearch.occurrenceCount = 0;
+    });
+
+    it('pauses on the frame the step landed in', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+
+        sectionSearch.query = 'Tick';
+        await waitFor(() => expect(sectionSearch.occurrenceCount).toBeGreaterThan(0));
+
+        await fireEvent.click(screen.getByTestId('section-search-next'));
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeTruthy());
+    });
+
+    it('leaves the live view alone when there is nothing to step to', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        sectionSearch.query = 'nothingmatchesthis';
+        await waitFor(() => expect(sectionSearch.occurrenceCount).toBe(0));
+
+        expect(screen.getByTestId('section-search-next')).toBeDisabled();
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+    });
+});
+
+describe('Flamegraph frame history selection', () => {
+    it('pins the clicked frame and paints it as the selected bar', async () => {
+        const { drawStrip } = await import('../lib/stripDraw');
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        const canvas = screen
+            .getByTestId('frame-strip')
+            .querySelector('canvas') as HTMLCanvasElement;
+        canvas.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100 }) as DOMRect;
+
+        await fireEvent.click(canvas, { clientX: 0, clientY: 10 });
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        await waitFor(() => {
+            const calls = vi.mocked(drawStrip).mock.calls;
+            expect(calls.at(-1)?.[2].selectedOrdinal).toBe(4319);
+        });
     });
 });

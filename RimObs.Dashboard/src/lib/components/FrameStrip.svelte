@@ -66,6 +66,7 @@
             heightPx,
             dpr,
             selectedOrdinal,
+            hoveredOrdinal: bars[hoverIndex]?.ordinal ?? null,
             cutOrdinals,
             gcOrdinals,
             slots,
@@ -76,6 +77,7 @@
                 bad: read('--bad', '#f25d63'),
                 badDeep: read('--bad-deep', '#c2393e'),
                 selected: read('--text', '#d4dded'),
+                hover: read('--text-dim', '#9aa8c0'),
                 grid: read('--border-soft', '#1c2535'),
                 line: read('--border', '#28344a'),
                 cut: read('--text-faint', '#8a98b3'),
@@ -88,6 +90,7 @@
     $effect(() => {
         void bars;
         void selectedOrdinal;
+        void hoverIndex;
         void cutOrdinals;
         void gcOrdinals;
         void widthPx;

@@ -42,6 +42,11 @@
     --sub-ai: #7c9cf5;
     --sub-render: #e8b53e;
     --sub-ui: #b184e8;
+    /* unity's own work, so engine time reads apart from rimworld's */
+    --sub-engine: #6f7f99;
+    /* the game waiting on vsync, not working. muted on purpose: a vsync-limited frame is not
+       a slow frame, and colouring the wait like cost makes every capped frame look blown. */
+    --sub-idle: #2f3a4d;
     --sub-none: #5c6b85;
 
     --font-display: 'Chakra Petch', ui-sans-serif, sans-serif;

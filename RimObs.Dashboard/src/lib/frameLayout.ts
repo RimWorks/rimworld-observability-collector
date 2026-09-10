@@ -10,6 +10,8 @@ export interface LayoutOptions {
     /** half-open node index bounds; defaults to the whole tree. */
     from?: number;
     to?: number;
+    /** 1 = force-hidden regardless of duration, e.g. the search filter. */
+    hidden?: Uint8Array;
 }
 
 export interface Quad {
@@ -42,6 +44,7 @@ export function foldFrame(
 // pulled out of layoutFrame so the hot loop reads as three cases, not eight branches
 function isHidden(n: TreeNode, i: number, folded: Uint8Array, opts: LayoutOptions): boolean {
     if (folded[i] === 1) return true;
+    if (opts.hidden?.[i] === 1) return true;
     if (n.depth >= opts.maxDepth) return true;
     return n.endUs <= opts.viewStartUs || n.startUs >= opts.viewEndUs;
 }

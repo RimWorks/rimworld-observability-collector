@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
@@ -28,6 +29,7 @@ public sealed class ControlServerTests : IDisposable {
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         ControlServices.ResetForTests();
+        AutoInstrumentRunner.ResetForTests();
 
         _server = new ControlServer(
             secret: "topsecret",
@@ -60,6 +62,7 @@ public sealed class ControlServerTests : IDisposable {
         SectionCatalog.Clear();
         SectionRegistry.Clear();
         ControlServices.ResetForTests();
+        AutoInstrumentRunner.ResetForTests();
         GC.SuppressFinalize(this);
     }
 
@@ -125,6 +128,27 @@ public sealed class ControlServerTests : IDisposable {
         }
 
         decoded.Patches.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Auto_returns_the_runners_counters() {
+        AutoInstrumentPlan plan = new AutoInstrumentPlan {
+            Matched = 5,
+            SkippedTrivial = 2,
+            SkippedAlreadyInstrumented = 1,
+        };
+        AutoInstrumentRunner.Submit(plan, "test.pkg", autoMute: false);
+
+        HttpResponseMessage res = await GetMsg("/auto");
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        ControlAutoInstrumentResponse decoded = WireCodec.Deserialize<ControlAutoInstrumentResponse>(
+            await res.Content.ReadAsByteArrayAsync(_drainCts.Token));
+        decoded.Matched.Should().Be(5);
+        decoded.SkippedTrivial.Should().Be(2);
+        decoded.SkippedOther.Should().Be(1);
+        decoded.Instrumented.Should().Be(0);
+        decoded.Pending.Should().Be(0);
     }
 
     private async Task<HttpResponseMessage> PostMsg(string path, byte[] body) {

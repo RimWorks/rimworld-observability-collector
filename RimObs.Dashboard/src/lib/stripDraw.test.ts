@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawStrip, type StripTheme } from './stripDraw';
+import { drawStrip, MARK_MIN_W, type StripTheme } from './stripDraw';
 import { buildBars, GC_BAND_PX } from './frameStrip';
 import { FRAME_BUDGET_US } from './frameCost';
 
@@ -10,6 +10,7 @@ const THEME: StripTheme = {
     bad: '#ff0000',
     badDeep: '#880000',
     selected: '#sel',
+    hover: '#hov',
     grid: '#grid',
     line: '#line',
     cut: '#cut',
@@ -238,5 +239,42 @@ describe('gridline paint order', () => {
             expect(line.x2).toBe(100);
             expect(line.y1).toBe(line.y2);
         }
+    });
+});
+
+// a full ring lays 2000 bars across ~1400px, so a bar drawn at its own width is a sub-pixel
+// sliver. the mark has to widen or clicking and hovering look like they did nothing.
+describe('drawStrip marks', () => {
+    const many = Array.from({ length: 200 }, (_, i) => i + 1);
+    const flat = many.map(() => 1000);
+
+    it('widens the selected bar to the minimum mark width', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars(many, flat), opts(7));
+        const marked = rects.filter((r) => r.fill === '#sel');
+        expect(marked).toHaveLength(1);
+        expect(marked[0].w).toBe(MARK_MIN_W);
+    });
+
+    it('paints and widens the hovered bar', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars(many, flat), { ...opts(), hoveredOrdinal: 7 });
+        const marked = rects.filter((r) => r.fill === '#hov');
+        expect(marked).toHaveLength(1);
+        expect(marked[0].w).toBe(MARK_MIN_W);
+    });
+
+    it('leaves the selection white when it is also hovered', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars(many, flat), { ...opts(7), hoveredOrdinal: 7 });
+        expect(rects.filter((r) => r.fill === '#sel')).toHaveLength(1);
+        expect(rects.filter((r) => r.fill === '#hov')).toHaveLength(0);
+    });
+
+    it('leaves unmarked bars at their own slot width', () => {
+        const { ctx, rects } = fakeCtx();
+        drawStrip(ctx, buildBars(many, flat), opts(7));
+        const plain = rects.filter((r) => r.fill !== '#sel' && r.fill !== THEME.background);
+        expect(plain.every((r) => r.w < MARK_MIN_W)).toBe(true);
     });
 });

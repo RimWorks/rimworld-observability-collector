@@ -634,7 +634,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(17);
+        AllWireTypes().Count.Should().Be(18);
     }
 }
 

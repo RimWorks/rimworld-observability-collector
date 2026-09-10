@@ -24,21 +24,22 @@ internal static class AutoInstrumentScanner {
         int maxTargets = DefaultMaxTargets
     ) {
         AutoInstrumentPlan plan = new AutoInstrumentPlan();
-        if (patterns.Length == 0)
+        MethodPattern.Split(patterns, out MethodPattern[] includes, out MethodPattern[] excludes);
+        if (includes.Length == 0)
             return plan;
 
         foreach (Assembly assembly in assemblies) {
             string name = assembly.GetName().Name ?? string.Empty;
-            if (!MethodPattern.AnyAssembly(patterns, name))
+            if (!MethodPattern.AnyAssembly(includes, name))
                 continue;
-            ScanAssembly(assembly, name, patterns, plan, maxTargets);
+            ScanAssembly(assembly, name, includes, excludes, plan, maxTargets);
         }
 
         return plan;
     }
 
     private static void ScanAssembly(
-        Assembly assembly, string assemblyName, MethodPattern[] patterns,
+        Assembly assembly, string assemblyName, MethodPattern[] patterns, MethodPattern[] excludes,
         AutoInstrumentPlan plan, int maxTargets
     ) {
         foreach (Type type in SafeTypes(assembly)) {
@@ -48,12 +49,12 @@ internal static class AutoInstrumentScanner {
             if (!AnyTypeMatch(patterns, assemblyName, typeName))
                 continue;
 
-            ScanType(type, typeName, assemblyName, patterns, plan, maxTargets);
+            ScanType(type, typeName, assemblyName, patterns, excludes, plan, maxTargets);
         }
     }
 
     private static void ScanType(
-        Type type, string typeName, string assemblyName, MethodPattern[] patterns,
+        Type type, string typeName, string assemblyName, MethodPattern[] patterns, MethodPattern[] excludes,
         AutoInstrumentPlan plan, int maxTargets
     ) {
         MethodInfo[] methods;
@@ -68,6 +69,11 @@ internal static class AutoInstrumentScanner {
             MethodInfo method = methods[i];
             if (!AnyMatch(patterns, assemblyName, typeName, method.Name))
                 continue;
+            // an exclusion wins wherever it sits in the list, so it is checked after the include.
+            if (AnyMatch(excludes, assemblyName, typeName, method.Name)) {
+                plan.SkippedIgnored++;
+                continue;
+            }
 
             plan.Matched++;
             Classify(method, typeName, plan, maxTargets);

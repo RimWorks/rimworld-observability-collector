@@ -23,7 +23,9 @@ public static class ConfigEndpoints {
                     return error;
                 }
 
-                store.Replace(incoming!);
+                incoming!.Sampling.MaxCaptureDepth =
+                    SamplingOptions.ClampCaptureDepth(incoming.Sampling.MaxCaptureDepth);
+                store.Replace(incoming);
                 // the ring resizes in place so the strip keeps the history that still fits.
                 aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
                 return Results.Json(store.Current, ConfigJson.Options);

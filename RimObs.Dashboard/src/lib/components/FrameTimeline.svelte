@@ -27,8 +27,17 @@
     } from '../frameView';
     import { readTheme, drawTimeline, ROW_HEIGHT } from '../frameDraw';
     import { shareOfFrame, shareOfBudget, percent } from '../frameCost';
+    import { sectionSearch } from '../sectionSearchState.svelte';
     import { ns } from '../format';
     import { t } from '../i18n';
+    import {
+        searchCatalog,
+        matchOccurrences,
+        stepCursor,
+        resolveCursorIndex,
+        hideMask,
+        type MatchCursor,
+    } from '../sectionSearch';
 
     let {
         series = EMPTY_SERIES,
@@ -70,11 +79,20 @@
     // the window holds many frames so a user can zoom out to them, but landing on the whole
     // window would bury the frame they picked. default to that frame alone.
     let selectedBounds = $derived.by<ViewRange>(() => {
-        const entry = series.entries.find((e) => e.ordinal === selectedOrdinal);
+        const entry =
+            series.entries.find((e) => e.ordinal === selectedOrdinal) ?? series.entries.at(-1);
+        // falling back to the whole window here showed seconds instead of one frame whenever the
+        // selected ordinal had scrolled out of the series, which happens on every poll.
         return entry ? { startUs: entry.startUs, endUs: entry.endUs } : bounds;
     });
 
     let view = $state<ViewRange | null>(null);
+
+    // a call for the same reason focusNode is one. as an effect keyed on selectedOrdinal this
+    // refit fired on every poll, because live-follow advances the ordinal, and ate the zoom.
+    export function refit(): void {
+        view = null;
+    }
     // clamped on read, not just on write: the window grows under us on every poll, and a
     // view from a longer series culls every node in a shorter one.
     let effectiveView = $derived(view ? clampView(view, bounds) : fitView(selectedBounds));
@@ -88,6 +106,38 @@
     let widthPx = $state(600);
     let dpr = $state(1);
 
+    // "sampled" is judged against the frame on screen, not the whole window.
+    let query = $derived(sectionSearch.query);
+    let filterMode = $derived(sectionSearch.filterMode);
+    let cursor = $state<MatchCursor | null>(null);
+
+    let currentFrameEntry = $derived(
+        series.entries.find((e) => e.ordinal === selectedOrdinal) ?? null,
+    );
+    let sampledIds = $derived.by(() => {
+        const set = new Set<number>();
+        const entry = currentFrameEntry;
+        if (!entry) return set;
+        for (let i = entry.nodeStart; i < entry.nodeEnd; i++) set.add(series.nodes[i].sectionId);
+        return set;
+    });
+    let matches = $derived.by(() => searchCatalog(query, names, sampledIds));
+    let unsampledMatches = $derived(matches.filter((m) => !m.sampled));
+    let frameScoped = $derived(sectionSearch.scope === 'frame');
+    // frame scope drops sections that never appear in this frame, so the count and the
+    // highlighting agree with each other instead of describing different sets.
+    let scopedMatches = $derived(frameScoped ? matches.filter((m) => m.sampled) : matches);
+    // present (even empty) tells the drawer a query is active; absent means "don't dim".
+    let matchIds = $derived(query.trim() ? new Set(scopedMatches.map((m) => m.id)) : null);
+    let matchRange = $derived(
+        frameScoped && currentFrameEntry
+            ? { startUs: currentFrameEntry.startUs, endUs: currentFrameEntry.endUs }
+            : null,
+    );
+    let hiddenMask = $derived.by(() =>
+        filterMode && matchIds && matchIds.size > 0 ? hideMask(series.nodes, matchIds) : undefined,
+    );
+
     let quads = $derived(
         layoutSeries(series, {
             viewStartUs: layoutView.startUs,
@@ -96,6 +146,7 @@
             maxDepth: MAX_DEPTH,
             minWidthPx: 2,
             minVisibleDurationUs,
+            hidden: hiddenMask,
         }),
     );
     let gaps = $derived(visibleGaps(series.gaps, layoutView.startUs, layoutView.endUs));
@@ -127,17 +178,12 @@
     const ariaLabel = 'frame timeline';
     let rangeText = $derived(ns((effectiveView.endUs - effectiveView.startUs) * 1000));
 
-    // five evenly spaced marks, labelled from the start of the window rather than the
-    // session anchor so the numbers stay short.
+    // five evenly spaced marks, labelled as an offset into the view. measuring from
+    // series.startUs instead read as seconds, because the window accumulates across polls.
     let ticks = $derived(
         [0, 0.2, 0.4, 0.6, 0.8].map((f) => ({
             at: f,
-            label: ns(
-                (effectiveView.startUs -
-                    series.startUs +
-                    (effectiveView.endUs - effectiveView.startUs) * f) *
-                    1000,
-            ),
+            label: ns((effectiveView.endUs - effectiveView.startUs) * f * 1000),
         })),
     );
 
@@ -156,6 +202,48 @@
             ? `${nodeName(series.nodes[focusIndex])}, ${ns(series.nodes[focusIndex].durUs * 1000)}, ${nodeCost(focusIndex)}`
             : '',
     );
+
+    let occurrences = $derived.by(() => {
+        const all = matchOccurrences(series.nodes, matchIds ?? new Set<number>());
+        const entry = currentFrameEntry;
+        if (!frameScoped || !entry) return all;
+        return all.filter((o) => o.nodeIndex >= entry.nodeStart && o.nodeIndex < entry.nodeEnd);
+    });
+
+    // how many frames the hits are spread over, so "12 nodes in 4 frames" is literal.
+    let matchedFrameCount = $derived.by(() => {
+        if (frameScoped) return occurrences.length > 0 ? 1 : 0;
+        let seen = 0;
+        for (const entry of series.entries) {
+            for (let i = entry.nodeStart; i < entry.nodeEnd; i++) {
+                if (matchIds?.has(series.nodes[i].sectionId)) {
+                    seen++;
+                    break;
+                }
+            }
+        }
+        return seen;
+    });
+
+    $effect(() => {
+        sectionSearch.nodeCount = occurrences.length;
+        sectionSearch.frameCount = matchedFrameCount;
+        // catalog-only hits are a registry question, so they belong to the window scope.
+        sectionSearch.unsampledCount = frameScoped ? 0 : unsampledMatches.length;
+        sectionSearch.occurrenceCount = occurrences.length;
+    });
+
+    /** returns the ordinal of the frame it landed in, so the caller can pin there. */
+    export function stepMatch(delta: 1 | -1): number | null {
+        const next = stepCursor(occurrences, cursor, delta);
+        cursor = next;
+        const idx = resolveCursorIndex(series.nodes, next);
+        if (idx < 0) return null;
+        const node = series.nodes[idx];
+        focus = { depth: node.depth, atUs: node.startUs };
+        zoomToNode(node);
+        return entryOfNode(series, idx)?.ordinal ?? null;
+    }
 
     let canvasEl = $state<HTMLCanvasElement | null>(null);
     let hostEl = $state<HTMLDivElement | null>(null);
@@ -177,6 +265,8 @@
         void widthPx;
         void heightPx;
         void names;
+        void matchIds;
+        void hiddenMask;
         dirty = true;
     });
 
@@ -392,6 +482,8 @@
             hoverIndex: hoverQuadIndex,
             focusIndex: focusQuadIndex,
             gaps,
+            matchSectionIds: matchIds,
+            matchRange,
         });
     }
 

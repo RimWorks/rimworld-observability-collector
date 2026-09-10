@@ -94,6 +94,7 @@ const THEME: DrawTheme = {
     hue: { tick: '#39c4d4', ai: '#7c9cf5', render: '#e8b53e', ui: '#b184e8' },
     hueNone: '#5c6b85',
     font: '11px monospace',
+    match: '#39c4d4',
 };
 
 function opts(over: Partial<DrawOptions> = {}): DrawOptions {
@@ -597,6 +598,8 @@ describe('readTheme', () => {
         el.style.setProperty('--sub-ai', '#222222');
         el.style.setProperty('--sub-render', '#333333');
         el.style.setProperty('--sub-ui', '#444444');
+        el.style.setProperty('--sub-engine', '#aaaaaa');
+        el.style.setProperty('--sub-idle', '#bbbbbb');
         el.style.setProperty('--sub-none', '#555555');
         el.style.setProperty('--bg-surface', '#666666');
         el.style.setProperty('--border', '#777777');
@@ -611,9 +614,17 @@ describe('readTheme', () => {
             collapsed: '#777777',
             inkLight: '#888888',
             inkDark: '#999999',
-            hue: { tick: '#111111', ai: '#222222', render: '#333333', ui: '#444444' },
+            hue: {
+                tick: '#111111',
+                ai: '#222222',
+                render: '#333333',
+                ui: '#444444',
+                engine: '#aaaaaa',
+                idle: '#bbbbbb',
+            },
             hueNone: '#555555',
             font: '500 11px Test Mono',
+            match: '#39c4d4',
         });
         el.remove();
     });
@@ -629,9 +640,17 @@ describe('readTheme', () => {
             collapsed: '#28344a',
             inkLight: '#d4dded',
             inkDark: '#080a0f',
-            hue: { tick: '#5c6b85', ai: '#5c6b85', render: '#5c6b85', ui: '#5c6b85' },
+            hue: {
+                tick: '#5c6b85',
+                ai: '#5c6b85',
+                render: '#5c6b85',
+                ui: '#5c6b85',
+                engine: '#5c6b85',
+                idle: '#5c6b85',
+            },
             hueNone: '#5c6b85',
             font: '500 11px monospace',
+            match: '#39c4d4',
         });
         el.remove();
     });

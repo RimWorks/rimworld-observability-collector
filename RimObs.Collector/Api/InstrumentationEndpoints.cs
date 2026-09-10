@@ -31,6 +31,23 @@ public static class InstrumentationEndpoints {
             });
         });
 
+        endpoints.MapGet("/api/v1/instrumentation/auto", async (SessionMetaRegistry registry) => {
+            if (!registry.IsAvailable)
+                return Unavailable();
+            ControlClient client = new(registry.ControlPort, registry.ControlSecret);
+            ControlAutoInstrumentResponse res;
+            try {
+                res = await client.AutoInstrumentAsync();
+            }
+            catch (ControlClientException ex) {
+                return ControlFailed(ex);
+            }
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                auto = res,
+            });
+        });
+
         endpoints.MapPost("/api/v1/instrumentation/patch", async (HttpContext ctx, SessionMetaRegistry registry, DynamicPatchStore store) => {
             if (!registry.IsAvailable)
                 return Unavailable();

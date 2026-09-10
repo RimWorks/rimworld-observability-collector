@@ -1,10 +1,23 @@
 <script lang="ts">
     import { computePosition, autoUpdate, flip, shift, offset } from '@floating-ui/dom';
-    import { api, type StatusResponse } from '../api';
+    import {
+        api,
+        type AutoInstrumentCounters,
+        type RimObsConfig,
+        type StatusResponse,
+    } from '../api';
     import { t, getLang, LANGUAGES } from '../i18n';
     import { relativeTime, count, bytes } from '../format';
     import { userPrefs } from '../userPrefs.svelte';
     import { MIN_RING, MAX_RING, clampRing } from '../ringCapacity';
+    import { liveConfig } from '../liveConfig.svelte';
+    import {
+        initialFilters,
+        initialIgnore,
+        rememberFilters,
+        rememberIgnore,
+    } from '../autoInstrumentDefaults';
+    import { MIN_DEPTH, MAX_DEPTH, clampDepth } from '../captureDepth';
     import { MAX_SESSION_NAME, sessionLabel } from '../sessionLabel';
     import { sessionsStore } from '../sessions.svelte';
     import BundleExportForm from './BundleExportForm.svelte';
@@ -89,33 +102,59 @@
     let health = $derived(prom?.prometheus_health);
 
     let sessions = $derived(sessionsStore.items);
+    let pastSessions = $derived(sessions.filter((s) => !s.is_current));
     let renameError = $derived(sessionsStore.error);
 
-    let ringCapacity = $state<number | null>(null);
-    let ringSaving = $state(false);
-    let ringError = $state('');
+    let config = $state<RimObsConfig | null>(null);
+    let saving = $state(false);
+    let saveError = $state('');
 
-    async function loadRing(): Promise<void> {
+    let auto = $derived(config?.auto_instrument);
+    // the example patterns are real starting values, not just placeholder text, and what you
+    // type is remembered locally so an empty collector never wipes it.
+    let filtersValue = $derived(initialFilters(auto?.filters ?? ''));
+    let ignoreValue = $derived(initialIgnore(auto?.ignore ?? ''));
+
+    async function loadConfig(): Promise<void> {
         try {
-            ringCapacity = (await api.config()).sampling.frame_ring_capacity;
+            const next = await api.config();
+            // an older collector can answer without the blocks the controls bind to. treating
+            // that as "no config" disables them instead of blanking the whole pane.
+            config = next.sampling && next.auto_instrument && next.session ? next : null;
         } catch {
-            ringCapacity = null;
+            config = null;
         }
     }
 
-    // the collector resizes in place and keeps the newest frames that still fit, so a shrink
-    // costs history but never the frame on screen.
-    async function saveRing(next: number): Promise<void> {
-        ringSaving = true;
-        ringError = '';
+    let autoStatus = $state<AutoInstrumentCounters | null>(null);
+
+    // read-only, so a control blip just means the fold stays empty until the next open.
+    async function loadAutoStatus(): Promise<void> {
         try {
-            const config = await api.config();
-            config.sampling.frame_ring_capacity = clampRing(next);
-            ringCapacity = (await api.saveConfig(config)).sampling.frame_ring_capacity;
+            autoStatus = (await api.instrumentationAuto()).auto;
+        } catch {
+            autoStatus = null;
+        }
+    }
+
+    // re-read before every write: the config document carries keys this build does not know
+    // about, and the collector may have changed them while the pane sat open.
+    async function save(mutate: (next: RimObsConfig) => void): Promise<void> {
+        saving = true;
+        saveError = '';
+        try {
+            const next = await api.config();
+            mutate(next);
+            next.sampling.frame_ring_capacity = clampRing(next.sampling.frame_ring_capacity);
+            next.sampling.max_capture_depth = clampDepth(next.sampling.max_capture_depth);
+            config = await api.saveConfig(next);
+            // the strip sizes its slots from the ring capacity and read it once at mount, so
+            // without this a resize left the bars filling a fraction of the panel for good.
+            liveConfig.setRingCapacity(config.sampling.frame_ring_capacity);
         } catch (err) {
-            ringError = (err as Error).message;
+            saveError = (err as Error).message;
         } finally {
-            ringSaving = false;
+            saving = false;
         }
     }
 </script>
@@ -130,7 +169,8 @@
     onclick={() => {
         open = !open;
         if (open) {
-            if (ringCapacity === null) void loadRing();
+            if (config === null) void loadConfig();
+            void loadAutoStatus();
             void sessionsStore.load();
         }
     }}
@@ -141,164 +181,346 @@
 
 {#if open}
     <div class="panel" bind:this={panelEl} role="dialog" aria-label={t('settings.title')}>
-        <h3>{t('overview.session')}</h3>
-        {#if status?.session}
-            <div class="rows">
-                <div class="kv">
-                    <span class="k">{t('session.name')}</span>
-                    <span class="v">
-                        <input
-                            class="sname"
-                            type="text"
-                            maxlength={MAX_SESSION_NAME}
-                            placeholder={t('session.name.placeholder')}
-                            value={sessions.find((s) => s.id === status?.session?.id)?.name ?? ''}
-                            onchange={(e) =>
-                                sessionsStore.rename(status!.session!.id, e.currentTarget.value)}
-                            aria-label={t('session.name')}
-                            data-testid="session-name"
-                        />
-                    </span>
+        <section class="group">
+            <h3>{t('overview.session')}</h3>
+            {#if status?.session}
+                <div class="field">
+                    <Tooltip text={t('tip.settings.sessionName')} align="stretch">
+                        <span class="label">{t('session.name')}</span>
+                    </Tooltip>
+                    <input
+                        class="text"
+                        type="text"
+                        maxlength={MAX_SESSION_NAME}
+                        placeholder={t('session.name.placeholder')}
+                        value={sessions.find((s) => s.id === status?.session?.id)?.name ?? ''}
+                        onchange={(e) =>
+                            sessionsStore.rename(status!.session!.id, e.currentTarget.value)}
+                        aria-label={t('session.name')}
+                        data-testid="session-name"
+                    />
                 </div>
-                <div class="kv">
-                    <span class="k">{t('overview.kv.id')}</span>
-                    <span class="v mono">{status.session.id}</span>
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.kv.library')}</span>
-                    <span class="v mono">{status.session.library_version}</span>
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.kv.started')}</span>
-                    <span class="v">{new Date(status.session.started_utc).toLocaleString()}</span>
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.kv.lastBatch')}</span>
-                    <span class="v">{relativeTime(status.receive?.last_batch_utc ?? null)}</span>
-                </div>
-            </div>
 
-            <div class="export">
+                <details class="fold">
+                    <summary>
+                        <Icon name="chevron" size={13} />
+                        <span>{t('settings.sessionDetails')}</span>
+                    </summary>
+                    <dl class="readout">
+                        <dt>{t('overview.kv.id')}</dt>
+                        <dd class="mono">{status.session.id}</dd>
+                        <dt>{t('overview.kv.library')}</dt>
+                        <dd class="mono">{status.session.library_version}</dd>
+                        <dt>{t('overview.kv.started')}</dt>
+                        <dd>{new Date(status.session.started_utc).toLocaleString()}</dd>
+                        <dt>{t('overview.kv.lastBatch')}</dt>
+                        <dd>{relativeTime(status.receive?.last_batch_utc ?? null)}</dd>
+                    </dl>
+                </details>
+
                 {#if exporting}
                     <BundleExportForm sessionId={status.session.id} onExport={handleExport} />
                     {#if exportError}
-                        <p class="export-error" role="alert">{exportError}</p>
+                        <p class="error" role="alert">{exportError}</p>
                     {/if}
                 {:else}
                     <button
-                        class="export-btn"
+                        class="wide"
                         type="button"
                         onclick={() => (exporting = true)}
-                        data-testid="open-export">{t('bundle.export.title')}</button
+                        data-testid="open-export"
                     >
+                        <Icon name="download" size={14} />
+                        {t('bundle.export.title')}
+                    </button>
                 {/if}
-            </div>
-        {:else}
-            <p class="muted">{t('overview.noSession')}</p>
-        {/if}
-
-        {#if sessions.filter((s) => !s.is_current).length > 0}
-            <h3>{t('session.past')}</h3>
-            <div class="rows" data-testid="past-sessions">
-                {#each sessions.filter((s) => !s.is_current) as session (session.id)}
-                    <div class="kv">
-                        <Tooltip text={session.id}>
-                            <span class="k trunc">{sessionLabel(session)}</span>
-                        </Tooltip>
-                        <span class="v">
-                            <input
-                                class="sname"
-                                type="text"
-                                maxlength={MAX_SESSION_NAME}
-                                placeholder={t('session.name.placeholder')}
-                                value={session.name}
-                                onchange={(e) =>
-                                    sessionsStore.rename(session.id, e.currentTarget.value)}
-                                aria-label={`${t('session.name')} ${session.id}`}
-                                data-testid="past-session-name"
-                            />
-                        </span>
-                    </div>
-                {/each}
-            </div>
-        {/if}
-        {#if renameError}
-            <p class="muted" data-testid="rename-error">{renameError}</p>
-        {/if}
-
-        <h3>{t('overview.collector')}</h3>
-        <div class="rows">
-            <div class="kv">
-                <span class="k">{t('overview.kv.status')}</span>
-                <span class="v mono">{status?.status ?? '-'}</span>
-            </div>
-            <div class="kv">
-                <span class="k">{t('settings.version')}</span>
-                <span class="v mono">{status?.version ?? '-'}</span>
-            </div>
-            <div class="kv">
-                <span class="k">{t('settings.schema')}</span>
-                <span class="v mono">{status?.schema_version ?? '-'}</span>
-            </div>
-            {#if status?.receive}
-                <div class="kv">
-                    <span class="k">{t('overview.sections')}</span>
-                    <span class="v mono" data-testid="kv-sections"
-                        >{count(status.receive.section_count)}</span
-                    >
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.gc')}</span>
-                    <span class="v mono" data-testid="kv-gc"
-                        >{count(status.receive.total_gc_events)}</span
-                    >
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.batches')}</span>
-                    <span class="v mono" data-testid="kv-batches"
-                        >{count(status.receive.total_batches)}</span
-                    >
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.samples')}</span>
-                    <span class="v mono" data-testid="kv-samples"
-                        >{count(status.receive.total_samples)}</span
-                    >
-                </div>
-                <div class="kv">
-                    <span class="k">{t('overview.bytes')}</span>
-                    <span class="v mono" data-testid="kv-bytes"
-                        >{bytes(status.receive.total_bytes)}</span
-                    >
-                </div>
+            {:else}
+                <p class="muted">{t('overview.noSession')}</p>
             {/if}
-            <div class="kv">
-                <Tooltip text={t('tip.settings.ringCapacity')}
-                    ><span class="k">{t('settings.ringCapacity')}</span></Tooltip
-                >
-                <span class="v">
+
+            {#if pastSessions.length > 0}
+                <details class="fold">
+                    <summary>
+                        <Icon name="chevron" size={13} />
+                        <span>{t('session.past')}</span>
+                        <span class="tally mono">{pastSessions.length}</span>
+                    </summary>
+                    <div data-testid="past-sessions">
+                        {#each pastSessions as session (session.id)}
+                            <div class="field row">
+                                <Tooltip text={session.id}>
+                                    <span class="label trunc">{sessionLabel(session)}</span>
+                                </Tooltip>
+                                <input
+                                    class="text"
+                                    type="text"
+                                    maxlength={MAX_SESSION_NAME}
+                                    placeholder={t('session.name.placeholder')}
+                                    value={session.name}
+                                    onchange={(e) =>
+                                        sessionsStore.rename(session.id, e.currentTarget.value)}
+                                    aria-label={`${t('session.name')} ${session.id}`}
+                                    data-testid="past-session-name"
+                                />
+                            </div>
+                        {/each}
+                    </div>
+                </details>
+            {/if}
+            {#if renameError}
+                <p class="error" data-testid="rename-error">{renameError}</p>
+            {/if}
+        </section>
+
+        <section class="group">
+            <h3>{t('settings.group.profiling')}</h3>
+
+            <div class="costly">
+                <label class="switch">
                     <input
-                        class="ring mono"
-                        type="number"
-                        min={MIN_RING}
-                        max={MAX_RING}
-                        step="100"
-                        disabled={ringSaving || ringCapacity === null}
-                        value={ringCapacity ?? ''}
-                        onchange={(e) => saveRing(Number(e.currentTarget.value))}
-                        aria-label={t('settings.ringCapacity')}
-                        data-testid="ring-capacity"
+                        type="checkbox"
+                        checked={auto?.enabled ?? false}
+                        disabled={config === null || saving}
+                        onchange={(e) => {
+                            const on = (e.currentTarget as HTMLInputElement).checked;
+                            void save((c) => (c.auto_instrument.enabled = on));
+                        }}
+                        data-testid="auto-instrument"
                     />
+                    <Tooltip text={t('tip.settings.autoInstrument')} align="stretch">
+                        <span class="label">{t('settings.autoInstrument')}</span>
+                    </Tooltip>
+                </label>
+                <span class="cost">
+                    <Icon name="alert" size={13} />
+                    {t('settings.autoInstrument.cost')}
                 </span>
             </div>
-            {#if ringError}
-                <p class="muted" data-testid="ring-error">{ringError}</p>
+
+            <div class="field">
+                <Tooltip text={t('tip.settings.autoInstrument.filters')} align="stretch">
+                    <span class="label">{t('settings.autoInstrument.filters')}</span>
+                </Tooltip>
+                <textarea
+                    class="text mono"
+                    rows="3"
+                    spellcheck="false"
+                    placeholder={t('settings.autoInstrument.filters.placeholder')}
+                    disabled={config === null || saving || !auto?.enabled}
+                    value={filtersValue}
+                    onchange={(e) => {
+                        const v = e.currentTarget.value;
+                        rememberFilters(v);
+                        void save((c) => (c.auto_instrument.filters = v));
+                    }}
+                    aria-label={t('settings.autoInstrument.filters')}
+                    data-testid="auto-filters"></textarea>
+            </div>
+
+            <div class="field">
+                <Tooltip text={t('tip.settings.autoInstrument.ignore')} align="stretch">
+                    <span class="label">{t('settings.autoInstrument.ignore')}</span>
+                </Tooltip>
+                <textarea
+                    class="text mono"
+                    rows="2"
+                    spellcheck="false"
+                    placeholder={t('settings.autoInstrument.ignore.placeholder')}
+                    disabled={config === null || saving || !auto?.enabled}
+                    value={ignoreValue}
+                    onchange={(e) => {
+                        const v = e.currentTarget.value;
+                        rememberIgnore(v);
+                        void save((c) => (c.auto_instrument.ignore = v));
+                    }}
+                    aria-label={t('settings.autoInstrument.ignore')}
+                    data-testid="auto-ignore"></textarea>
+            </div>
+
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    checked={auto?.mute_trivial ?? true}
+                    disabled={config === null || saving || !auto?.enabled}
+                    onchange={(e) => {
+                        const on = (e.currentTarget as HTMLInputElement).checked;
+                        void save((c) => (c.auto_instrument.mute_trivial = on));
+                    }}
+                    data-testid="auto-mute-trivial"
+                />
+                <Tooltip text={t('tip.settings.autoMuteTrivial')} align="stretch">
+                    <span class="label">{t('settings.autoMuteTrivial')}</span>
+                </Tooltip>
+            </label>
+
+            {#if auto?.enabled && autoStatus}
+                <details class="fold">
+                    <summary>
+                        <Icon name="chevron" size={13} />
+                        <span>{t('settings.autoInstrument.status')}</span>
+                        <span class="tally">{t('settings.readonly')}</span>
+                    </summary>
+                    <dl class="readout">
+                        <dt>{t('settings.autoInstrument.matched')}</dt>
+                        <dd class="mono" data-testid="auto-matched">{count(autoStatus.matched)}</dd>
+                        <dt>{t('settings.autoInstrument.instrumented')}</dt>
+                        <dd class="mono" data-testid="auto-instrumented">
+                            {count(autoStatus.instrumented)}
+                        </dd>
+                        <dt>{t('settings.autoInstrument.muted')}</dt>
+                        <dd class="mono" data-testid="auto-muted">{count(autoStatus.muted)}</dd>
+                        <dt>{t('settings.autoInstrument.skippedTrivial')}</dt>
+                        <dd class="mono" data-testid="auto-skipped-trivial">
+                            {count(autoStatus.skippedTrivial)}
+                        </dd>
+                        <dt>{t('settings.autoInstrument.skippedOther')}</dt>
+                        <dd class="mono" data-testid="auto-skipped-other">
+                            {count(autoStatus.skippedOther)}
+                        </dd>
+                        <dt>{t('settings.autoInstrument.refused')}</dt>
+                        <dd class="mono" data-testid="auto-refused">{count(autoStatus.refused)}</dd>
+                        <dt>{t('settings.autoInstrument.pending')}</dt>
+                        <dd class="mono" data-testid="auto-pending">{count(autoStatus.pending)}</dd>
+                    </dl>
+                </details>
             {/if}
-            <div class="kv">
-                <span class="k">{t('settings.language')}</span>
+
+            <div class="field row">
+                <Tooltip text={t('tip.settings.maxDepth')}>
+                    <span class="label">{t('settings.maxDepth')}</span>
+                </Tooltip>
+                <input
+                    class="text num mono"
+                    type="number"
+                    min={MIN_DEPTH}
+                    max={MAX_DEPTH}
+                    step="1"
+                    disabled={config === null || saving}
+                    value={config?.sampling.max_capture_depth ?? ''}
+                    onchange={(e) => {
+                        const v = Number(e.currentTarget.value);
+                        void save((c) => (c.sampling.max_capture_depth = v));
+                    }}
+                    aria-label={t('settings.maxDepth')}
+                    data-testid="max-depth"
+                />
+            </div>
+
+            <div class="field row">
+                <Tooltip text={t('tip.settings.ringCapacity')}>
+                    <span class="label">{t('settings.ringCapacity')}</span>
+                </Tooltip>
+                <input
+                    class="text num mono"
+                    type="number"
+                    min={MIN_RING}
+                    max={MAX_RING}
+                    step="100"
+                    disabled={config === null || saving}
+                    value={config?.sampling.frame_ring_capacity ?? ''}
+                    onchange={(e) => {
+                        const v = Number(e.currentTarget.value);
+                        void save((c) => (c.sampling.frame_ring_capacity = v));
+                    }}
+                    aria-label={t('settings.ringCapacity')}
+                    data-testid="ring-capacity"
+                />
+            </div>
+
+            {#if saveError}
+                <p class="error" role="alert" data-testid="config-error">
+                    {t('settings.saveFailed')}: {saveError}
+                </p>
+            {/if}
+        </section>
+
+        <section class="group">
+            <h3>{t('overview.collector')}</h3>
+            {#if status?.update?.available}
+                <a class="update" href={status.update.url} target="_blank" rel="noreferrer">
+                    <Icon name="external" size={13} />
+                    <span>{t('settings.update')}</span>
+                    <span class="mono">{status.update.latest_version}</span>
+                </a>
+            {/if}
+            <details class="fold">
+                <summary>
+                    <Icon name="chevron" size={13} />
+                    <span>{t('settings.collectorStatus')}</span>
+                    <span class="tally">{t('settings.readonly')}</span>
+                </summary>
+                <dl class="readout">
+                    <dt>{t('overview.kv.status')}</dt>
+                    <dd class="mono">{status?.status ?? '-'}</dd>
+                    <dt>{t('settings.version')}</dt>
+                    <dd class="mono">{status?.version ?? '-'}</dd>
+                    <dt>{t('settings.schema')}</dt>
+                    <dd class="mono">{status?.schema_version ?? '-'}</dd>
+                    {#if status?.receive}
+                        <dt>{t('overview.sections')}</dt>
+                        <dd class="mono" data-testid="kv-sections">
+                            {count(status.receive.section_count)}
+                        </dd>
+                        <dt>{t('overview.gc')}</dt>
+                        <dd class="mono" data-testid="kv-gc">
+                            {count(status.receive.total_gc_events)}
+                        </dd>
+                        <dt>{t('overview.batches')}</dt>
+                        <dd class="mono" data-testid="kv-batches">
+                            {count(status.receive.total_batches)}
+                        </dd>
+                        <dt>{t('overview.samples')}</dt>
+                        <dd class="mono" data-testid="kv-samples">
+                            {count(status.receive.total_samples)}
+                        </dd>
+                        <dt>{t('overview.bytes')}</dt>
+                        <dd class="mono" data-testid="kv-bytes">
+                            {bytes(status.receive.total_bytes)}
+                        </dd>
+                    {/if}
+                    {#if prom}
+                        <dt>
+                            <Tooltip text={t('tip.settings.prometheus')}>
+                                <span>{t('settings.prometheus')}</span>
+                            </Tooltip>
+                        </dt>
+                        <dd class:on={prom.prometheus_enabled}>
+                            {prom.prometheus_enabled
+                                ? t('settings.exporter.enabled')
+                                : t('settings.exporter.disabled')}
+                        </dd>
+                        {#if prom.prometheus_enabled && health}
+                            <dt>{t('settings.exporter.endpoint')}</dt>
+                            <dd class="mono">/metrics</dd>
+                            <dt>{t('settings.exporter.last_scrape')}</dt>
+                            <dd class="mono">{health.last_scrape_utc ?? '-'}</dd>
+                            <dt>{t('settings.exporter.sample_count')}</dt>
+                            <dd class="mono">{health.last_sample_count}</dd>
+                            {#if health.total_errors > 0}
+                                <dt>{t('settings.exporter.errors')}</dt>
+                                <dd class="mono bad">
+                                    {health.total_errors} · {health.last_error ?? ''}
+                                </dd>
+                            {/if}
+                        {/if}
+                    {:else}
+                        <dt>{t('settings.exporters')}</dt>
+                        <dd>{t('settings.exporter.unavailable')}</dd>
+                    {/if}
+                </dl>
+            </details>
+        </section>
+
+        <section class="group">
+            <h3>{t('settings.group.dashboard')}</h3>
+
+            <div class="field row">
+                <Tooltip text={t('tip.settings.language')}>
+                    <span class="label">{t('settings.language')}</span>
+                </Tooltip>
                 <select
                     aria-label={t('settings.language')}
-                    class="v lang"
+                    class="text lang"
                     value={getLang()}
                     onchange={(e) =>
                         userPrefs.setLang((e.currentTarget as HTMLSelectElement).value)}
@@ -308,69 +530,38 @@
                     {/each}
                 </select>
             </div>
-            {#if status?.update?.available}
-                <div class="kv">
-                    <span class="k">{t('settings.update')}</span>
-                    <a class="v mono link" href={status.update.url} target="_blank" rel="noreferrer"
-                        >{status.update.latest_version}</a
-                    >
-                </div>
-            {/if}
-        </div>
 
-        <h3>{t('settings.exporters')}</h3>
-        {#if prom}
-            <div class="rows">
-                <div class="kv">
-                    <Tooltip text={t('tip.settings.prometheus')}
-                        ><span class="k">{t('settings.prometheus')}</span></Tooltip
-                    >
-                    <span class="v" class:on={prom.prometheus_enabled}>
-                        {prom.prometheus_enabled
-                            ? t('settings.exporter.enabled')
-                            : t('settings.exporter.disabled')}
-                    </span>
-                </div>
-                {#if prom.prometheus_enabled && health}
-                    <div class="kv">
-                        <span class="k">{t('settings.exporter.endpoint')}</span>
-                        <span class="v mono">/metrics</span>
-                    </div>
-                    <div class="kv">
-                        <span class="k">{t('settings.exporter.last_scrape')}</span>
-                        <span class="v mono">{health.last_scrape_utc ?? '-'}</span>
-                    </div>
-                    <div class="kv">
-                        <span class="k">{t('settings.exporter.sample_count')}</span>
-                        <span class="v mono">{health.last_sample_count}</span>
-                    </div>
-                    {#if health.total_errors > 0}
-                        <div class="kv">
-                            <span class="k">{t('settings.exporter.errors')}</span>
-                            <span class="v mono err"
-                                >{health.total_errors} · {health.last_error ?? ''}</span
-                            >
-                        </div>
-                    {/if}
-                {/if}
-            </div>
-        {:else}
-            <p class="muted">{t('settings.exporter.unavailable')}</p>
-        {/if}
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    checked={config?.session.prompt_for_name ?? false}
+                    disabled={config === null || saving}
+                    onchange={(e) => {
+                        const on = (e.currentTarget as HTMLInputElement).checked;
+                        void save((c) => (c.session.prompt_for_name = on));
+                    }}
+                    data-testid="prompt-for-name"
+                />
+                <Tooltip text={t('tip.settings.promptForName')} align="stretch">
+                    <span class="label">{t('settings.promptForName')}</span>
+                </Tooltip>
+            </label>
 
-        <h3>{t('settings.behavior')}</h3>
-        <label class="toggle">
-            <input
-                type="checkbox"
-                checked={userPrefs.closeOnDisconnect}
-                onchange={(e) =>
-                    userPrefs.setCloseOnDisconnect((e.currentTarget as HTMLInputElement).checked)}
-            />
-            <span class="toggle-text">
-                <span class="toggle-label">{t('settings.close_on_disconnect')}</span>
-                <span class="toggle-hint">{t('settings.close_on_disconnect.hint')}</span>
-            </span>
-        </label>
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    checked={userPrefs.closeOnDisconnect}
+                    onchange={(e) =>
+                        userPrefs.setCloseOnDisconnect(
+                            (e.currentTarget as HTMLInputElement).checked,
+                        )}
+                    data-testid="close-on-disconnect"
+                />
+                <Tooltip text={t('tip.settings.closeOnDisconnect')} align="stretch">
+                    <span class="label">{t('settings.close_on_disconnect')}</span>
+                </Tooltip>
+            </label>
+        </section>
     </div>
 {/if}
 
@@ -401,153 +592,245 @@
         top: 0;
         left: 0;
         z-index: 50;
-        width: 320px;
+        width: 372px;
         max-height: calc(100vh - var(--topbar-h) - var(--s-5));
         overflow-y: auto;
-        padding: var(--s-3) var(--s-4) var(--s-4);
+        overscroll-behavior: contain;
         background: var(--bg-elev);
         border: 1px solid var(--border);
         border-radius: var(--r-md);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.55);
+        scrollbar-color: var(--border-strong) transparent;
+    }
+    .panel ::selection {
+        background: var(--cyan);
+        color: var(--bg-void);
+    }
+
+    .group {
+        padding: var(--s-3) var(--s-4) var(--s-4);
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .group:last-child {
+        border-bottom: none;
     }
     h3 {
-        margin: var(--s-4) 0 var(--s-1);
+        margin: 0 0 var(--s-3);
         font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--text-faint);
         font-weight: 600;
     }
-    h3:first-child {
-        margin-top: 0;
-    }
-    .export {
-        margin-top: var(--s-3);
-    }
-    .export-btn {
-        width: 100%;
-        background: var(--bg-surface);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        padding: var(--s-2) var(--s-3);
-        font: inherit;
-        font-size: 0.82rem;
-        cursor: pointer;
-        transition: border-color var(--t-fast) var(--ease-out);
-    }
-    .export-btn:hover {
-        border-color: var(--cyan);
-    }
-    .export-error {
-        margin: var(--s-2) 0 0;
-        color: var(--bad);
-        font-size: 0.8rem;
-    }
-    .rows {
+
+    /* one control: its label sits above its input, and every control is on a surface the
+       read-only grid below never uses. that difference is the whole point of the layout. */
+    .field {
         display: flex;
         flex-direction: column;
+        gap: var(--s-1);
+        margin-bottom: var(--s-3);
     }
-    .kv {
-        display: flex;
+    .field.row {
+        flex-direction: row;
+        align-items: center;
         justify-content: space-between;
         gap: var(--s-3);
-        padding: var(--s-2) 0;
-        border-bottom: 1px solid var(--border-soft);
-        align-items: baseline;
     }
-    .kv:last-child {
-        border-bottom: none;
+    .label {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        cursor: help;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-decoration-color: var(--border-strong);
+        text-underline-offset: 3px;
     }
-    .k {
-        font-size: 0.74rem;
+    .text {
+        width: 100%;
+        font: inherit;
+        font-size: 0.82rem;
+        color: var(--text);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: var(--s-1) var(--s-2);
+        caret-color: var(--cyan);
+    }
+    .text:hover:not(:disabled) {
+        border-color: var(--border-strong);
+    }
+    .text:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .text::placeholder {
+        color: var(--text-faint);
+        opacity: 0.75;
+    }
+    textarea.text {
+        resize: vertical;
+        line-height: 1.5;
+    }
+    .num {
+        width: 6.5rem;
+        flex: none;
+        text-align: right;
+    }
+    .lang {
+        width: auto;
+        flex: none;
+        cursor: pointer;
+    }
+
+    .switch {
+        display: flex;
+        gap: var(--s-2);
+        align-items: center;
+        cursor: pointer;
+        margin-bottom: var(--s-3);
+    }
+    .switch input {
+        cursor: pointer;
+    }
+
+    /* auto-instrumentation patches thousands of methods, so it does not get to look like the
+       language picker. the tint and the badge are the only warning before the game stutters. */
+    .costly {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s-2);
+        margin-bottom: var(--s-3);
+        padding: var(--s-2) var(--s-3);
+        border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--warn) 8%, var(--bg-surface));
+    }
+    .costly .switch {
+        margin-bottom: 0;
+    }
+    .cost {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-1);
+        flex: none;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--warn);
+    }
+
+    .fold {
+        margin-bottom: var(--s-3);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--r-md);
+        background: var(--bg-surface);
+    }
+    .fold summary {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--s-3);
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        cursor: pointer;
+        list-style: none;
+    }
+    .fold summary::-webkit-details-marker {
+        display: none;
+    }
+    .fold summary :global(svg) {
+        flex: none;
+        transition: transform var(--t-fast) var(--ease-out);
+    }
+    .fold[open] summary :global(svg) {
+        transform: rotate(90deg);
+    }
+    .fold summary:hover {
+        color: var(--text);
+    }
+    .tally {
+        margin-left: auto;
+        font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--text-faint);
     }
-    .v {
-        font-size: 0.84rem;
+    .fold > :global(*:not(summary)) {
+        padding: 0 var(--s-3) var(--s-3);
+    }
+    .fold .field:last-child {
+        margin-bottom: 0;
+    }
+
+    /* read-only. no borders, no boxes, nothing that invites a click. */
+    .readout {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--s-1) var(--s-3);
+        margin: 0;
+        font-size: 0.78rem;
+    }
+    .readout dt {
+        color: var(--text-faint);
+        white-space: nowrap;
+    }
+    .readout dd {
+        margin: 0;
         text-align: right;
         word-break: break-all;
+        font-variant-numeric: tabular-nums;
     }
-    .v.on {
+    .readout dd.on {
         color: var(--cyan);
     }
-    .v.err {
+    .readout dd.bad {
         color: var(--bad);
     }
-    .link {
+
+    .update {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        margin-bottom: var(--s-3);
+        padding: var(--s-2) var(--s-3);
+        border: 1px solid color-mix(in srgb, var(--cyan) 30%, var(--border));
+        border-radius: var(--r-md);
+        font-size: 0.8rem;
         color: var(--cyan-soft);
+    }
+    .update span:last-child {
+        margin-left: auto;
+    }
+
+    .wide {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--s-2);
+        width: 100%;
+        background: var(--bg-surface);
+        font-size: 0.82rem;
+        padding: var(--s-2) var(--s-3);
+    }
+    .wide:hover {
+        border-color: var(--cyan);
+    }
+
+    .error {
+        margin: 0 0 var(--s-2);
+        color: var(--bad);
+        font-size: 0.78rem;
     }
     .muted {
         font-size: 0.82rem;
         color: var(--text-faint);
         margin: 0;
     }
-    .lang {
-        background: var(--bg-surface);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        padding: var(--s-1) var(--s-2);
-        font-family: var(--font-ui);
-        font-size: 0.82rem;
-        cursor: pointer;
-    }
-    .lang:hover {
-        border-color: var(--cyan);
-    }
-    .toggle {
-        display: flex;
-        gap: var(--s-3);
-        align-items: flex-start;
-        cursor: pointer;
-        padding-top: var(--s-2);
-    }
-    .toggle input {
-        cursor: pointer;
-    }
-    .toggle-text {
-        display: flex;
-        flex-direction: column;
-        gap: var(--s-1);
-    }
-    .toggle-label {
-        font-size: 0.86rem;
-        color: var(--text);
-    }
-    .toggle-hint {
-        font-size: 0.76rem;
-        color: var(--text-faint);
-        line-height: 1.4;
-    }
-    .sname {
-        width: 100%;
-        font: inherit;
-        font-size: 0.8rem;
-        color: var(--text);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        padding: 2px 6px;
-    }
     .trunc {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }
-    .ring {
-        width: 6.5rem;
-        text-align: right;
-        font: inherit;
-        font-size: 0.8rem;
-        color: var(--text);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        padding: 2px 6px;
-    }
-    .ring:disabled {
-        opacity: 0.5;
     }
 </style>

@@ -13,6 +13,9 @@ internal sealed class AutoInstrumentPlan {
 
     public int SkippedBlocklisted { get; set; }
 
+    /// <summary>Matched an include line but also an ignore line, so it was never a candidate.</summary>
+    public int SkippedIgnored { get; set; }
+
     /// <summary>Matched, eligible, but past <c>maxTargets</c>. These are never patched.</summary>
     public int SkippedOverCap { get; set; }
 

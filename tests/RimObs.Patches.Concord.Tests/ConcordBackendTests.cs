@@ -90,7 +90,7 @@ public sealed class ConcordBackendTests : IDisposable {
         PatchBackends.Register(_backend, PatchBackends.ConcordPriority);
         PatchBackends.SelectBest(scan: false);
         AutoInstrumentRunner.ApplyFilters(
-            filters, autoMute: true, "test.owner", [typeof(AutoTargets).Assembly]);
+            filters, ignore: null, autoMute: true, "test.owner", [typeof(AutoTargets).Assembly]);
     }
 
     [Fact]

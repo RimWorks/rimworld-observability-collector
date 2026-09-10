@@ -16,6 +16,19 @@ public static class Profiler {
 
     public static volatile bool Enabled = true;
 
+    /// <summary>Nesting depth past which a section is not recorded. Collector config owns it.</summary>
+    public const int DefaultMaxDepth = 8;
+
+    private static volatile int s_MaxDepth = DefaultMaxDepth;
+
+    public static int MaxDepth {
+        get => s_MaxDepth;
+        set {
+            int clamped = value < 1 ? 1 : value;
+            s_MaxDepth = clamped > MaxStackDepth ? MaxStackDepth : clamped;
+        }
+    }
+
     private static ISampleSink? Sink;
 
     private static int s_NextThreadBlock;
@@ -60,8 +73,12 @@ public static class Profiler {
         if (!SectionRegistry.s_Active[sectionId])
             return DisabledToken;
 
-        int[] stack = s_Stack ??= new int[MaxStackDepth];
+        // not pushing is what keeps the pair balanced: Stop sees DisabledToken and pops nothing.
         int depth = s_Depth;
+        if (depth >= s_MaxDepth)
+            return DisabledToken;
+
+        int[] stack = s_Stack ??= new int[MaxStackDepth];
         if (depth < MaxStackDepth)
             stack[depth] = sectionId;
         s_Depth = depth + 1;

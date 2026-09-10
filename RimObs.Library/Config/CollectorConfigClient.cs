@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
+using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Observers;
 using RimWorks.RimObs.Profile;
 
@@ -58,6 +59,12 @@ internal sealed class CollectorConfigClient {
         }
 
         SectionRegistry.ApplyDisabledSet(disabled);
+
+        Profiler.MaxDepth = document.Sampling?.MaxCaptureDepth ?? Profiler.DefaultMaxDepth;
+
+        CollectorAutoInstrumentConfig? auto = document.AutoInstrument;
+        AutoInstrumentRequest.Set(
+            auto?.Enabled ?? false, auto?.Filters, auto?.Ignore, auto?.MuteTrivial ?? true);
     }
 
     private string? Fetch() {

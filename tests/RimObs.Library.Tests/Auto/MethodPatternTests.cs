@@ -72,4 +72,34 @@ public class MethodPatternTests {
     public void ParseAll_of_null_is_empty() {
         MethodPattern.ParseAll(null).Should().BeEmpty();
     }
+
+    [Fact]
+    public void Leading_bang_negates_and_the_rest_still_parses() {
+        MethodPattern p = MethodPattern.Parse("!Assembly-CSharp!Verse.Log::*")!;
+
+        p.Negated.Should().BeTrue();
+        p.Assembly.Should().Be("Assembly-CSharp");
+        p.Type.Should().Be("Verse.Log");
+        p.Method.Should().Be("*");
+    }
+
+    [Fact]
+    public void A_plain_line_is_not_negated() {
+        MethodPattern.Parse("Verse.*")!.Negated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParseAll_can_force_every_line_negated_for_the_ignore_box() {
+        MethodPattern[] parsed = MethodPattern.ParseAll("Verse.Log*\nRimWorld.*", negate: true);
+
+        parsed.Should().HaveCount(2);
+        parsed.Should().OnlyContain(p => p.Negated);
+    }
+
+    [Fact]
+    public void Forcing_negation_does_not_double_negate_an_already_negated_line() {
+        MethodPattern[] parsed = MethodPattern.ParseAll("!Verse.Log*", negate: true);
+
+        parsed.Should().ContainSingle().Which.Negated.Should().BeTrue();
+    }
 }
