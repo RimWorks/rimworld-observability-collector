@@ -333,6 +333,8 @@ public sealed class FramesEndpointsTests {
         aggregator.OnSectionBatch(new SectionBatch {
             SectionIds = [10, 20, 10],
             ParentIds = [-1, 10, -1],
+            NodeIds = [1, 2, 3],
+            ParentNodeIds = [-1, 1, -1],
             StartTimestamps = [100L, 150L, 700L],
             ElapsedTicks = [500L, 200L, 400L],
             FrameOrdinals = [1, 1, 2],

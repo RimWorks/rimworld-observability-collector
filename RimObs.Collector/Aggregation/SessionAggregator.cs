@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using RimWorks.RimObs.Collector.Storage;
 using RimWorks.RimObs.Wire;
 
@@ -233,6 +234,12 @@ public sealed class SessionAggregator {
         int allocLen = batch.AllocBytes.Length;
         int threadLen = batch.ThreadIds.Length;
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        Dictionary<int, int> laneByNode = new(n);
+        for (int i = 0; i < n && i < threadLen; i++) {
+            int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
+            if (nodeId != CallTreeBuilder.NoParent)
+                laneByNode[nodeId] = batch.ThreadIds[i];
+        }
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
             long elapsed = batch.ElapsedTicks[i];
@@ -246,22 +253,28 @@ public sealed class SessionAggregator {
             UpdateMin(ref stats.MinElapsedTicks, elapsed);
             UpdateMax(ref stats.MaxElapsedTicks, elapsed);
             stats.Distribution.Record(nowEpochSeconds, elapsed);
-            if (i < threadLen)
+            int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
+            int parentNode = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
+            if (i < threadLen && CountsAsLaneBusy(parentId, parentNode, batch.ThreadIds[i], laneByNode))
                 Threads.AddBusy(batch.ThreadIds[i], elapsed);
 
-            int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
             long edgeKey = ((long)(uint)parentId << 32) | (uint)id;
             CallEdgeStats edge = _callEdges.GetOrAdd(edgeKey, _ => new CallEdgeStats { ParentId = parentId, SectionId = id });
             Interlocked.Increment(ref edge.CallCount);
             Interlocked.Add(ref edge.TotalElapsedTicks, elapsed);
             Interlocked.Add(ref edge.TotalAllocBytes, allocBytes);
             int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
-            int parentNodeId = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNodeId, start, elapsed, allocBytes, i < threadLen ? batch.ThreadIds[i] : 0);
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, i < threadLen ? batch.ThreadIds[i] : 0);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);
     }
+
+    // A child that runs inside a parent on the same lane is already inside the parent's
+    // elapsed, so only roots and children that hopped to another lane add busy time.
+    private static bool CountsAsLaneBusy(int parentId, int parentNodeId, int threadId, Dictionary<int, int> laneByNode) =>
+        parentId == CallTreeBuilder.NoParent
+        || (laneByNode.TryGetValue(parentNodeId, out int parentThread) && parentThread != threadId);
 
     private static void UpdateMin(ref long location, long value) {
         long current;

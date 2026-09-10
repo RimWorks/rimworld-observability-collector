@@ -688,4 +688,41 @@ public sealed class SessionAggregatorSubsystemTests {
         aggregator.FindSection(10)!.Subsystem.Should().BeNull();
         aggregator.FindSection(11)!.Subsystem.Should().BeNull();
     }
+
+    [Fact]
+    public void OnSectionBatch_counts_a_nested_child_on_the_same_lane_once() {
+        SessionAggregator agg = new();
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            NodeIds = [1, 2],
+            ParentNodeIds = [-1, 1],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
+            ThreadIds = [1, 1],
+        });
+
+        agg.Threads.Snapshot().Single(t => t.Id == 1).BusyTicks.Should().Be(500L);
+    }
+
+    [Fact]
+    public void OnSectionBatch_counts_a_child_that_ran_on_another_lane() {
+        SessionAggregator agg = new();
+
+        agg.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            NodeIds = [1, 2],
+            ParentNodeIds = [-1, 1],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 200L],
+            FrameOrdinals = [1, 1],
+            ThreadIds = [1, 7],
+        });
+
+        agg.Threads.Snapshot().Single(t => t.Id == 1).BusyTicks.Should().Be(500L);
+        agg.Threads.Snapshot().Single(t => t.Id == 7).BusyTicks.Should().Be(200L);
+    }
 }
