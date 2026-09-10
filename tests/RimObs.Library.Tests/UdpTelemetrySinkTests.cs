@@ -139,6 +139,52 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
     }
 
     [Fact]
+    public void Lane_registration_carries_the_producing_thread_name_and_role() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 2000;
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        sink.Start();
+
+        SectionHandle handle = SectionRegistry.Register("test.named-lane");
+        using ManualResetEventSlim release = new(false);
+        Thread producer = new(() => {
+            sink.RecordSection(handle.Id, parentId: -1, nodeId: 1, parentNodeId: -1, startTimestamp: 1, elapsedTicks: 100, allocBytes: 0L);
+            release.Wait(TimeSpan.FromSeconds(5));
+        }) {
+            Name = "SomeMod.Background",
+            IsBackground = true,
+        };
+        producer.Start();
+
+        ThreadRegistrationsBatch? lanes = null;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+        IPEndPoint any = new(IPAddress.Any, 0);
+        while (DateTime.UtcNow < deadline && lanes == null) {
+            try {
+                byte[] bytes = receiver.Receive(ref any);
+                TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
+                if (envelope.BatchType == BatchType.ThreadRegistrations)
+                    lanes = WireCodec.Deserialize<ThreadRegistrationsBatch>(envelope.Payload);
+            }
+            catch (SocketException) {
+                break;
+            }
+        }
+
+        release.Set();
+        producer.Join(TimeSpan.FromSeconds(5));
+
+        // regression: every lane used to register as an empty name with the UnityJob role.
+        lanes.Should().NotBeNull();
+        lanes!.Names.Should().Equal("SomeMod.Background");
+        lanes.Roles.Should().Equal((int)ThreadRole.Mod);
+    }
+
+    [Fact]
     public void Send_to_unbound_port_records_socket_error() {
         int port = GetFreePort();
         SessionAnchor.Initialize("test-session");

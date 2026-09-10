@@ -310,8 +310,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     }
 
     /// <summary>
-    /// Announces each lane the drain has never seen before. Names stay empty: only the producing
-    /// thread can read its own name, and reading it there would allocate on the hot path.
+    /// Announces each lane the drain has never seen before, with the name its owning thread
+    /// carries. An unnamed thread registers as empty and falls back to the Unity job role.
     /// </summary>
     private void StageThreadRegistrations(int[] threadIds, int n) {
         for (int i = 0; i < n; i++) {
@@ -320,11 +320,25 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 continue;
             if (_threadRegistrationStaged == ThreadRegistrationCapacity)
                 FlushThreadRegistrations();
+            string name = _ring.NameFor(id);
             _threadRegistrationIds[_threadRegistrationStaged] = id;
-            _threadRegistrationNames[_threadRegistrationStaged] = string.Empty;
-            _threadRegistrationRoles[_threadRegistrationStaged] = (int)(id == _mainThreadId ? ThreadRole.Main : ThreadRole.UnityJob);
+            _threadRegistrationNames[_threadRegistrationStaged] = name;
+            _threadRegistrationRoles[_threadRegistrationStaged] = (int)RoleFor(id, name);
             _threadRegistrationStaged++;
         }
+    }
+
+    private ThreadRole RoleFor(int threadId, string name) {
+        if (threadId == _mainThreadId)
+            return ThreadRole.Main;
+        if (name.Length == 0)
+            return ThreadRole.UnityJob;
+        if (name.StartsWith("RimObs", StringComparison.Ordinal))
+            return ThreadRole.RimObs;
+        // Unity names its pool "Worker Thread"/"Job.Worker N"; anything else named is a mod's own thread.
+        if (name.IndexOf("Worker", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Job", StringComparison.OrdinalIgnoreCase) >= 0)
+            return ThreadRole.UnityJob;
+        return ThreadRole.Mod;
     }
 
     private void FlushThreadRegistrations() {
