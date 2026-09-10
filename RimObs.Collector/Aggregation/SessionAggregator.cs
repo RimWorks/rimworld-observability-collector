@@ -257,7 +257,7 @@ public sealed class SessionAggregator {
             Interlocked.Add(ref edge.TotalAllocBytes, allocBytes);
             int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
             int parentNodeId = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNodeId, start, elapsed, allocBytes);
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNodeId, start, elapsed, allocBytes, i < threadLen ? batch.ThreadIds[i] : 0);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);

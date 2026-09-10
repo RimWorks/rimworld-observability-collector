@@ -13,7 +13,8 @@ public sealed record FrameSnapshot(
     int[] ParentNodeIds,
     long[] NodeStartTicks,
     long[] NodeElapsedTicks,
-    long[] NodeAllocBytes) {
+    long[] NodeAllocBytes,
+    int[] ThreadIds) {
     public int NodeCount => SectionIds.Length;
 
     public long DurationTicks => EndTicks - StartTicks;
@@ -46,11 +47,13 @@ public sealed class FrameRing {
     private readonly List<long> _openStartTicks = [];
     private readonly List<long> _openElapsedTicks = [];
     private readonly List<long> _openAllocBytes = [];
+    private readonly List<int> _openThreadIds = [];
     private int _next;
     private int _count;
     private int _openOrdinal = -1;
     private long _preFrameSamples;
     private long _lateSamples;
+    private bool _openHasThreadIds;
 
     public FrameRing()
         : this(DefaultCapacity) {
@@ -86,7 +89,7 @@ public sealed class FrameRing {
         }
     }
 
-    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L) {
+    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L, int threadId = 0) {
         lock (_gate) {
             if (frameOrdinal <= 0) {
                 _preFrameSamples++;
@@ -107,6 +110,9 @@ public sealed class FrameRing {
             _openStartTicks.Add(startTicks);
             _openElapsedTicks.Add(elapsedTicks);
             _openAllocBytes.Add(allocBytes);
+            _openThreadIds.Add(threadId);
+            if (threadId != 0)
+                _openHasThreadIds = true;
         }
     }
 
@@ -332,7 +338,9 @@ public sealed class FrameRing {
             [.. _openParentNodeIds],
             [.. _openStartTicks],
             [.. _openElapsedTicks],
-            [.. _openAllocBytes]);
+            [.. _openAllocBytes],
+            // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
+            _openHasThreadIds ? [.. _openThreadIds] : []);
         _next = (_next + 1) % _buffer.Length;
         if (_count < _buffer.Length)
             _count++;
@@ -347,5 +355,7 @@ public sealed class FrameRing {
         _openStartTicks.Clear();
         _openElapsedTicks.Clear();
         _openAllocBytes.Clear();
+        _openThreadIds.Clear();
+        _openHasThreadIds = false;
     }
 }

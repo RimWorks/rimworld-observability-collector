@@ -18,7 +18,8 @@ public sealed class FramePayloadTests {
             ParentNodeIds: [-1, 10],
             NodeStartTicks: [100L, 150L],
             NodeElapsedTicks: [200L, 50L],
-            NodeAllocBytes: [4096L, 128L]);
+            NodeAllocBytes: [4096L, 128L],
+            ThreadIds: [1, 7]);
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize(FramePayload.Map(frame, anchor: 0L, usPerTick: 1.0)));
         JsonElement alloc = doc.RootElement.GetProperty("nodes").GetProperty("alloc_bytes");

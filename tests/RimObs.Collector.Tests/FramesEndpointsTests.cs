@@ -313,4 +313,90 @@ public sealed class FramesEndpointsTests {
             await app.StopAsync();
         }
     }
+
+    [Fact]
+    public async Task Latest_carries_thread_ids_per_node_and_names_the_lanes() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-threads-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-threads",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnThreadRegistrations(new ThreadRegistrationsBatch {
+            ThreadIds = [1, 7],
+            Names = ["Main", "Pathfinder"],
+            Roles = [1, 2],
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20, 10],
+            ParentIds = [-1, 10, -1],
+            StartTimestamps = [100L, 150L, 700L],
+            ElapsedTicks = [500L, 200L, 400L],
+            FrameOrdinals = [1, 1, 2],
+            ThreadIds = [1, 7, 1],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            JsonElement threadIds = doc.RootElement.GetProperty("frame").GetProperty("nodes").GetProperty("thread_ids");
+            threadIds.EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1, 7);
+
+            JsonElement[] threads = [.. doc.RootElement.GetProperty("threads").EnumerateArray()];
+            threads.Length.Should().Be(2);
+            JsonElement main = threads.Single(t => t.GetProperty("id").GetInt32() == 1);
+            main.GetProperty("name").GetString().Should().Be("Main");
+            main.GetProperty("role").GetInt32().Should().Be(1);
+            // 900 ticks at 10 MHz, so 90 microseconds of busy time on the main lane.
+            main.GetProperty("busy_ns").GetInt64().Should().Be(90_000L);
+            JsonElement pathfinder = threads.Single(t => t.GetProperty("id").GetInt32() == 7);
+            pathfinder.GetProperty("name").GetString().Should().Be("Pathfinder");
+            pathfinder.GetProperty("role").GetInt32().Should().Be(2);
+            pathfinder.GetProperty("busy_ns").GetInt64().Should().Be(20_000L);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Latest_serves_empty_thread_ids_for_a_v8_batch() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-threads-v8-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-threads-v8",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20, 10],
+            ParentIds = [-1, 10, -1],
+            StartTimestamps = [100L, 150L, 700L],
+            ElapsedTicks = [500L, 200L, 400L],
+            FrameOrdinals = [1, 1, 2],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement frame = doc.RootElement.GetProperty("frame");
+
+            frame.GetProperty("node_count").GetInt32().Should().Be(2);
+            frame.GetProperty("nodes").GetProperty("thread_ids").GetArrayLength().Should().Be(0);
+            doc.RootElement.GetProperty("threads").GetArrayLength().Should().Be(0);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
 }

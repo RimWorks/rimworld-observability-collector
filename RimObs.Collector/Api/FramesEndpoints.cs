@@ -20,6 +20,7 @@ public static class FramesEndpoints {
                 frame = frame is null ? null : FramePayload.Map(frame, anchor, usPerTick),
                 strip = MapStrip(aggregator, usPerTick, 0),
                 stats = FramePayload.MapStats(stats, usPerTick),
+                threads = MapThreads(aggregator, TickConverter.NsPerTick(meta)),
                 vitals = MapVitals(aggregator),
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
@@ -112,6 +113,22 @@ public static class FramesEndpoints {
             fps = aggregator.LatestFps,
             tick = aggregator.LatestTpsFpsTick,
         };
+    }
+
+    // spelled out here rather than serialized off ThreadInfo, which is PascalCase.
+    private static object[] MapThreads(SessionAggregator aggregator, double nsPerTick) {
+        IReadOnlyList<ThreadInfo> threads = aggregator.Threads.Snapshot();
+        object[] mapped = new object[threads.Count];
+        for (int i = 0; i < threads.Count; i++) {
+            ThreadInfo thread = threads[i];
+            mapped[i] = new {
+                id = thread.Id,
+                name = thread.Name,
+                role = thread.Role,
+                busy_ns = (long)(thread.BusyTicks * nsPerTick),
+            };
+        }
+        return mapped;
     }
 
     private static object MapStrip(SessionAggregator aggregator, double usPerTick, int count) {
