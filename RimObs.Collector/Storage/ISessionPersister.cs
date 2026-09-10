@@ -17,4 +17,6 @@ public interface ISessionPersister : IDisposable {
     void ReplaceGcEventsSnapshot(string sessionId, GcEventRecord[] events);
 
     void WriteCallTreeSnapshot(string sessionId, IReadOnlyCollection<CallEdgeStats> edges);
+
+    void WriteThreadsSnapshot(string sessionId, IReadOnlyCollection<ThreadInfo> threads);
 }

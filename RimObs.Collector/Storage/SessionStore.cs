@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 namespace RimWorks.RimObs.Collector.Storage;
 
 public sealed class SessionStore : IDisposable {
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
     private const string SchemaVersionPragma = "user_version";
 
     private readonly SqliteConnection _connection;
@@ -331,6 +331,56 @@ ON CONFLICT(parent_id, section_id) DO UPDATE SET
         tx.Commit();
     }
 
+    public void WriteThreadsSnapshot(IReadOnlyCollection<ThreadInfo> threads) {
+        ArgumentNullException.ThrowIfNull(threads);
+        ThrowIfDisposed();
+
+        using SqliteTransaction tx = _connection.BeginTransaction();
+        using SqliteCommand upsert = _connection.CreateCommand();
+        upsert.Transaction = tx;
+        upsert.CommandText = @"
+INSERT INTO threads (thread_id, name, role, busy_ticks)
+VALUES ($id, $name, $role, $busy)
+ON CONFLICT(thread_id) DO UPDATE SET
+    name = excluded.name,
+    role = excluded.role,
+    busy_ticks = excluded.busy_ticks;
+";
+        SqliteParameter pId = upsert.Parameters.Add("$id", SqliteType.Integer);
+        SqliteParameter pName = upsert.Parameters.Add("$name", SqliteType.Text);
+        SqliteParameter pRole = upsert.Parameters.Add("$role", SqliteType.Integer);
+        SqliteParameter pBusy = upsert.Parameters.Add("$busy", SqliteType.Integer);
+
+        foreach (ThreadInfo thread in threads) {
+            pId.Value = thread.Id;
+            pName.Value = thread.Name;
+            pRole.Value = thread.Role;
+            pBusy.Value = thread.BusyTicks;
+            upsert.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    public List<ThreadInfo> GetThreads() {
+        ThrowIfDisposed();
+
+        using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT thread_id, name, role, busy_ticks FROM threads ORDER BY thread_id;";
+
+        List<ThreadInfo> rows = [];
+        using SqliteDataReader reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            rows.Add(new ThreadInfo(
+                Id: reader.GetInt32(0),
+                Name: reader.GetString(1),
+                Role: reader.GetInt32(2),
+                BusyTicks: reader.GetInt64(3)));
+        }
+        return rows;
+    }
+
+    public int CountThreads() => CountRows("SELECT COUNT(*) FROM threads;");
+
     public int CountCallTreeEdges() => CountRows("SELECT COUNT(*) FROM call_tree_edges;");
 
     public int CountSections() => CountRows("SELECT COUNT(*) FROM sections;");
@@ -538,6 +588,13 @@ CREATE TABLE call_tree_edges (
     call_count INTEGER NOT NULL,
     total_elapsed_ticks INTEGER NOT NULL,
     PRIMARY KEY (parent_id, section_id)
+) WITHOUT ROWID;
+
+CREATE TABLE threads (
+    thread_id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    role INTEGER NOT NULL,
+    busy_ticks INTEGER NOT NULL
 ) WITHOUT ROWID;
 ";
         cmd.ExecuteNonQuery();

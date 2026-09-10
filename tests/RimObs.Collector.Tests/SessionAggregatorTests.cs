@@ -135,6 +135,8 @@ public sealed class SessionAggregatorTests {
         public void ReplaceGcEventsSnapshot(string sessionId, RimWorks.RimObs.Collector.Aggregation.GcEventRecord[] events) => WrittenGc.Add((sessionId, events));
         public List<(string id, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.CallEdgeStats> edges)> WrittenCallTree { get; } = [];
         public void WriteCallTreeSnapshot(string sessionId, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.CallEdgeStats> edges) => WrittenCallTree.Add((sessionId, edges));
+        public List<(string id, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.ThreadInfo> threads)> WrittenThreads { get; } = [];
+        public void WriteThreadsSnapshot(string sessionId, IReadOnlyCollection<RimWorks.RimObs.Collector.Aggregation.ThreadInfo> threads) => WrittenThreads.Add((sessionId, threads));
         public void Dispose() { }
     }
 

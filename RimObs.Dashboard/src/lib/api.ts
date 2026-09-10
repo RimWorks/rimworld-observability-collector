@@ -37,6 +37,20 @@ export interface StatusResponse {
     };
 }
 
+/** One lane in the thread table. `role` is the ThreadRole enum: 0 main, 1 unity job, 2 mod, 3 rimobs. */
+export interface ThreadLane {
+    id: number;
+    name: string;
+    role: number;
+    busy_ns: number;
+}
+
+export interface ThreadsResponse {
+    schema_version: number;
+    session_id: string;
+    threads: ThreadLane[];
+}
+
 export interface Hotspot {
     id: number;
     name: string;
@@ -474,6 +488,8 @@ export const api = {
         get<HotspotsResponse>(`/api/v1/sessions/current/hotspots?limit=${limit}`),
     sections: () => get<SectionsResponse>('/api/v1/sessions/current/sections'),
     allSections: () => get<RegistrySectionsResponse>('/api/v1/sections'),
+    threads: (sessionId = 'current') =>
+        get<ThreadsResponse>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/threads`),
     frames: () => get<FrameResponse>('/api/v1/frames/latest'),
     clearFrames: async (): Promise<void> => {
         const res = await fetch('/api/v1/frames/clear', {

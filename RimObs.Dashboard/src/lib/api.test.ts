@@ -28,6 +28,14 @@ describe('api endpoint URLs', () => {
         );
     });
 
+    it('builds the threads URL for the live session and for a saved one', async () => {
+        const f = mockFetch({ threads: [] });
+        await api.threads();
+        expect(f.mock.calls[0][0]).toBe('/api/v1/sessions/current/threads');
+        await api.threads('sess 1');
+        expect(f.mock.calls[1][0]).toBe('/api/v1/sessions/sess%201/threads');
+    });
+
     it('passes the hotspots limit', async () => {
         const f = mockFetch({ hotspots: [] });
         await api.hotspots(25);

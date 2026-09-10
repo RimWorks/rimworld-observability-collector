@@ -38,6 +38,7 @@ public sealed class PersistenceFlusher : BackgroundService {
         IReadOnlyCollection<MetricStats> metrics = _aggregator.SnapshotMetrics();
         IReadOnlyCollection<CallEdgeStats> callEdges = _aggregator.SnapshotCallEdges();
         GcEventRecord[] gc = _aggregator.SnapshotGcEvents(GcSnapshotLimit);
+        IReadOnlyList<ThreadInfo> threads = _aggregator.Threads.Snapshot();
 
         if (sections.Count > 0)
             _persister.WriteSectionsSnapshot(sessionId, sections);
@@ -45,6 +46,8 @@ public sealed class PersistenceFlusher : BackgroundService {
             _persister.WriteMetricsSnapshot(sessionId, metrics);
         if (callEdges.Count > 0)
             _persister.WriteCallTreeSnapshot(sessionId, callEdges);
+        if (threads.Count > 0)
+            _persister.WriteThreadsSnapshot(sessionId, threads);
         _persister.ReplaceGcEventsSnapshot(sessionId, gc);
     }
 

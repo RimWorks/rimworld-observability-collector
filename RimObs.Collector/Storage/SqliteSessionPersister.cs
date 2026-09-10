@@ -84,6 +84,17 @@ public sealed class SqliteSessionPersister : ISessionPersister {
         store.WriteCallTreeSnapshot(edges);
     }
 
+    public void WriteThreadsSnapshot(string sessionId, IReadOnlyCollection<ThreadInfo> threads) {
+        ArgumentNullException.ThrowIfNull(threads);
+        ValidateSessionId(sessionId);
+        if (threads.Count == 0)
+            return;
+        ThrowIfDisposed();
+
+        SessionStore store = GetOrOpen(sessionId);
+        store.WriteThreadsSnapshot(threads);
+    }
+
     public void ReplaceGcEventsSnapshot(string sessionId, GcEventRecord[] events) {
         ArgumentNullException.ThrowIfNull(events);
         ValidateSessionId(sessionId);

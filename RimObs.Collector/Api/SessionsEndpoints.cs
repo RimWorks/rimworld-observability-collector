@@ -34,6 +34,7 @@ public static class SessionsEndpoints {
         endpoints.MapGet("/api/v1/sessions/current/metrics", GetCurrentMetrics);
         endpoints.MapGet("/api/v1/sessions/current/patches", GetCurrentPatches);
         endpoints.MapGet("/api/v1/sessions/current/call_tree", GetCurrentCallTree);
+        endpoints.MapGet("/api/v1/sessions/{id}/threads", GetSessionThreads);
         endpoints.MapPost("/api/v1/sessions/{id}/name", RenameSession);
         endpoints.MapPost("/api/v1/sessions/new", StartNewSession);
         endpoints.MapPost("/api/v1/sessions/restart-game", RestartGame);
@@ -196,6 +197,46 @@ public static class SessionsEndpoints {
             total_metric_observations = aggregator.TotalMetricObservations,
             total_section_ns = (long)(totalSectionTicks * nsPerTick),
             last_batch_utc = aggregator.LastBatchUtc == default ? (DateTime?)null : aggregator.LastBatchUtc,
+        });
+    }
+
+    /// <summary>
+    /// The thread lanes for one session. "current" or the live session's id reads the live
+    /// table; any other id reads the lanes persisted for that session.
+    /// </summary>
+    private static IResult GetSessionThreads(string id, SessionAggregator aggregator, IServiceProvider services) {
+        SessionMeta? meta = aggregator.Meta;
+        bool wantsCurrent = string.Equals(id, "current", StringComparison.Ordinal)
+            || (meta is not null && string.Equals(id, meta.SessionId, StringComparison.Ordinal));
+
+        if (wantsCurrent) {
+            if (meta is null)
+                return Results.NotFound(new { schema_version = SchemaVersion.Current, reason = "no active session" });
+            return ThreadsResult(meta.SessionId, aggregator.Threads.Snapshot(), NsPerTick(meta));
+        }
+
+        if (services.GetService<SqliteSessionPersister>() is not { } persister)
+            return Results.NotFound(new { schema_version = SchemaVersion.Current, reason = "no such session" });
+
+        string dbPath = persister.ResolveDatabasePath(id);
+        if (!File.Exists(dbPath))
+            return Results.NotFound(new { schema_version = SchemaVersion.Current, reason = "no such session" });
+
+        using SessionStore store = SessionStore.OpenReadOnly(dbPath);
+        SessionMeta? stored = store.ReadSessionMeta(id) ?? store.ReadFirstSessionMeta();
+        return ThreadsResult(id, store.GetThreads(), NsPerTick(stored));
+    }
+
+    private static IResult ThreadsResult(string sessionId, IReadOnlyList<ThreadInfo> threads, double nsPerTick) {
+        return Results.Ok(new {
+            schema_version = SchemaVersion.Current,
+            session_id = sessionId,
+            threads = threads.Select(t => new {
+                id = t.Id,
+                name = t.Name,
+                role = t.Role,
+                busy_ns = (long)(t.BusyTicks * nsPerTick),
+            }).ToArray(),
         });
     }
 

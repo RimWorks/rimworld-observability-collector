@@ -138,14 +138,37 @@ public sealed class PersistenceFlusherTests : IDisposable {
         Convert.ToInt64(cmd.ExecuteScalar()).Should().Be(1);
     }
 
+    [Fact]
+    public void FlushOnce_persists_thread_lanes_so_a_saved_session_keeps_them() {
+        SessionAggregator agg = new();
+        agg.OnSessionMeta(new SessionMeta { SessionId = "lanes", StartedUtcTicks = 100, StopwatchFrequency = 10_000_000, AnchorTimestamp = 0 });
+        agg.OnThreadRegistrations(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["main"],
+            Roles = [(int)ThreadRole.Main],
+        });
+        agg.Threads.AddBusy(7, 250);
+
+        using SqliteSessionPersister persister = new(_tempDir);
+        persister.WriteSessionMeta(agg.Meta!);
+        new PersistenceFlusher(agg, persister, TimeSpan.FromSeconds(1)).FlushOnce();
+
+        using SessionStore store = SessionStore.OpenReadOnly(Path.Combine(_tempDir, "lanes.db"));
+        List<ThreadInfo> lanes = store.GetThreads();
+        lanes.Should().ContainSingle();
+        lanes[0].Should().Be(new ThreadInfo(7, "main", (int)ThreadRole.Main, 250));
+    }
+
     private sealed class SpyPersister : ISessionPersister {
         public List<SessionMeta> WrittenMetas { get; } = [];
         public List<(string sessionId, IReadOnlyCollection<SectionStats> sections)> WrittenSections { get; } = [];
         public List<(string sessionId, IReadOnlyCollection<MetricStats> metrics)> WrittenMetrics { get; } = [];
         public List<(string sessionId, GcEventRecord[] events)> WrittenGc { get; } = [];
         public List<(string sessionId, IReadOnlyCollection<CallEdgeStats> edges)> WrittenCallTree { get; } = [];
+        public List<(string sessionId, IReadOnlyCollection<ThreadInfo> threads)> WrittenThreads { get; } = [];
 
         public void WriteSessionMeta(SessionMeta meta) => WrittenMetas.Add(meta);
+        public void WriteThreadsSnapshot(string sessionId, IReadOnlyCollection<ThreadInfo> threads) => WrittenThreads.Add((sessionId, threads));
         public void WriteSectionsSnapshot(string sessionId, IReadOnlyCollection<SectionStats> sections) => WrittenSections.Add((sessionId, sections));
         public void WriteMetricsSnapshot(string sessionId, IReadOnlyCollection<MetricStats> metrics) => WrittenMetrics.Add((sessionId, metrics));
         public void ReplaceGcEventsSnapshot(string sessionId, GcEventRecord[] events) => WrittenGc.Add((sessionId, events));
@@ -159,6 +182,7 @@ public sealed class PersistenceFlusherTests : IDisposable {
         public void WriteMetricsSnapshot(string sessionId, IReadOnlyCollection<MetricStats> metrics) { }
         public void ReplaceGcEventsSnapshot(string sessionId, GcEventRecord[] events) { }
         public void WriteCallTreeSnapshot(string sessionId, IReadOnlyCollection<CallEdgeStats> edges) { }
+        public void WriteThreadsSnapshot(string sessionId, IReadOnlyCollection<ThreadInfo> threads) { }
         public void Dispose() { }
     }
 }
