@@ -43,3 +43,30 @@ public static class OtherAutoTargets {
         return acc;
     }
 }
+
+/// <summary>
+/// A struct with both shapes, so the scan can prove it refuses the instance method and keeps
+/// the static one. Mirrors Gilzoide.ManagedJobs.ManagedJob, which crashed the game.
+/// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+public struct StructScanTargets {
+    private readonly int _value;
+
+    public StructScanTargets(int value) => _value = value;
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public int InstanceWork(int n) {
+        int acc = _value;
+        for (int i = 0; i < n; i++)
+            acc += i * n + acc;
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static int StaticWork(int n) {
+        int acc = 0;
+        for (int i = 0; i < n; i++)
+            acc += i * n + acc;
+        return acc;
+    }
+}

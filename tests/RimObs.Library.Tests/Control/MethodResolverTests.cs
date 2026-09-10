@@ -76,4 +76,40 @@ public class MethodResolverTests {
         result.Refused.Should().BeTrue();
         result.Reason.Should().Contain("blocklist");
     }
+
+    // an instance method on a struct takes `this` by ref. a struct used as a unity job payload
+    // is copied into native job memory, so that byref points outside the managed heap and the
+    // patch trampoline reads a struct that was never allocated. Assembly-CSharp!* hit exactly
+    // this on Gilzoide.ManagedJobs.ManagedJob.get_Job and segfaulted mono.
+    [Theory]
+    [InlineData("Add")]
+    [InlineData("get_Value")]
+    public void Refuses_instance_methods_on_value_types(string methodName) {
+        MethodResolveResult result = MethodResolver.Resolve(
+            typeof(StructTargets).FullName!, methodName, [],
+            AppDomain.CurrentDomain.GetAssemblies());
+
+        result.Refused.Should().BeTrue();
+        result.Reason.Should().Contain("value type");
+    }
+
+    [Fact]
+    public void Still_allows_static_methods_on_value_types() {
+        MethodResolveResult result = MethodResolver.Resolve(
+            typeof(StructTargets).FullName!, "StaticAdd",
+            [typeof(int).FullName!, typeof(int).FullName!],
+            AppDomain.CurrentDomain.GetAssemblies());
+
+        result.Refused.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Still_allows_instance_methods_on_reference_types() {
+        MethodResolveResult result = MethodResolver.Resolve(
+            typeof(ResolverTargets).FullName!, "Add",
+            [typeof(int).FullName!, typeof(int).FullName!],
+            AppDomain.CurrentDomain.GetAssemblies());
+
+        result.Refused.Should().BeFalse();
+    }
 }

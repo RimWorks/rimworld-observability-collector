@@ -45,6 +45,14 @@ internal static class MethodResolver {
         return MethodResolveResult.Accept(target, BuildSignature(target));
     }
 
+    /// <summary>
+    /// `this` on a struct is a byref. a struct used as a unity job payload is copied into native
+    /// job memory, so the byref points outside the managed heap and the patch trampoline reads a
+    /// struct that was never allocated. that segfaults mono rather than throwing.
+    /// </summary>
+    internal static bool HasUnmanageableThis(MethodInfo method) =>
+        !method.IsStatic && method.DeclaringType is { IsValueType: true };
+
     internal static bool IsBlocklisted(string typeFullName) {
         for (int i = 0; i < s_BlocklistedNamespaces.Length; i++) {
             if (typeFullName.StartsWith(s_BlocklistedNamespaces[i], StringComparison.Ordinal))
@@ -98,6 +106,8 @@ internal static class MethodResolver {
             return "extern method has no IL body";
         if (target.IsGenericMethodDefinition || target.ContainsGenericParameters)
             return "open generic methods are not supported";
+        if (HasUnmanageableThis(target))
+            return "instance methods on a value type are not supported: `this` can point outside the managed heap";
         return null;
     }
 

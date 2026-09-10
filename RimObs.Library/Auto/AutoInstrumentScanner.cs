@@ -81,7 +81,7 @@ internal static class AutoInstrumentScanner {
     }
 
     private static void Classify(MethodInfo method, string typeName, AutoInstrumentPlan plan, int maxTargets) {
-        if (MethodResolver.IsBlocklisted(typeName)) {
+        if (MethodResolver.IsBlocklisted(typeName) || MethodResolver.HasUnmanageableThis(method)) {
             plan.SkippedBlocklisted++;
             return;
         }

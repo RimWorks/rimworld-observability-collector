@@ -133,4 +133,27 @@ public class AutoInstrumentScannerTests {
         plan.Targets.Select(m => m.Name).Should().NotContain("Elsewhere");
         plan.Targets.Select(m => m.Name).Should().Contain("Worthwhile");
     }
+
+    // the dynamic-patch path refuses these too. the scan is the path that actually crashed:
+    // Assembly-CSharp!* matched Gilzoide.ManagedJobs.ManagedJob.get_Job, a struct instance
+    // method unity runs on a job thread, and mono segfaulted reading its GCHandle.
+    [Fact]
+    public void Skips_instance_methods_on_value_types() {
+        AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(
+            [typeof(StructScanTargets).Assembly],
+            MethodPattern.ParseAll("RimObsTest.AutoFixtures.StructScanTargets"));
+
+        plan.Matched.Should().BeGreaterThan(0);
+        plan.SkippedBlocklisted.Should().BeGreaterThan(0);
+        plan.Targets.Should().NotContain(m => !m.IsStatic);
+    }
+
+    [Fact]
+    public void Still_instruments_static_methods_on_value_types() {
+        AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(
+            [typeof(StructScanTargets).Assembly],
+            MethodPattern.ParseAll("RimObsTest.AutoFixtures.StructScanTargets::StaticWork"));
+
+        plan.Targets.Should().ContainSingle().Which.IsStatic.Should().BeTrue();
+    }
 }
