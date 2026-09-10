@@ -391,7 +391,7 @@ public sealed class WireCodecTests {
         byte[] wireBytes = WireCodec.Serialize(original);
 
         MessagePackReader reader = new MessagePackReader(wireBytes);
-        reader.ReadArrayHeader().Should().Be(8);
+        reader.ReadArrayHeader().Should().Be(9);
     }
 
     [Fact]
@@ -634,7 +634,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(20);
+        AllWireTypes().Count.Should().Be(21);
     }
 
     // the preview is only trustworthy if every counter survives the wire, so this asserts the
@@ -668,5 +668,61 @@ public sealed class WireCodecTests {
             WireCodec.Deserialize<ControlAutoPreviewRequest>(WireCodec.Serialize(sent));
 
         back.Should().BeEquivalentTo(sent);
+    }
+
+    [Fact]
+    public void Thread_registrations_round_trip() {
+        ThreadRegistrationsBatch sent = new() {
+            ThreadIds = [1, 2, 3],
+            Names = ["Main", "", "Worker 7"],
+            Roles = [(int)ThreadRole.Main, (int)ThreadRole.UnityJob, (int)ThreadRole.Mod],
+        };
+
+        ThreadRegistrationsBatch back =
+            WireCodec.Deserialize<ThreadRegistrationsBatch>(WireCodec.Serialize(sent));
+
+        back.ThreadIds.Should().Equal(sent.ThreadIds);
+        back.Names.Should().Equal(sent.Names);
+        back.Roles.Should().Equal(sent.Roles);
+    }
+
+    // v8 wrote 8 fields. a v8 payload must still decode, with ThreadIds left empty, the same
+    // tolerance the codec already gives v5 through v8.
+    [Fact]
+    public void Section_batch_from_a_v8_payload_decodes_with_no_thread_ids() {
+        SectionBatch v8 = new() {
+            SectionIds = [10],
+            ElapsedTicks = [5L],
+            StartTimestamps = [1L],
+            ParentIds = [-1],
+            FrameOrdinals = [4321],
+            NodeIds = [1],
+            ParentNodeIds = [-1],
+            AllocBytes = [0L],
+        };
+
+        SectionBatch back = WireCodec.Deserialize<SectionBatch>(WireCodec.SerializeSectionBatchV8(v8));
+
+        back.SectionIds.Should().Equal(10);
+        back.ThreadIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Section_batch_round_trips_thread_ids() {
+        SectionBatch sent = new() {
+            SectionIds = [10, 11],
+            ElapsedTicks = [5L, 6L],
+            StartTimestamps = [1L, 2L],
+            ParentIds = [-1, 10],
+            FrameOrdinals = [4321, 4321],
+            NodeIds = [1, 2],
+            ParentNodeIds = [-1, 1],
+            AllocBytes = [0L, 0L],
+            ThreadIds = [1, 2],
+        };
+
+        SectionBatch back = WireCodec.Deserialize<SectionBatch>(WireCodec.Serialize(sent));
+
+        back.ThreadIds.Should().Equal(1, 2);
     }
 }

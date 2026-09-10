@@ -16,4 +16,10 @@ public sealed class SectionBatch {
     public int[] ParentNodeIds { get; set; } = [];
 
     public long[] AllocBytes { get; set; } = [];
+
+    /// <summary>
+    /// Lane id per sample, parallel to <see cref="SectionIds"/>. Empty when decoded from a v8
+    /// payload, so guard with <c>i &lt; ThreadIds.Length</c>.
+    /// </summary>
+    public int[] ThreadIds { get; set; } = [];
 }

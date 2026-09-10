@@ -21,6 +21,8 @@ public static class WireCodec {
                 return Serialize(v);
             case SectionRegistrationsBatch v:
                 return Serialize(v);
+            case ThreadRegistrationsBatch v:
+                return Serialize(v);
             case SectionBatch v:
                 return Serialize(v);
             case MetricRegistrationsBatch v:
@@ -110,7 +112,7 @@ public static class WireCodec {
 
     public static byte[] Serialize(SectionBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(8);
+        writer.WriteArrayHeader(9);
         WriteInt32Array(writer, value.SectionIds);
         WriteInt64Array(writer, value.ElapsedTicks);
         WriteInt64Array(writer, value.StartTimestamps);
@@ -119,6 +121,16 @@ public static class WireCodec {
         WriteInt32Array(writer, value.NodeIds);
         WriteInt32Array(writer, value.ParentNodeIds);
         WriteInt64Array(writer, value.AllocBytes);
+        WriteInt32Array(writer, value.ThreadIds);
+        return writer.ToArray();
+    }
+
+    public static byte[] Serialize(ThreadRegistrationsBatch value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(3);
+        WriteInt32Array(writer, value.ThreadIds);
+        WriteStringArray(writer, value.Names);
+        WriteInt32Array(writer, value.Roles);
         return writer.ToArray();
     }
 
@@ -275,6 +287,21 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    /// <summary>Test-only: lets a test build a payload from an older schema version.</summary>
+    internal static byte[] SerializeSectionBatchV8(SectionBatch value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(8);
+        WriteInt32Array(writer, value.SectionIds);
+        WriteInt64Array(writer, value.ElapsedTicks);
+        WriteInt64Array(writer, value.StartTimestamps);
+        WriteInt32Array(writer, value.ParentIds);
+        WriteInt32Array(writer, value.FrameOrdinals);
+        WriteInt32Array(writer, value.NodeIds);
+        WriteInt32Array(writer, value.ParentNodeIds);
+        WriteInt64Array(writer, value.AllocBytes);
+        return writer.ToArray();
+    }
+
     // One entry per wire type. A dispatch chain here was 17 sequential type compares and
     // the most complex method in the codec.
     private static readonly Dictionary<Type, Func<byte[], object>> s_Readers = new() {
@@ -283,6 +310,7 @@ public static class WireCodec {
         [typeof(PongMessage)] = data => ReadPongMessage(data),
         [typeof(SessionMeta)] = data => ReadSessionMeta(data),
         [typeof(SectionRegistrationsBatch)] = data => ReadSectionRegistrationsBatch(data),
+        [typeof(ThreadRegistrationsBatch)] = data => ReadThreadRegistrationsBatch(data),
         [typeof(SectionBatch)] = data => ReadSectionBatch(data),
         [typeof(MetricRegistrationsBatch)] = data => ReadMetricRegistrationsBatch(data),
         [typeof(MetricsBatch)] = data => ReadMetricsBatch(data),
@@ -375,6 +403,16 @@ public static class WireCodec {
         return batch;
     }
 
+    private static ThreadRegistrationsBatch ReadThreadRegistrationsBatch(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ThreadRegistrationsBatch {
+            ThreadIds = ReadInt32Array(reader),
+            Names = ReadStringArray(reader),
+            Roles = ReadInt32Array(reader),
+        };
+    }
+
     private static SectionBatch ReadSectionBatch(byte[] data) {
         WireBufferReader reader = new WireBufferReader(data);
         int fieldCount = reader.ReadArrayHeader();
@@ -392,6 +430,8 @@ public static class WireCodec {
         }
         if (fieldCount >= 8)
             batch.AllocBytes = ReadInt64Array(reader);
+        if (fieldCount >= 9)
+            batch.ThreadIds = ReadInt32Array(reader);
         return batch;
     }
 

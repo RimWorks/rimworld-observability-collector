@@ -17,5 +17,7 @@ public static class SchemaVersion {
     //     runtime where the mono allocation hook could not be enabled.
     // v8: GcEventsBatch gains FrameOrdinals, so a collection can be placed on the strip.
     //     Readers built for v7 get an empty array.
-    public const int Current = 8;
+    // v9: SectionBatch gains ThreadIds and ThreadRegistrationsBatch names the lanes. readers
+    //     built for v8 see 8 fields and get an empty ThreadIds, which reads as main-thread only.
+    public const int Current = 9;
 }
