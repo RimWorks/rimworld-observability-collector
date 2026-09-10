@@ -1,10 +1,8 @@
 # Architecture
 
-RimObs spans three separate runtimes because each piece runs in a fundamentally different host environment.
-
 ## Summary
 
-The system has three runtimes. A `net472` instrumentation library runs inside RimWorld's Unity Mono process. A `netstandard2.0` shared wire-type library serves both sides. A `net10` collector daemon runs out of process. A MessagePack-framed UDP and HTTP protocol carries telemetry to the collector. The collector stores it in SQLite and serves it through an embedded Svelte 5 SPA.
+RimObs spans three runtimes because each piece runs in a different host. A `net472` instrumentation library runs inside RimWorld's Unity Mono process. A `netstandard2.0` shared wire-type library serves both sides. A `net10` collector daemon runs out of process. A MessagePack-framed UDP and HTTP protocol carries telemetry to the collector. The collector stores it in SQLite and serves it through an embedded Svelte 5 SPA.
 
 ## The three runtimes
 

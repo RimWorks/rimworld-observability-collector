@@ -69,7 +69,7 @@ internal sealed class CollectorConfigClient {
 
     private string? Fetch() {
         try {
-#pragma warning disable SYSLIB0014 // WebRequest is the robust choice under net472/Mono; obsolete only in the net10 test host.
+#pragma warning disable SYSLIB0014 // WebRequest is what works under net472/Mono; obsolete only in the net10 test host.
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(_configUrl);
 #pragma warning restore SYSLIB0014
             request.Method = "GET";

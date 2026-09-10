@@ -42,7 +42,7 @@ Open this when you want to add or remove timing probes without restarting the ga
 
 Data sources: [`GET /api/v1/instrumentation/patches`](Local-HTTP-API) polled every 5 seconds; [`GET /api/v1/instrumentation/search`](Local-HTTP-API) on each debounced keystroke; [`POST /api/v1/instrumentation/patch`](Local-HTTP-API) and [`DELETE /api/v1/instrumentation/patch/{id}`](Local-HTTP-API) on button click.
 
-### Call Tree (`#/calltree`)
+### Call tree (`#/calltree`)
 
 A collapsible tree of profiled call stacks. Each node shows its share of total time, call count, and cumulative nanoseconds. Depth is capped at 16 levels; the tree is rooted at the top 10 sections by total time.
 

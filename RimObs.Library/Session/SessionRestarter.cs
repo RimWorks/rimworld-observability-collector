@@ -17,14 +17,9 @@ public static class SessionRestarter {
     internal static void SetSink(UdpTelemetrySink? sink) => s_Sink = sink;
 
     /// <summary>
-    /// Re-anchors onto a new id and re-queues every registration, so the collector's name table
-    /// refills for the new session instead of leaving every section as a bare id. Returns the
-    /// new session id. Locked because the entry hook and the dashboard button can both call it.
-    /// </summary>
-    /// <summary>
     /// Restarts the game process. A session is one launch, so a restart is the only split that
     /// needs no re-anchoring: the new process mints its own id on the way up. Optionally saves
-    /// first, because Root.Shutdown does not, and unsaved colony progress is simply lost.
+    /// first, because Root.Shutdown does not, and unsaved colony progress is lost.
     /// Must run on the game thread: it touches the window stack and the save pipeline.
     /// </summary>
     public static void RestartGame(bool save) {
@@ -35,7 +30,6 @@ public static class SessionRestarter {
 
     private static void TrySaveCurrentGame() {
         Type? loader = Type.GetType("Verse.GameDataSaveLoader, Assembly-CSharp", throwOnError: false);
-        Type? faction = Type.GetType("Verse.Faction, Assembly-CSharp", throwOnError: false);
         if (loader == null)
             return;
 
@@ -49,7 +43,6 @@ public static class SessionRestarter {
             return;
 
         save.Invoke(null, new object?[] { name });
-        _ = faction;
     }
 
     /// <summary>The name of the save the colony is already using, or null at the main menu.</summary>
@@ -71,6 +64,11 @@ public static class SessionRestarter {
         type?.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
     }
 
+    /// <summary>
+    /// Re-anchors onto a new id and re-queues every registration, so the collector's name table
+    /// refills for the new session instead of leaving every section as a bare id. Returns the
+    /// new session id. Locked because the entry hook and the dashboard button can both call it.
+    /// </summary>
     public static string StartNew() {
         lock (s_Lock) {
             string id = Guid.NewGuid().ToString("N");
