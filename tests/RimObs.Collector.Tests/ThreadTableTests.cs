@@ -1,4 +1,3 @@
-using System;
 using RimWorks.RimObs.Collector.Aggregation;
 using RimWorks.RimObs.Wire;
 using FluentAssertions;
@@ -76,12 +75,26 @@ public sealed class ThreadTableTests {
     }
 
     [Fact]
-    public void Busy_for_an_unknown_lane_is_ignored_rather_than_throwing() {
+    public void Busy_for_an_unknown_lane_creates_it_so_a_lost_registration_only_costs_the_name() {
         ThreadTable table = new();
 
-        Action act = () => table.AddBusy(99, 10L);
+        table.AddBusy(99, 10L);
 
-        act.Should().NotThrow();
-        table.Snapshot().Should().BeEmpty();
+        table.Snapshot().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new ThreadInfo(99, "", 0, 10L));
+    }
+
+    [Fact]
+    public void A_late_registration_fills_in_the_name_and_keeps_the_busy_total() {
+        ThreadTable table = new();
+        table.AddBusy(99, 10L);
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [99],
+            Names = ["Worker"],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+
+        table.Snapshot().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new ThreadInfo(99, "Worker", (int)ThreadRole.UnityJob, 10L));
     }
 }

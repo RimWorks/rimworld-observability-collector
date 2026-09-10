@@ -24,8 +24,9 @@ public sealed class ThreadTable {
 
     public void AddBusy(int threadId, long ticks) {
         lock (_gate) {
-            if (_byId.TryGetValue(threadId, out ThreadInfo? info))
-                _byId[threadId] = info with { BusyTicks = info.BusyTicks + ticks };
+            _byId[threadId] = _byId.TryGetValue(threadId, out ThreadInfo? info)
+                ? info with { BusyTicks = info.BusyTicks + ticks }
+                : new ThreadInfo(threadId, string.Empty, 0, ticks);
         }
     }
 
