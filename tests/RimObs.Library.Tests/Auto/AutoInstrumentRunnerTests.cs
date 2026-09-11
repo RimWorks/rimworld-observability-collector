@@ -204,6 +204,23 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
         AutoInstrumentRunner.SkippedOverCap.Should().Be(2);
     }
 
+    // lowering the cap used to only zero the counters: the rescan saw every method as already
+    // instrumented, so the patches stayed live while the dashboard read as under the cap.
+    [Fact]
+    public void Lowering_the_cap_unpatches_what_is_now_past_it() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+
+        AutoInstrumentRunner.MaxTargets = 1;
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+
+        PatchRegistry.Snapshot().Should().HaveCount(1);
+        AutoInstrumentRunner.SkippedOverCap.Should().Be(2);
+        AutoInstrumentRunner.Truncated.Should().BeTrue();
+    }
+
     [Fact]
     public void The_cap_falls_back_to_the_default_when_it_is_set_to_nothing() {
         AutoInstrumentRunner.MaxTargets = 0;

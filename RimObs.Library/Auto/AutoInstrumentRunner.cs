@@ -35,8 +35,8 @@ internal static class AutoInstrumentRunner {
     private static readonly HashSet<MethodInfo> s_Reverted = new HashSet<MethodInfo>();
 
     /// <summary>
-    /// Most methods one scan may queue. Changing it re-arms the parked settings, so the next
-    /// frame rescans instead of waiting for the filters to change too.
+    /// Most methods this runner may keep patched. Changing it re-arms the parked settings, so
+    /// the next frame rescans, and lowering it unpatches the newest targets past the new cap.
     /// </summary>
     public static int MaxTargets {
         get => s_MaxTargets;
@@ -80,6 +80,7 @@ internal static class AutoInstrumentRunner {
         AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(
             assemblies ?? AssemblyIndex.Enumerate(), patterns, s_MaxTargets);
         RestoreReverted(plan, includes, excludes);
+        EnforceCap(plan);
         Submit(plan, ownerId, autoMute);
         return plan;
     }
@@ -133,6 +134,31 @@ internal static class AutoInstrumentRunner {
             if (plan.SkippedAlreadyInstrumented > 0)
                 plan.SkippedAlreadyInstrumented--;
             plan.Targets.Add(method);
+        }
+    }
+
+    /// <summary>
+    /// Trims the live patch set to the cap, newest first. The scanner only caps what one scan
+    /// queues, so without this a lowered cap would leave every earlier patch running.
+    /// </summary>
+    private static void EnforceCap(AutoInstrumentPlan plan) {
+        int over = s_Applied.Count + plan.Targets.Count - s_MaxTargets;
+        if (over <= 0)
+            return;
+
+        int fromPlan = over < plan.Targets.Count ? over : plan.Targets.Count;
+        if (fromPlan > 0) {
+            plan.Targets.RemoveRange(plan.Targets.Count - fromPlan, fromPlan);
+            plan.SkippedOverCap += fromPlan;
+            over -= fromPlan;
+        }
+
+        for (int i = s_Applied.Count - 1; i >= 0 && over > 0; i--, over--) {
+            AppliedPatch applied = s_Applied[i];
+            s_Removing.Add(applied.PatchId);
+            s_Reverted.Add(applied.Target);
+            s_Applied.RemoveAt(i);
+            plan.SkippedOverCap++;
         }
     }
 
