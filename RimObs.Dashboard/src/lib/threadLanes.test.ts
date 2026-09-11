@@ -4,6 +4,7 @@ import {
     laneBusyNs,
     laneLabel,
     laneRow,
+    MIN_LANE_ROWS,
     lanesFromNodes,
     orderLanes,
     ThreadRole,
@@ -187,20 +188,21 @@ describe('laneBands', () => {
     it('stacks each lane below the rows the one above it needs', () => {
         const bands = laneBands(
             [main(), t({ id: 2 })],
-            [n(0, 1), n(2, 1), n(0, 2), n(1, 2)],
+            [n(0, 1), n(6, 1), n(0, 2), n(5, 2)],
             MAX_DEPTH,
         );
         expect(bands.offsets.get(1)).toBe(0);
-        expect(bands.offsets.get(2)).toBe(3);
-        expect(bands.rows).toBe(5);
-        expect(bands.bands.map((b) => b.rows)).toEqual([3, 2]);
+        expect(bands.offsets.get(2)).toBe(7);
+        expect(bands.rows).toBe(13);
+        expect(bands.bands.map((b) => b.rows)).toEqual([7, 6]);
     });
 
-    // the gutter draws a row for it either way, so the band has to hold that row open.
-    it('gives a lane with nothing in the window one row', () => {
+    // 65px minimum lane height: a shallow or empty lane still gets MIN_LANE_ROWS rows.
+    it('floors every band at the minimum lane height', () => {
         const bands = laneBands([main(), t({ id: 2 })], [n(0, 1)], MAX_DEPTH);
-        expect(bands.offsets.get(2)).toBe(1);
-        expect(bands.rows).toBe(2);
+        expect(bands.bands.map((b) => b.rows)).toEqual([MIN_LANE_ROWS, MIN_LANE_ROWS]);
+        expect(bands.offsets.get(2)).toBe(MIN_LANE_ROWS);
+        expect(bands.rows).toBe(2 * MIN_LANE_ROWS);
     });
 
     it('leaves out a lane nobody selected', () => {
@@ -213,7 +215,7 @@ describe('laneBands', () => {
     it('draws nodes with no lane in the main band', () => {
         const bands = laneBands([main(), t({ id: 2 })], [n(0), n(1), n(0, 2)], MAX_DEPTH);
         expect(laneRow(bands, n(1))).toBe(1);
-        expect(bands.offsets.get(2)).toBe(2);
+        expect(bands.offsets.get(2)).toBe(MIN_LANE_ROWS);
     });
 
     it('drops nodes with no lane when main is deselected', () => {
@@ -224,7 +226,7 @@ describe('laneBands', () => {
 
     it('caps a band at the layout depth limit', () => {
         const bands = laneBands([main(), t({ id: 2 })], [n(500, 1), n(0, 2)], 4);
-        expect(bands.rows).toBe(5);
+        expect(bands.rows).toBe(4 + MIN_LANE_ROWS);
         expect(bands.offsets.get(2)).toBe(4);
     });
 
@@ -244,7 +246,7 @@ describe('lanesFromNodes', () => {
         expect(lanes[1].role).toBe(ThreadRole.UnityJob);
 
         const bands = laneBands(lanes, tree, MAX_DEPTH);
-        expect(tree.map((node) => laneRow(bands, node))).toEqual([0, 1, 2]);
+        expect(tree.map((node) => laneRow(bands, node))).toEqual([0, 1, MIN_LANE_ROWS]);
     });
 
     it('is empty when no node names a thread', () => {

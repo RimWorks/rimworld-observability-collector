@@ -1735,7 +1735,7 @@ describe('Flamegraph flame bands', () => {
             expect(await drawnRows()).toEqual([
                 [10, 0],
                 [30, 1],
-                [40, 2],
+                [40, 4],
             ]),
         );
     });

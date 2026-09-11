@@ -257,7 +257,7 @@ describe('layoutFrame thread bands', () => {
     it('drops a worker quad below the rows main needs', () => {
         const tree = [lane(node(0, 0, 400), 1), lane(node(1, 0, 400), 1), lane(node(0, 0, 400), 2)];
         const quads = layoutFrame(tree, { ...OPTS, bands });
-        expect(quads.map((q) => q.depth)).toEqual([0, 1, 2]);
+        expect(quads.map((q) => q.depth)).toEqual([0, 1, 4]);
         // the tint follows nesting inside the lane, so a band never starts out washed out.
         expect(quads.map((q) => q.nest)).toEqual([0, 1, 0]);
     });
@@ -273,7 +273,7 @@ describe('layoutFrame thread bands', () => {
     it('never collapses two lanes into one run', () => {
         const tree = [lane(node(0, 10, 1), 1), lane(node(0, 11, 1), 2), lane(node(0, 12, 1), 1)];
         const quads = layoutFrame(tree, { ...OPTS, bands });
-        expect(quads.map((q) => q.depth)).toEqual([0, 2]);
+        expect(quads.map((q) => q.depth)).toEqual([0, 4]);
         expect(quads[0].count).toBe(2);
         expect(quads[1].count).toBe(1);
     });

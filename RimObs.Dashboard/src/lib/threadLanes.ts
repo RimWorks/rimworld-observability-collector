@@ -111,11 +111,15 @@ export function laneBands(lanes: ThreadLane[], nodes: TreeNode[], maxDepth: numb
             offsets.set(UNKNOWN_LANE, rows);
             depth = Math.max(depth, deepest.get(UNKNOWN_LANE) ?? 0);
         }
-        bands.push({ id: lane.id, rows: depth + 1 });
-        rows += depth + 1;
+        const bandRows = Math.max(depth + 1, MIN_LANE_ROWS);
+        bands.push({ id: lane.id, rows: bandRows });
+        rows += bandRows;
     }
     return { bands, offsets, rows };
 }
+
+/** 4 rows x 18px = 72px, the first row multiple past the 65px minimum lane height. */
+export const MIN_LANE_ROWS = 4;
 
 /** canvas row for a node, or -1 when its lane is not drawn. */
 export function laneRow(bands: LaneBands | undefined, node: TreeNode): number {
