@@ -1620,14 +1620,16 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 
-    it('keeps the session-cumulative busy total off non-main lanes', async () => {
+    it('shows per-frame calls and busy time, never the session total', async () => {
         userPrefs.setMainThreadOnly(false);
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
 
         await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
-        expect(screen.getByTestId('lane-2').querySelector('small')).toBeNull();
-        expect(screen.getByTestId('lane-1').textContent).toContain('16.20 ms');
+        expect(screen.getByTestId('lane-2').textContent).toMatch(/1\s*·\s*400\.0 us/);
+        expect(screen.getByTestId('lane-1').textContent).toMatch(/1\s*·\s*16\.20 ms/);
+        // 4.00 ms is lane 2's session-cumulative busy_ns; the gutter must never show it.
+        expect(screen.getByTestId('lane-2').textContent).not.toContain('4.00 ms');
     });
 
     it('drops a lane from the gutter when the thread filter deselects it', async () => {

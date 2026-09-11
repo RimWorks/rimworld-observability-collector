@@ -42,7 +42,7 @@
     import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
     import { liveConfig } from '../lib/liveConfig.svelte';
     import { sectionSearch } from '../lib/sectionSearchState.svelte';
-    import { SvelteSet } from 'svelte/reactivity';
+    import { SvelteMap, SvelteSet } from 'svelte/reactivity';
     import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
@@ -65,6 +65,7 @@
     import { t } from '../lib/i18n';
     import {
         laneBands,
+        laneBusyNs,
         laneLabel,
         lanesFromNodes,
         orderLanes,
@@ -555,22 +556,43 @@
             selectedLanes.add(lane.id);
         }
     });
-    // lanes with nodes in the drawn window; an idle worker holds no empty band open, and a
-    // lane joins at its ordered spot the moment its first node lands.
-    let activeLaneIds = $derived.by(() => {
-        const ids = new Set<number>();
-        for (const n of series.nodes) if (n.laneId !== undefined) ids.add(n.laneId);
-        return ids;
+    // a lane shows while its thread has nodes in recent frames and lingers about a second
+    // after going quiet, so sporadic workers do not flicker in and out of the gutter.
+    const LANE_LINGER_FRAMES = 60;
+    const laneLastSeen = new SvelteMap<number, number>();
+    $effect(() => {
+        const f = frame;
+        if (!f) return;
+        for (const id of f.nodes.thread_ids ?? []) laneLastSeen.set(id, f.capture_ordinal);
     });
+    let laneCallCounts = $derived.by(() => {
+        const counts = new Map<number, number>();
+        for (const id of frame?.nodes.thread_ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
+        return counts;
+    });
+    function laneStats(lane: ThreadLane): { calls: number; busyNs: number } {
+        if (!frame) return { calls: 0, busyNs: 0 };
+        if (!frame.nodes.thread_ids?.length) {
+            // a v8 frame carries no lane data, and everything it holds rides the main band.
+            return lane.role === ThreadRole.Main
+                ? { calls: frame.node_count, busyNs: frame.duration_us * 1000 }
+                : { calls: 0, busyNs: 0 };
+        }
+        return {
+            calls: laneCallCounts.get(lane.id) ?? 0,
+            busyNs: laneBusyNs(frame.nodes, lane.id),
+        };
+    }
     let visibleLanes = $derived.by(() => {
         if (allLanes.length === 0) return [MAIN_FALLBACK];
-        return userPrefs.mainThreadOnly
-            ? allLanes.filter((l) => l.role === ThreadRole.Main)
-            : allLanes.filter(
-                  (l) =>
-                      selectedLanes.has(l.id) &&
-                      (l.role === ThreadRole.Main || activeLaneIds.has(l.id)),
-              );
+        if (userPrefs.mainThreadOnly) return allLanes.filter((l) => l.role === ThreadRole.Main);
+        const newest = frame?.capture_ordinal ?? 0;
+        return allLanes.filter(
+            (l) =>
+                selectedLanes.has(l.id) &&
+                (l.role === ThreadRole.Main ||
+                    (laneLastSeen.get(l.id) ?? -1) >= newest - LANE_LINGER_FRAMES),
+        );
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
     // label always sits level with the flame it names.
@@ -952,6 +974,7 @@
             <div class="gutter">
                 <div class="lane gc">GC &mdash;</div>
                 {#each visibleLanes as lane, i (lane.id)}
+                    {@const stats = laneStats(lane)}
                     <div
                         class="lane"
                         class:main={lane.role === ThreadRole.Main}
@@ -959,9 +982,7 @@
                         data-testid="lane-{lane.id}"
                     >
                         {laneLabel(lane)}
-                        {#if lane.role === ThreadRole.Main}
-                            <small class="mono">{ns((frame?.duration_us ?? 0) * 1000)}</small>
-                        {/if}
+                        <small class="mono">{count(stats.calls)} &middot; {ns(stats.busyNs)}</small>
                     </div>
                 {/each}
             </div>
@@ -1452,20 +1473,18 @@
         grid-template-columns: var(--gut) 1fr;
         background: var(--bg-void);
         border-bottom: 1px solid var(--border);
-        height: 600px;
+        /* the flame owns whatever the chrome leaves; the drawer takes its cut in split mode */
+        height: calc(100vh - var(--chrome-h));
+        min-height: 160px;
         overflow: auto;
-        resize: vertical;
         /* drag pans instead; bars just eat width next to the flame. */
         scrollbar-width: none;
     }
     .stage::-webkit-scrollbar {
         display: none;
     }
-    /* the drawer explains the flame, so it must not cover it. the stage keeps its resize
-       handle, which is the splitter: drag it back up if you want the flame bigger. */
     .stage.split {
-        height: min(600px, calc(100vh - var(--drawer-h) - var(--chrome-h)));
-        min-height: 160px;
+        height: calc(100vh - var(--drawer-h) - var(--chrome-h));
     }
     .gutter {
         border-right: 1px solid var(--border);
