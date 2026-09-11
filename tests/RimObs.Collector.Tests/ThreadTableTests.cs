@@ -7,6 +7,23 @@ namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class ThreadTableTests {
     [Fact]
+    public void MainLaneId_trusts_only_registered_main_lanes() {
+        ThreadTable table = new();
+        table.MainLaneId().Should().Be(0);
+
+        // a busy sample beats the registration and fabricates a role-0 placeholder.
+        table.AddBusy(7, 100L);
+        table.MainLaneId().Should().Be(0);
+
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [9, 1],
+            Names = ["", "Main"],
+            Roles = [(int)ThreadRole.Main, (int)ThreadRole.Main],
+        });
+        table.MainLaneId().Should().Be(1);
+    }
+
+    [Fact]
     public void Records_a_registration() {
         ThreadTable table = new();
         table.Upsert(new ThreadRegistrationsBatch {

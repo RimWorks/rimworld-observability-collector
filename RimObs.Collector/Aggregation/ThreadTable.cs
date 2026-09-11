@@ -44,6 +44,23 @@ public sealed class ThreadTable {
         }
     }
 
+    /// <summary>
+    /// The registered main lane, 0 while none has announced. Lowest id wins, matching the
+    /// dashboard's rule when a dropped registration leaves a worker stamped role 0.
+    /// </summary>
+    public int MainLaneId() {
+        lock (_gate) {
+            int main = 0;
+            foreach (ThreadInfo t in _byId.Values) {
+                if (t.Role != (int)ThreadRole.Main || !_registered.Contains(t.Id))
+                    continue;
+                if (main == 0 || t.Id < main)
+                    main = t.Id;
+            }
+            return main;
+        }
+    }
+
     public IReadOnlyList<ThreadInfo> Snapshot() {
         lock (_gate) {
             return new List<ThreadInfo>(_byId.Values);

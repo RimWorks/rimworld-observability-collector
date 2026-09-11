@@ -56,6 +56,37 @@ public sealed class FrameRingTests {
         ring.ComputeStats().NewestOrdinal.Should().Be(8);
     }
 
+    // a worker lane can drain a frame's samples before the main thread's batch lands; a frame
+    // without its main lane is mid-flight by definition and must not be served or stepped onto.
+    [Fact]
+    public void A_frame_without_its_main_lane_stays_hidden_until_main_lands_or_it_seals() {
+        ManualClock clock = new();
+        FrameRing ring = new(64) { Clock = clock, OpenFrameWindow = 4 };
+        ring.Add(1, 20, -1, 10, -1, 1000L, 200L, 0L, 7, mainLane: false);
+
+        clock.Advance(ring.QuietPeriod);
+        ring.Latest().Should().BeNull();
+        ring.FindByOrdinal(1).Should().BeNull();
+        ring.SnapshotStrip(0).Should().BeEmpty();
+        ring.Range(1, 0).Should().BeEmpty();
+
+        ring.Add(1, 10, -1, 11, -1, 900L, 500L, 0L, 1, mainLane: true);
+        clock.Advance(ring.QuietPeriod);
+        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void A_workerless_main_frame_and_a_sealed_worker_frame_both_serve() {
+        FrameRing ring = new(64) { Clock = new ManualClock(), OpenFrameWindow = 2 };
+        ring.Add(1, 20, -1, 10, -1, 1000L, 200L, 0L, 7, mainLane: false);
+        for (int ordinal = 2; ordinal <= 4; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
+
+        // 1 sealed when 3 arrived; sealed data is final, so it serves even without main.
+        ring.FindByOrdinal(1).Should().NotBeNull();
+    }
+
     // a paused game sends nothing more, so its last frame has had its drain cycle and is the
     // only thing left to show.
     [Fact]

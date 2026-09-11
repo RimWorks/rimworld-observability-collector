@@ -233,6 +233,7 @@ public sealed class SessionAggregator {
         int parentNodeIdLen = batch.ParentNodeIds.Length;
         int allocLen = batch.AllocBytes.Length;
         int threadLen = batch.ThreadIds.Length;
+        int mainLane = Threads.MainLaneId();
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
@@ -259,7 +260,11 @@ public sealed class SessionAggregator {
             Interlocked.Add(ref edge.TotalElapsedTicks, elapsed);
             Interlocked.Add(ref edge.TotalAllocBytes, allocBytes);
             int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, i < threadLen ? batch.ThreadIds[i] : 0);
+            int laneId = i < threadLen ? batch.ThreadIds[i] : 0;
+            // a v8 batch or an unannounced main both count as main, so nothing hides for lack
+            // of thread data; only a sample from a KNOWN non-main lane is a worker's.
+            bool fromMain = laneId == 0 || mainLane == 0 || laneId == mainLane;
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, laneId, fromMain);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);

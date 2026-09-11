@@ -116,7 +116,7 @@ public sealed class FrameRing {
         }
     }
 
-    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L, int threadId = 0) {
+    public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L, int threadId = 0, bool mainLane = true) {
         lock (_gate) {
             if (frameOrdinal <= 0) {
                 _preFrameSamples++;
@@ -128,6 +128,7 @@ public sealed class FrameRing {
             }
             if (!_open.TryGetValue(frameOrdinal, out OpenFrame? open))
                 _open[frameOrdinal] = open = new OpenFrame();
+            open.HasMain |= mainLane;
             open.SectionIds.Add(sectionId);
             open.ParentIds.Add(parentId);
             open.NodeIds.Add(nodeId);
@@ -171,6 +172,8 @@ public sealed class FrameRing {
             foreach (KeyValuePair<int, OpenFrame> entry in _open) {
                 if (entry.Key > ceiling)
                     break;
+                if (!entry.Value.HasMain)
+                    continue;
                 newest = entry.Value.Materialize(entry.Key);
             }
             newest ??= _count == 0 ? null : _buffer[(_next - 1 + _buffer.Length) % _buffer.Length];
@@ -230,7 +233,7 @@ public sealed class FrameRing {
     public FrameSnapshot? FindByOrdinal(int ordinal) {
         lock (_gate) {
             if (_open.TryGetValue(ordinal, out OpenFrame? open))
-                return open.Materialize(ordinal);
+                return open.HasMain ? open.Materialize(ordinal) : null;
             FrameSnapshot[] view = View();
             int at = LowerBound(view, ordinal);
             if (at < view.Length && view[at].CaptureOrdinal == ordinal)
@@ -357,13 +360,21 @@ public sealed class FrameRing {
     // every open ordinal sits above _sealedThrough and every ring ordinal at or below it, so
     // sealed frames plus open previews concatenate into one ascending run. caller holds _gate.
     private FrameSnapshot[] View() {
-        FrameSnapshot[] frames = new FrameSnapshot[_count + _open.Count];
+        int openTake = 0;
+        foreach (OpenFrame open in _open.Values) {
+            if (open.HasMain)
+                openTake++;
+        }
+        FrameSnapshot[] frames = new FrameSnapshot[_count + openTake];
         int start = _count < _buffer.Length ? 0 : _next;
         for (int i = 0; i < _count; i++)
             frames[i] = _buffer[(start + i) % _buffer.Length];
         int n = _count;
-        foreach (KeyValuePair<int, OpenFrame> entry in _open)
+        foreach (KeyValuePair<int, OpenFrame> entry in _open) {
+            if (!entry.Value.HasMain)
+                continue;
             frames[n++] = entry.Value.Materialize(entry.Key);
+        }
         return frames;
     }
 
@@ -394,6 +405,9 @@ public sealed class FrameRing {
         public readonly List<long> AllocBytes = [];
         public readonly List<int> ThreadIds = [];
         public bool HasThreadIds;
+
+        /// <summary>False until the main lane lands; a frame without it is mid-flight.</summary>
+        public bool HasMain;
 
         private FrameSnapshot? _snapshot;
 
