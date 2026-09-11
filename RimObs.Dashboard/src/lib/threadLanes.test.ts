@@ -41,6 +41,23 @@ describe('orderLanes', () => {
         expect(lanes.map((l) => l.id)).toEqual([1]);
     });
 
+    // a dropped registration packet leaves a worker stamped role 0 forever.
+    it('keeps only the lowest-id role-0 lane as main, in the same order either way', () => {
+        const forward = orderLanes([
+            t({ id: 1, name: 'Main', role: ThreadRole.Main }),
+            t({ id: 99, role: ThreadRole.Main }),
+            t({ id: 4 }),
+        ]);
+        const reversed = orderLanes([
+            t({ id: 4 }),
+            t({ id: 99, role: ThreadRole.Main }),
+            t({ id: 1, name: 'Main', role: ThreadRole.Main }),
+        ]);
+        expect(forward.map((l) => l.id)).toEqual([1, 4, 99]);
+        expect(reversed.map((l) => l.id)).toEqual([1, 4, 99]);
+        expect(forward.filter((l) => l.role === ThreadRole.Main).map((l) => l.id)).toEqual([1]);
+    });
+
     it('leaves the input array alone', () => {
         const input = [t({ id: 5 }), t({ id: 2 })];
         orderLanes(input);

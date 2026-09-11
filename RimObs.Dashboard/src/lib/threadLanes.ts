@@ -15,12 +15,22 @@ export function laneLabel(t: ThreadLane): string {
 
 /** Main anchored first, then by id, so a lane keeps its row between polls. */
 export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
-    return threads
-        .filter((t) => t.role !== ThreadRole.RimObs)
+    const kept = threads.filter((t) => t.role !== ThreadRole.RimObs);
+    // role 0 is also the collector's placeholder for a lane whose registration got dropped,
+    // so only the oldest (lowest id) role-0 lane is really main.
+    const mainId = kept.reduce(
+        (low, t) => (t.role === ThreadRole.Main && (low === null || t.id < low) ? t.id : low),
+        null as number | null,
+    );
+    return kept
+        .map((t) =>
+            t.role === ThreadRole.Main && t.id !== mainId
+                ? { ...t, role: ThreadRole.UnityJob }
+                : t,
+        )
         .sort((a, b) => {
-            if (a.role === ThreadRole.Main) return -1;
-            if (b.role === ThreadRole.Main) return 1;
-            return a.id - b.id;
+            const rank = (t: ThreadLane) => (t.role === ThreadRole.Main ? 0 : 1);
+            return rank(a) - rank(b) || a.id - b.id;
         });
 }
 
