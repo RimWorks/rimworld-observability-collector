@@ -74,7 +74,6 @@ internal sealed class ControlServer {
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
         if (method == "GET" && path == "/auto") { HandleAutoInstrument(ctx); return; }
         if (method == "POST" && path == "/auto/preview") { HandleAutoPreview(ctx); return; }
-        if (method == "POST" && path == "/ring-capacity") { HandleRingCapacity(ctx); return; }
         if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
         if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
         if (method == "DELETE" && path.StartsWith("/patch/", StringComparison.Ordinal)) {
@@ -147,24 +146,6 @@ internal sealed class ControlServer {
         foreach ((int id, string sig, int sec, PatchStatus status) in PatchRegistry.Snapshot())
             entries.Add(new ControlPatchEntry { PatchId = id, Signature = sig, SectionId = sec, Status = status });
         WriteResponse(ctx, WireCodec.Serialize(new ControlPatchListResponse { Patches = entries.ToArray() }));
-    }
-
-    /// <summary>
-    /// Resizes the sender's per-thread sample rings. Existing lanes take it at their next
-    /// empty drain, so a frame in flight can still drop.
-    /// </summary>
-    private static void HandleRingCapacity(HttpListenerContext ctx) {
-        Transport.UdpTelemetrySink? sink = ControlServices.Sink;
-        if (sink is null) {
-            ctx.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
-            return;
-        }
-
-        byte[] body = ReadBody(ctx);
-        ControlRingCapacityRequest req = WireCodec.Deserialize<ControlRingCapacityRequest>(body);
-        WriteResponse(ctx, WireCodec.Serialize(new ControlRingCapacityResponse {
-            Capacity = sink.SetRingCapacity(req.Capacity),
-        }));
     }
 
     private static void HandleAutoInstrument(HttpListenerContext ctx) {

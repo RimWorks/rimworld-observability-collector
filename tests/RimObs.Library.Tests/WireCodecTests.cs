@@ -664,7 +664,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(23);
+        AllWireTypes().Count.Should().Be(21);
     }
 
     // the preview is only trustworthy if every counter survives the wire, so this asserts the
@@ -700,17 +700,6 @@ public sealed class WireCodecTests {
             WireCodec.Deserialize<ControlAutoPreviewRequest>(WireCodec.Serialize(sent));
 
         back.Should().BeEquivalentTo(sent);
-    }
-
-    [Fact]
-    public void Ring_capacity_round_trips_in_both_directions() {
-        ControlRingCapacityRequest req = new() { Capacity = 65536 };
-        ControlRingCapacityResponse res = new() { Capacity = 32768 };
-
-        WireCodec.Deserialize<ControlRingCapacityRequest>(WireCodec.Serialize(req))
-            .Capacity.Should().Be(65536);
-        WireCodec.Deserialize<ControlRingCapacityResponse>(WireCodec.Serialize(res))
-            .Capacity.Should().Be(32768);
     }
 
     [Fact]

@@ -53,10 +53,6 @@ public static class WireCodec {
                 return Serialize(v);
             case ControlAutoInstrumentResponse v:
                 return Serialize(v);
-            case ControlRingCapacityRequest v:
-                return Serialize(v);
-            case ControlRingCapacityResponse v:
-                return Serialize(v);
             default:
                 throw new NotSupportedException($"WireCodec cannot serialize {typeof(T)}.");
         }
@@ -267,20 +263,6 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
-    public static byte[] Serialize(ControlRingCapacityRequest value) {
-        WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(1);
-        writer.WriteInt32(value.Capacity);
-        return writer.ToArray();
-    }
-
-    public static byte[] Serialize(ControlRingCapacityResponse value) {
-        WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(1);
-        writer.WriteInt32(value.Capacity);
-        return writer.ToArray();
-    }
-
     public static byte[] Serialize(ControlAutoPreviewResponse value) {
         WireBufferWriter writer = new WireBufferWriter();
         writer.WriteArrayHeader(8);
@@ -334,8 +316,6 @@ public static class WireCodec {
         [typeof(ControlAutoInstrumentResponse)] = data => ReadControlAutoInstrumentResponse(data),
         [typeof(ControlAutoPreviewRequest)] = data => ReadControlAutoPreviewRequest(data),
         [typeof(ControlAutoPreviewResponse)] = data => ReadControlAutoPreviewResponse(data),
-        [typeof(ControlRingCapacityRequest)] = data => ReadControlRingCapacityRequest(data),
-        [typeof(ControlRingCapacityResponse)] = data => ReadControlRingCapacityResponse(data),
     };
 
     public static T Deserialize<T>(byte[] data) where T : class {
@@ -600,18 +580,6 @@ public static class WireCodec {
             Ignore = reader.ReadString() ?? string.Empty,
             MaxTargets = reader.ReadInt32(),
         };
-    }
-
-    private static ControlRingCapacityRequest ReadControlRingCapacityRequest(byte[] data) {
-        WireBufferReader reader = new WireBufferReader(data);
-        reader.ReadArrayHeader();
-        return new ControlRingCapacityRequest { Capacity = reader.ReadInt32() };
-    }
-
-    private static ControlRingCapacityResponse ReadControlRingCapacityResponse(byte[] data) {
-        WireBufferReader reader = new WireBufferReader(data);
-        reader.ReadArrayHeader();
-        return new ControlRingCapacityResponse { Capacity = reader.ReadInt32() };
     }
 
     private static ControlAutoPreviewResponse ReadControlAutoPreviewResponse(byte[] data) {

@@ -8,7 +8,6 @@ using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
 using RimWorks.RimObs.Tests;
-using RimWorks.RimObs.Transport;
 using RimWorks.RimObs.Wire;
 using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
@@ -182,29 +181,6 @@ public sealed class ControlServerTests : IDisposable {
         decoded.Eligible.Should().Be(1);
         decoded.Truncated.Should().BeTrue();
         decoded.MaxTargets.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task Ring_capacity_op_rounds_up_and_retunes_the_sink() {
-        using UdpTelemetrySink sink = new(ownerId: "test.pkg", port: 45999);
-        ControlServices.SetSink(sink);
-
-        HttpResponseMessage res = await PostMsg("/ring-capacity",
-            WireCodec.Serialize(new ControlRingCapacityRequest { Capacity = 1000 }));
-        res.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        ControlRingCapacityResponse decoded = WireCodec.Deserialize<ControlRingCapacityResponse>(
-            await res.Content.ReadAsByteArrayAsync(_drainCts.Token));
-        decoded.Capacity.Should().Be(1024);
-        sink.RingCapacity.Should().Be(1024);
-    }
-
-    [Fact]
-    public async Task Ring_capacity_op_reports_unavailable_before_the_sink_is_wired() {
-        HttpResponseMessage res = await PostMsg("/ring-capacity",
-            WireCodec.Serialize(new ControlRingCapacityRequest { Capacity = 1024 }));
-
-        res.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 
     private async Task<HttpResponseMessage> PostMsg(string path, byte[] body) {
