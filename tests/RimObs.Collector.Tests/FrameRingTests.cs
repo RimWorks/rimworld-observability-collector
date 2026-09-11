@@ -36,6 +36,26 @@ public sealed class FrameRingTests {
         ring.Count.Should().Be(0);
     }
 
+    // a 500ms hitch frame reports its cheap sections first and the expensive one last. the
+    // stream is still live the whole time, so the hitch frame must not seal without it.
+    [Fact]
+    public void A_hitch_frame_stays_open_while_other_frames_keep_arriving() {
+        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FrameRing ring = new(8) { NowUtc = () => clock };
+        ring.Add(1, 10, -1, 100, -1, 100L, 500L);
+
+        clock = clock.AddMilliseconds(250);
+        ring.Add(2, 10, -1, 200, -1, 700L, 400L);
+        ring.Latest().Should().BeNull();
+
+        clock = clock.AddMilliseconds(250);
+        ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
+
+        ring.LateSamples.Should().Be(0);
+        ring.GoQuiet();
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
     // the game stops sending; the dashboard keeps polling and must see the whole tail, not
     // whatever was sealed a window ago.
     [Fact]
@@ -96,6 +116,29 @@ public sealed class FrameRingTests {
 
         ring.LateSamples.Should().Be(1);
         ring.FindByOrdinal(5)!.ThreadIds.Should().Equal(1, 7);
+    }
+
+    // the window is the only rule while samples keep arriving, so a wide window really is wide.
+    // the dashboard polls every 16ms, and a read used to seal any frame untouched for 200ms.
+    [Fact]
+    public void A_wide_window_holds_a_frame_open_past_the_quiet_deadline() {
+        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FrameRing ring = RingWithWindow(64, 64);
+        ring.NowUtc = () => clock;
+        ring.Add(1, 10, -1, 100, -1, 100L, 500L, 0L, 1);
+
+        for (int ordinal = 2; ordinal <= 40; ordinal++) {
+            clock = clock.AddMilliseconds(16);
+            ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
+            ring.Latest();
+        }
+
+        clock = clock.AddMilliseconds(16);
+        ring.Add(1, 20, -1, 999, -1, 150L, 200L, 0L, 7);
+
+        ring.LateSamples.Should().Be(0);
+        ring.Flush();
+        ring.FindByOrdinal(1)!.ThreadIds.Should().Equal(1, 7);
     }
 
     [Fact]
