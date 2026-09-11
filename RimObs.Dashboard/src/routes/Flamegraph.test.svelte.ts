@@ -686,6 +686,28 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('lossy-count')).toHaveTextContent('3');
     });
 
+    // a bundle written before library_ring_samples existed has no such key in frames.json
+    it('raises the lossy badge for a bundle missing the ring counter', async () => {
+        mockFetch();
+        const base = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (!url.includes('/file/frames.json')) return base(input, init);
+            return jsonResponse({
+                ...BUNDLE_FRAMES_BODY,
+                dropped: { pre_frame_samples: 12, late_samples: 7 },
+            });
+        }) as unknown as typeof fetch;
+
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+
+        await screen.findByTestId('frame-scrub');
+        expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
+        expect(screen.getByTestId('lossy-count')).toHaveTextContent('19');
+        expect(screen.getByTestId('drop-ring')).toHaveTextContent('0');
+    });
+
     it('drops the live badge when switching to a clean bundle', async () => {
         let late = 0;
         mockFetch();

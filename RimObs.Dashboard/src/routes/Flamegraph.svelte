@@ -641,7 +641,9 @@
             : -1,
     );
     let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
-    let dropped = $derived((live ? liveRes?.dropped : importedFrames?.dropped) ?? NO_DROPS);
+    // an older bundle can be missing a counter the current build knows about, so fill the gaps
+    // rather than trust the shape: one absent key turns the total into NaN.
+    let dropped = $derived({ ...NO_DROPS, ...(live ? liveRes?.dropped : importedFrames?.dropped) });
 
     let dropTotal = $derived(
         dropped.pre_frame_samples + dropped.late_samples + dropped.library_ring_samples,
