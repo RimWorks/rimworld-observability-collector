@@ -27,7 +27,8 @@ public sealed class FrameRingTests {
     // a lane that reports a drain interval late still has to land, so a fresh frame stays open.
     [Fact]
     public void A_frame_still_being_reported_stays_open_on_a_read() {
-        FrameRing ring = new(8);
+        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FrameRing ring = new(8) { NowUtc = () => clock };
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
@@ -456,7 +457,8 @@ public sealed class FrameRingTests {
 
     [Fact]
     public void Snapshot_is_empty_before_the_first_frame_seals() {
-        FrameRing ring = RingWithWindow(4, 1);
+        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FrameRing ring = new(4) { OpenFrameWindow = 1, NowUtc = () => clock };
         ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
 
         ring.Snapshot().Should().BeEmpty();

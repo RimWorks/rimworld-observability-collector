@@ -241,6 +241,8 @@ public class BundleExportServiceTests {
     [Fact]
     public async Task Estimate_LeavesTheOpenFrameAlone() {
         SessionAggregator aggregator = BuildAggregator();
+        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        aggregator.Frames.NowUtc = () => clock;
         aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
         BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
 
