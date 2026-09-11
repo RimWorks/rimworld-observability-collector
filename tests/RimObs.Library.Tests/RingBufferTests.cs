@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using RimWorks.RimObs.Transport;
 using FluentAssertions;
@@ -250,10 +251,10 @@ public sealed class RingBufferTests {
         reaped.Should().Equal(workerId);
     }
 
-    // The reaped samples reach the caller before the lane goes, so the name it stamps on them is
-    // still the dead thread's and not an empty string.
+    // The last-drain race only fires inside Reap, so drive it directly: a reap that hands samples
+    // back must leave the lane resolvable, or the consumer relabels a live-named thread as empty.
     [Fact]
-    public void A_reaped_lanes_last_samples_still_resolve_the_owner_name() {
+    public void A_reap_that_yields_samples_keeps_the_owner_name_resolvable() {
         SampleRingSet set = new(16);
         List<int> reaped = new();
         set.LaneReaped = id => reaped.Add(id);
@@ -261,19 +262,28 @@ public sealed class RingBufferTests {
         int workerId = 0;
         Thread worker = new(() => {
             workerId = Environment.CurrentManagedThreadId;
-            set.TryWrite(1, -1, 0, -1, 0, 0, 1);
+            set.TryWrite(1, -1, 0, -1, 0, 0, 1).Should().BeTrue();
         }) { Name = "MyModWorker" };
         worker.Start();
         worker.Join();
 
         SampleBatch batch = new SampleBatch(16);
-        set.Drain(batch, 16).Should().Be(1);
+        Reap(set, batch, 16).Should().Be(1);
         batch.ThreadIds[0].Should().Be(workerId);
         set.NameFor(workerId).Should().Be("MyModWorker");
         reaped.Should().BeEmpty();
 
-        set.Drain(batch, 16).Should().Be(0);
+        Reap(set, batch, 16).Should().Be(0);
+        set.LaneCount.Should().Be(0);
         reaped.Should().Equal(workerId);
+    }
+
+    private static int Reap(SampleRingSet set, SampleBatch batch, int maxCount) {
+        Type type = typeof(SampleRingSet);
+        object lanes = type.GetField("_lanes", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(set)!;
+        object lane = ((Array)lanes).GetValue(0)!;
+        MethodInfo reap = type.GetMethod("Reap", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (int)reap.Invoke(set, new[] { lane, batch, (object)maxCount })!;
     }
 
     [Fact]
