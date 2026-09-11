@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import ThreadFilter from './ThreadFilter.svelte';
+import { userPrefs } from '../userPrefs.svelte';
 import { ThreadRole } from '../threadLanes';
 import type { ThreadLane } from '../api';
 import type { FrameNodes } from '../frameTree';
@@ -28,6 +29,10 @@ function mount(selected = new SvelteSet<number>([1, 2])) {
 }
 
 describe('ThreadFilter', () => {
+    beforeEach(() => {
+        userPrefs.mainThreadOnly = false;
+    });
+
     it('labels a named lane and falls back to the id for an unnamed one', () => {
         mount();
         expect(screen.getByText('MainThread')).toBeInTheDocument();
@@ -56,6 +61,18 @@ describe('ThreadFilter', () => {
     it('toggles a lane back in on a second click', async () => {
         const selected = mount(new SvelteSet<number>([1]));
         await fireEvent.click(screen.getByTestId('thread-row-2'));
+        expect(selected.has(2)).toBe(true);
+    });
+
+    // main-thread-only hides every other lane from the gutter, so a row that still looked
+    // pressed and still took clicks was lying about what got drawn.
+    it('shows only the main lane as drawn and takes no clicks under main-thread-only', async () => {
+        userPrefs.mainThreadOnly = true;
+        const selected = mount();
+        const other = screen.getByTestId('thread-row-2');
+        expect(screen.getByTestId('thread-row-1').getAttribute('aria-pressed')).toBe('true');
+        expect(other.getAttribute('aria-pressed')).toBe('false');
+        await fireEvent.click(other);
         expect(selected.has(2)).toBe(true);
     });
 });

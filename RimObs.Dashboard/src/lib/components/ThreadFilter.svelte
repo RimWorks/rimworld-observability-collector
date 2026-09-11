@@ -3,6 +3,7 @@
     import type { FrameNodes } from '../frameTree';
     import { laneBusyNs, laneLabel, orderLanes, ThreadRole } from '../threadLanes';
     import { t } from '../i18n';
+    import { userPrefs } from '../userPrefs.svelte';
     import type { SvelteSet } from 'svelte/reactivity';
 
     let {
@@ -20,15 +21,21 @@
     const WARM = 0.25;
     const HOT = 0.5;
 
+    // main-thread-only wins over the selection, so the rows go read-only and show what the
+    // gutter actually draws instead of a toggle that does nothing.
+    let locked = $derived(userPrefs.mainThreadOnly);
+
     let rows = $derived(
         orderLanes(threads).map((lane) => {
             const busy = nodes ? laneBusyNs(nodes, lane.id) : 0;
             const share = frameNs > 0 ? busy / frameNs : 0;
-            return { lane, share, pct: Math.round(share * 1000) / 10 };
+            const drawn = locked ? lane.role === ThreadRole.Main : selected.has(lane.id);
+            return { lane, share, drawn, pct: Math.round(share * 1000) / 10 };
         }),
     );
 
     function toggle(id: number): void {
+        if (locked) return;
         if (selected.has(id)) selected.delete(id);
         else selected.add(id);
     }
@@ -40,8 +47,10 @@
         <button
             type="button"
             class="row"
-            class:off={!selected.has(row.lane.id)}
-            aria-pressed={selected.has(row.lane.id)}
+            class:off={!row.drawn}
+            aria-pressed={row.drawn}
+            disabled={locked}
+            title={locked ? t('tip.threads.mainOnly') : undefined}
             onclick={() => toggle(row.lane.id)}
             data-testid="thread-row-{row.lane.id}"
         >
@@ -88,8 +97,11 @@
         text-align: left;
         cursor: pointer;
     }
-    .row:hover {
+    .row:hover:not(:disabled) {
         background: var(--bg-surface);
+    }
+    .row:disabled {
+        cursor: default;
     }
     /* ghosting the text keeps the bar readable; opacity would fade the track with it */
     .row.off {
