@@ -71,13 +71,14 @@ public sealed class UdpReceiver : BackgroundService {
             return null;
         }
 
-        if (envelope.SchemaVersion != SchemaVersion.Current) {
+        if (envelope.SchemaVersion < SchemaVersion.MinSupported || envelope.SchemaVersion > SchemaVersion.Current) {
             // every batch is dropped, so say it loudly once per version instead of 10x a second.
             if (Interlocked.Exchange(ref _mismatchedVersion, envelope.SchemaVersion) != envelope.SchemaVersion) {
                 _log.LogError(
-                    "Dropping every batch: the game library speaks schema_version={Version}, this collector speaks {Expected}. "
+                    "Dropping every batch: the game library speaks schema_version={Version}, this collector speaks {Min}-{Expected}. "
                         + "They ship together, so rebuild and redeploy both with `make build`.",
                     envelope.SchemaVersion,
+                    SchemaVersion.MinSupported,
                     SchemaVersion.Current);
             }
             return null;

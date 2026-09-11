@@ -235,6 +235,31 @@ public sealed class UdpReceiverDispatchTests {
         agg.Threads.Snapshot().Should().ContainSingle().Which.BusyTicks.Should().Be(150L);
     }
 
+    // regression: the gate demanded schema_version == Current, so a v8 library lost every batch
+    // instead of just its thread data.
+    [Fact]
+    public void Dispatch_v8_section_batch_aggregates_with_no_thread_data() {
+        SessionAggregator agg = new();
+        UdpReceiver receiver = NewReceiver(agg);
+        byte[] payload = TruncateToEightFields(WireCodec.Serialize(new SectionBatch {
+            SectionIds = [3],
+            ElapsedTicks = [100],
+            StartTimestamps = [10],
+            ParentIds = [-1],
+            FrameOrdinals = [1],
+            NodeIds = [1],
+            ParentNodeIds = [-1],
+            AllocBytes = [0],
+        }));
+
+        receiver.Dispatch(SerializeEnvelope(BatchType.Sections, payload, schemaVersion: 8));
+
+        agg.TotalSamples.Should().Be(1);
+        FrameSnapshot frame = agg.Frames.FindByOrdinal(1)!;
+        frame.NodeIds.Should().Equal(1);
+        frame.ThreadIds.Should().BeEmpty();
+    }
+
     [Fact]
     public void Dispatch_non_ping_batch_returns_null() {
         SessionAggregator agg = new();
@@ -257,7 +282,7 @@ public sealed class UdpReceiverDispatchTests {
         TheoryData<BatchType, int> data = new();
         foreach (BatchType batchType in Enum.GetValues<BatchType>()) {
             data.Add(batchType, SchemaVersion.Current + 1);
-            data.Add(batchType, SchemaVersion.Current - 1);
+            data.Add(batchType, SchemaVersion.MinSupported - 1);
         }
 
         return data;
@@ -269,6 +294,14 @@ public sealed class UdpReceiverDispatchTests {
             data.Add(batchType);
 
         return data;
+    }
+
+    // a v8 SectionBatch is the v9 one minus ThreadIds: drop the fixarray header from 9 to 8 and
+    // the reader stops before the trailing field.
+    private static byte[] TruncateToEightFields(byte[] payload) {
+        payload[0].Should().Be(0x99);
+        payload[0] = 0x98;
+        return payload;
     }
 
     private static UdpReceiver NewReceiver(SessionAggregator agg) {

@@ -20,4 +20,8 @@ public static class SchemaVersion {
     // v9: SectionBatch gains ThreadIds and ThreadRegistrationsBatch names the lanes. readers
     //     built for v8 see 8 fields and get an empty ThreadIds, which reads as main-thread only.
     public const int Current = 9;
+
+    // oldest version the collector still decodes. the per-batch field-count guards above
+    // fill in whatever a shorter payload left out.
+    public const int MinSupported = 8;
 }
