@@ -8,8 +8,12 @@ export const ThreadRole = {
     RimObs: 3,
 } as const;
 
-/** Unity's job pool leaves its workers unnamed, so the id is the only label available. */
+/**
+ * Main is always "MainThread" so the gutter matches the call tree's frame scope; Unity never
+ * names it and its job pool leaves workers unnamed, so the id is the only label left.
+ */
 export function laneLabel(t: ThreadLane): string {
+    if (t.role === ThreadRole.Main) return 'MainThread';
     return t.name !== '' ? t.name : `Thread ${t.id}`;
 }
 

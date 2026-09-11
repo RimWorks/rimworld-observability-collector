@@ -19,6 +19,14 @@ describe('laneLabel', () => {
     it('falls back to the id when there is no name', () => {
         expect(laneLabel(t({ id: 14 }))).toBe('Thread 14');
     });
+
+    // unity never names the main thread, and the call tree's scope chip says MainThread.
+    it('always labels the main lane MainThread', () => {
+        expect(laneLabel(t({ id: 1, name: '', role: ThreadRole.Main }))).toBe('MainThread');
+        expect(laneLabel(t({ id: 1, name: 'Unity Main', role: ThreadRole.Main }))).toBe(
+            'MainThread',
+        );
+    });
 });
 
 describe('orderLanes', () => {
