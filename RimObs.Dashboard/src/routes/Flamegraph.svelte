@@ -281,35 +281,6 @@
     let panel = $state<InstrumentationPanel | null>(null);
     let livePatches = $state<MergedPatch[]>([]);
     let liveBySection = $derived(liveSectionIds(livePatches));
-    let contextMenu = $state<{ patch: MergedPatch; x: number; y: number } | null>(null);
-
-    function openContext(p: { sectionId: number; x: number; y: number }): void {
-        const patch = liveBySection.get(p.sectionId);
-        contextMenu = patch ? { patch, x: p.x, y: p.y } : null;
-    }
-
-    $effect(() => {
-        if (!contextMenu) return;
-        function dismiss(e: Event): void {
-            if (!(e.target as Element | null)?.closest?.('.ctx')) contextMenu = null;
-        }
-        function onKey(e: KeyboardEvent): void {
-            if (e.key === 'Escape') contextMenu = null;
-        }
-        globalThis.addEventListener('pointerdown', dismiss);
-        globalThis.addEventListener('keydown', onKey);
-        return () => {
-            globalThis.removeEventListener('pointerdown', dismiss);
-            globalThis.removeEventListener('keydown', onKey);
-        };
-    });
-
-    async function unpatchFromMenu(): Promise<void> {
-        const menu = contextMenu;
-        contextMenu = null;
-        if (menu) await panel?.remove(menu.patch.id);
-    }
-
     const sectionsRes = new Resource(() => api.allSections(), 10000);
     // read once: the ring capacity only moves when someone edits it in Settings, and the
     // status footer just needs a number to divide the held count by.
@@ -775,6 +746,12 @@
                 >
             </div>
             <span class="rightpair">
+                <button
+                    type="button"
+                    class="clearring"
+                    onclick={() => timeline?.resetView()}
+                    data-testid="reset-view">{t('flamegraph.resetView')}</button
+                >
                 <Tooltip text={t('tip.flamegraph.newSession')}>
                     <button
                         type="button"
@@ -983,7 +960,6 @@
                     {names}
                     selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
                     bind:selectedNode
-                    onContext={openContext}
                 />
             </div>
         </div>
@@ -1054,56 +1030,7 @@
     deltaText={deltaUs !== null ? deltaText(deltaUs) : ''}
 />
 
-{#if contextMenu}
-    <div
-        class="ctx"
-        role="menu"
-        tabindex="-1"
-        style="left: {contextMenu.x}px; top: {contextMenu.y}px"
-        data-testid="flame-context"
-    >
-        <p class="ctx-sig mono">{contextMenu.patch.methodName}</p>
-        <button type="button" role="menuitem" onclick={unpatchFromMenu}
-            >{t('instrumentation.remove')}</button
-        >
-    </div>
-{/if}
-
 <style>
-    .ctx {
-        position: fixed;
-        z-index: 60;
-        min-width: 180px;
-        padding: var(--s-2);
-        background: var(--bg-elev);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-    }
-    .ctx-sig {
-        margin: 0 0 var(--s-2);
-        font-size: 0.74rem;
-        color: var(--text-faint);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .ctx button {
-        width: 100%;
-        text-align: left;
-        background: none;
-        border: none;
-        border-radius: var(--r-sm);
-        color: var(--text);
-        font: inherit;
-        font-size: 0.82rem;
-        padding: var(--s-1) var(--s-2);
-        cursor: pointer;
-    }
-    .ctx button:hover {
-        background: var(--bg-surface);
-        color: var(--cyan);
-    }
     .footerpanel {
         padding: var(--s-3) var(--rail) var(--s-5);
     }

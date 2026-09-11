@@ -128,17 +128,37 @@ const STAGGERED_FRAME: FrameData = {
 
 describe('FrameTimeline', () => {
     it('resets the view back to the selected frame', async () => {
-        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
-        const reset = screen.getByTestId('reset-view');
-        expect(reset).toBeDisabled();
+        const { component } = render(FrameTimeline, {
+            series: buildSeries([FRAME]),
+            names: NAMES,
+        });
+        const range = screen.getByTestId('frame-range');
+        const home = range.textContent;
 
         const canvas = document.querySelector('canvas')!;
         await fireEvent.keyDown(canvas, { key: '+' });
-        await waitFor(() => expect(reset).not.toBeDisabled());
+        await waitFor(() => expect(range.textContent).not.toBe(home));
 
-        await fireEvent.click(reset);
+        (component as unknown as { resetView: () => void }).resetView();
 
-        await waitFor(() => expect(reset).toBeDisabled());
+        await waitFor(() => expect(range.textContent).toBe(home));
+    });
+
+    // right-drag pans now, so the canvas suppresses the browser menu and a right release
+    // must never fire the click-to-zoom gesture.
+    it('right-click opens no menu and zooms nothing', async () => {
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = document.querySelector('canvas')!;
+        canvas.setPointerCapture = () => {};
+        const range = screen.getByTestId('frame-range');
+        const home = range.textContent;
+
+        const menuAllowed = fireEvent.contextMenu(canvas);
+        await fireEvent.pointerDown(canvas, { button: 2, clientX: 5, clientY: 5, pointerId: 1 });
+        await fireEvent.pointerUp(canvas, { button: 2, clientX: 5, clientY: 5, pointerId: 1 });
+
+        expect(await menuAllowed).toBe(false);
+        expect(range.textContent).toBe(home);
     });
 
     // the host element only exists once a frame arrives. attaching the observer on mount

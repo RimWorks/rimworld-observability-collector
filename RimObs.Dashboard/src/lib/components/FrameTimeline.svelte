@@ -46,7 +46,6 @@
         selectedNode = $bindable(-1),
         selectedOrdinal = null,
         bands,
-        onContext,
     }: {
         series?: FrameSeries;
         selectedOrdinal?: number | null;
@@ -54,7 +53,6 @@
         selectedNode?: number;
         /** one flame band per thread lane. absent draws every node in one band. */
         bands?: LaneBands;
-        onContext?: (p: { sectionId: number; x: number; y: number }) => void;
     } = $props();
 
     const ANIM_MS = 180;
@@ -338,7 +336,7 @@
         dirty = true;
     }
 
-    function resetView(): void {
+    export function resetView(): void {
         animFrom = null;
         animTo = null;
         view = null;
@@ -414,6 +412,7 @@
     }
 
     let dragState: {
+        button: number;
         startClientX: number;
         startClientY: number;
         startView: ViewRange;
@@ -422,9 +421,12 @@
 
     function handlePointerDown(event: PointerEvent): void {
         if (empty || !canvasEl) return;
+        // left and right both drag-pan; middle/back/forward stay with the browser.
+        if (event.button > 0 && event.button !== 2) return;
         canvasEl.focus();
         canvasEl.setPointerCapture(event.pointerId);
         dragState = {
+            button: event.button,
             startClientX: event.clientX,
             startClientY: event.clientY,
             startView: effectiveView,
@@ -452,20 +454,18 @@
     function handlePointerUp(event: PointerEvent): void {
         if (empty || !canvasEl) return;
         const wasDrag = dragState?.moved ?? false;
+        const button = dragState?.button ?? 0;
         dragState = null;
-        if (wasDrag) return;
+        // a right press only ever pans; the click-to-zoom gesture stays on the left button.
+        if (wasDrag || button === 2) return;
         const { row, atUs } = posToView(event.clientX, event.clientY);
         const idx = hitTestSeries(series, row, atUs, bands);
         if (idx >= 0) zoomToNode(series.nodes[idx]);
     }
 
     function handleContextMenu(event: MouseEvent): void {
-        if (empty || !canvasEl || !onContext) return;
-        const { row, atUs } = posToView(event.clientX, event.clientY);
-        const idx = hitTestSeries(series, row, atUs, bands);
-        if (idx < 0) return;
+        // right-drag pans, so the browser menu never belongs on the canvas.
         event.preventDefault();
-        onContext({ sectionId: series.nodes[idx].sectionId, x: event.clientX, y: event.clientY });
     }
 
     function handlePointerLeave(): void {
@@ -639,13 +639,6 @@
         <span data-testid="frame-span" class="mono"
             >{t('flamegraph.overFrames').replace('{n}', String(shownFrames))}</span
         >
-        <button
-            type="button"
-            class="reset"
-            onclick={resetView}
-            disabled={view === null}
-            data-testid="reset-view">{t('flamegraph.resetView')}</button
-        >
     </p>
     <div class="sr-only" role="status" aria-live="polite">{liveText}</div>
 {/if}
@@ -654,25 +647,6 @@
     .wrap {
         position: relative;
         width: 100%;
-    }
-    .reset {
-        margin-left: auto;
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        color: var(--text-dim);
-        font: inherit;
-        font-size: 0.74rem;
-        padding: 1px 8px;
-        cursor: pointer;
-    }
-    .reset:hover:not(:disabled) {
-        border-color: var(--cyan);
-        color: var(--cyan);
-    }
-    .reset:disabled {
-        color: var(--text-ghost);
-        cursor: default;
     }
     canvas {
         display: block;
