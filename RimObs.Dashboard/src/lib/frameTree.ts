@@ -8,6 +8,8 @@ export interface FrameNodes {
     start_us: number[];
     dur_us: number[];
     alloc_bytes?: number[];
+    /** empty for a v8 bundle, which predates per-node thread ids. */
+    thread_ids?: number[];
 }
 
 export interface FrameData {

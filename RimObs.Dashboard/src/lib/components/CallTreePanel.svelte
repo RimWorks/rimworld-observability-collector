@@ -32,6 +32,7 @@
         percentiles = new Map<number, { p50Us: number; p95Us: number; p99Us: number }>(),
         instrumentation,
         comparison,
+        threads,
         patchOwners = new Map<string, string[]>(),
         open = $bindable(false),
     }: {
@@ -47,6 +48,7 @@
         /** panels that live in the footer but whose state belongs to the route */
         instrumentation?: Snippet;
         comparison?: Snippet;
+        threads?: Snippet;
         /** other mods patching each section's target method, keyed by section name */
         patchOwners?: Map<string, string[]>;
         /** the route shrinks the flame stage to match, so the drawer never covers it */
@@ -117,6 +119,7 @@
     const SIDE_TABS = [
         { id: 'instrumentation', label: 'nav.instrumentation' },
         { id: 'comparison', label: 'comparison.title' },
+        { id: 'threads', label: 'threads.title' },
     ] as const;
     type TabId = (typeof TABS)[number]['id'] | (typeof SIDE_TABS)[number]['id'];
     // the drawer is shut on load and never restores a tab, so the flame owns the viewport first
@@ -252,7 +255,7 @@
 
     {#if activeTab !== null}
         <div class="drawer" data-testid="tree-drawer">
-            {#if activeTab !== 'instrumentation' && activeTab !== 'comparison'}
+            {#if !SIDE_TABS.some((s) => s.id === activeTab)}
                 <div class="bar">
                     <span class="seg" role="group" aria-label={t('tree.scope')}>
                         {#each SCOPES as s (s.id)}
@@ -296,6 +299,8 @@
                 {@render instrumentation?.()}
             {:else if activeTab === 'comparison'}
                 {@render comparison?.()}
+            {:else if activeTab === 'threads'}
+                {@render threads?.()}
             {:else if activeTab === 'pie'}
                 {#if slices.length === 0}
                     <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>

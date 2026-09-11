@@ -42,6 +42,8 @@
     import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
     import { liveConfig } from '../lib/liveConfig.svelte';
     import { sectionSearch } from '../lib/sectionSearchState.svelte';
+    import { SvelteSet } from 'svelte/reactivity';
+    import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { ns, count, bytes, gradeFromShare } from '../lib/format';
     import {
@@ -521,10 +523,22 @@
     let allLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
     // an imported bundle and the first poll carry no thread list, and the page has always drawn
     // a main lane. keep drawing it.
+    // a lane starts drawn and stays that way unless the filter panel turns it off; seeded
+    // tracks what has been offered so the effect cannot undo a click.
+    const seededLanes = new Set<number>();
+    const selectedLanes = new SvelteSet<number>();
+    $effect(() => {
+        for (const lane of allLanes) {
+            if (seededLanes.has(lane.id)) continue;
+            seededLanes.add(lane.id);
+            selectedLanes.add(lane.id);
+        }
+    });
+    // main is the frame's own scope, so the filter can only ever hide workers.
     let visibleLanes = $derived.by(() => {
         const lanes = userPrefs.mainThreadOnly
             ? allLanes.filter((l) => l.role === ThreadRole.Main)
-            : allLanes;
+            : allLanes.filter((l) => l.role === ThreadRole.Main || selectedLanes.has(l.id));
         return lanes.length > 0 ? lanes : [MAIN_FALLBACK];
     });
 
@@ -960,6 +974,7 @@
             bind:open={treeOpen}
             instrumentation={instrumentationPanel}
             comparison={comparisonPanel}
+            threads={threadFilterPanel}
             onSelect={(i) => {
                 if (treeScope === 'session' || !currentEntry) return;
                 timeline?.focusNode(currentEntry.nodeStart + i);
@@ -970,6 +985,17 @@
     {#snippet instrumentationPanel()}
         <div class="footerpanel" data-testid="instrumentation-panel">
             <InstrumentationPanel bind:this={panel} onPatchesChange={(p) => (livePatches = p)} />
+        </div>
+    {/snippet}
+
+    {#snippet threadFilterPanel()}
+        <div class="footerpanel" data-testid="thread-filter-panel">
+            <ThreadFilter
+                threads={allLanes}
+                nodes={frame?.nodes ?? null}
+                frameNs={(frame?.duration_us ?? 0) * 1000}
+                selected={selectedLanes}
+            />
         </div>
     {/snippet}
 

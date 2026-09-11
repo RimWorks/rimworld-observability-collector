@@ -227,6 +227,8 @@
     "settings.promptForName": "Pedirme un nombre para las sesiones nuevas",
     "tip.settings.promptForName": "Muestra el aviso de nombre cuando arranca una sesión nueva. Las sesiones con nombre son las que puedes volver a encontrar al comparar ejecuciones; las demás son solo un id y una marca de tiempo.",
     "tip.settings.closeOnDisconnect": "Cierra esta pestaña cuando el collector deja de responder, normalmente porque RimWorld se ha cerrado. Los navegadores lo bloquean en pestañas que no abrió un script, así que puede no hacer nada.",
+    "threads.title": "Hilos",
+    "threads.busy": "Ocupado",
     "threads.mainOnly": "Solo el hilo principal",
     "tip.threads.mainOnly": "Dibuja un solo carril para el hilo principal y oculta los demás. Desactívalo para ver al lado los hilos de trabajos de Unity y los de los mods, que es como detectas el trabajo que corre junto al bucle de ticks.",
     "tip.settings.language": "Idioma solo del panel. No cambia el idioma de RimWorld ni los nombres de sección que informa el juego.",

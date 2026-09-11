@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { laneLabel, orderLanes, ThreadRole } from './threadLanes';
+import { laneBusyNs, laneLabel, orderLanes, ThreadRole } from './threadLanes';
 import type { ThreadLane } from './api';
+import type { FrameNodes } from './frameTree';
 
 const t = (over: Partial<ThreadLane> = {}): ThreadLane => ({
     id: 1,
@@ -70,5 +71,62 @@ describe('orderLanes', () => {
         const input = [t({ id: 5 }), t({ id: 2 })];
         orderLanes(input);
         expect(input.map((l) => l.id)).toEqual([5, 2]);
+    });
+});
+
+// node i: id, parent id (-1 for a root), duration in us, and the lane it ran on.
+function nodes(rows: [number, number, number, number][]): FrameNodes {
+    return {
+        section_ids: rows.map(() => 1),
+        parent_ids: rows.map(() => -1),
+        node_ids: rows.map((r) => r[0]),
+        parent_node_ids: rows.map((r) => r[1]),
+        start_us: rows.map(() => 0),
+        dur_us: rows.map((r) => r[2]),
+        thread_ids: rows.map((r) => r[3]),
+    };
+}
+
+describe('laneBusyNs', () => {
+    it('sums the lane root nodes', () => {
+        const f = nodes([
+            [10, -1, 400, 1],
+            [11, -1, 400, 1],
+        ]);
+        expect(laneBusyNs(f, 1)).toBe(800_000);
+    });
+
+    // a child sits inside its parent's span, so counting both bills the same time twice.
+    it('does not double-count a nested child', () => {
+        const f = nodes([
+            [10, -1, 800, 1],
+            [11, 10, 500, 1],
+            [12, 11, 100, 1],
+        ]);
+        expect(laneBusyNs(f, 1)).toBe(800_000);
+    });
+
+    // a worker's scope is opened by the main thread, so its parent lives on another lane.
+    it('counts a node whose parent ran on another lane', () => {
+        const f = nodes([
+            [10, -1, 800, 1],
+            [20, 10, 100, 2],
+        ]);
+        expect(laneBusyNs(f, 2)).toBe(100_000);
+    });
+
+    it('is zero for a lane with no nodes in the frame', () => {
+        expect(laneBusyNs(nodes([[10, -1, 800, 1]]), 7)).toBe(0);
+    });
+
+    // a v8 bundle predates per-node thread ids, so no lane can claim any time.
+    it('is zero for every lane when thread_ids is empty', () => {
+        const f = nodes([
+            [10, -1, 800, 1],
+            [20, -1, 100, 2],
+        ]);
+        f.thread_ids = [];
+        expect(laneBusyNs(f, 1)).toBe(0);
+        expect(laneBusyNs(f, 2)).toBe(0);
     });
 });

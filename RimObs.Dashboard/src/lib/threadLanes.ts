@@ -1,4 +1,5 @@
 import type { ThreadLane } from './api';
+import { NO_PARENT, type FrameNodes } from './frameTree';
 
 /** Mirrors RimObs.Wire.ThreadRole. */
 export const ThreadRole = {
@@ -15,6 +16,26 @@ export const ThreadRole = {
 export function laneLabel(t: ThreadLane): string {
     if (t.role === ThreadRole.Main) return 'MainThread';
     return t.name !== '' ? t.name : `Thread ${t.id}`;
+}
+
+/**
+ * Busy time for one lane inside ONE frame; only outermost nodes count, a child is already
+ * inside its parent's span. ThreadLane.busy_ns is session-cumulative and is not this number.
+ */
+export function laneBusyNs(nodes: FrameNodes, laneId: number): number {
+    const lanes = nodes.thread_ids ?? [];
+    const own = new Set<number>();
+    for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i] === laneId) own.add(nodes.node_ids[i]);
+    }
+    let us = 0;
+    for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i] !== laneId) continue;
+        const parent = nodes.parent_node_ids[i];
+        if (parent !== NO_PARENT && own.has(parent)) continue;
+        us += nodes.dur_us[i];
+    }
+    return us * 1000;
 }
 
 /** Main anchored first, then by id, so a lane keeps its row between polls. */

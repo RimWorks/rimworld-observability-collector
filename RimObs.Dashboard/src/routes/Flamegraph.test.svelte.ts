@@ -277,7 +277,7 @@ async function openTree() {
 }
 
 // instrumentation and comparison moved out of their own <details> and into the same footer
-async function openFooterTab(id: 'instrumentation' | 'comparison') {
+async function openFooterTab(id: 'instrumentation' | 'comparison' | 'threads') {
     await screen.findByTestId(`tab-${id}`);
     await fireEvent.click(screen.getByTestId(`tab-${id}`));
 }
@@ -1592,6 +1592,19 @@ describe('Flamegraph thread lanes', () => {
         await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
         expect(screen.getByTestId('lane-2').querySelector('small')).toBeNull();
         expect(screen.getByTestId('lane-1').textContent).toContain('16.20 ms');
+    });
+
+    it('drops a lane from the gutter when the thread filter deselects it', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
+
+        await openFooterTab('threads');
+        await fireEvent.click(await screen.findByTestId('thread-row-2'));
+
+        await waitFor(() => expect(screen.queryByTestId('lane-2')).toBeNull());
+        expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 
     it('still draws a main lane when the response carries no threads', async () => {
