@@ -29,8 +29,9 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private readonly ManualResetEventSlim _stop = new(false);
     private readonly string _ownerId;
 
-    // the sink is built during mod init, on the game's main thread, so that id names the main lane.
-    private readonly int _mainThreadId = Environment.CurrentManagedThreadId;
+    // mod init runs on the threaded-loading worker, so MainThreadMarker learns the main lane
+    // from the first frame instead; this is what the sender last announced. sender thread only.
+    private int _announcedMainThreadId;
 
     private readonly SampleBatch _batch = new SampleBatch(BatchSize);
     private readonly int[] _registrationIds = new int[64];
@@ -315,6 +316,14 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     /// carries. An unnamed thread registers as empty and falls back to the Unity job role.
     /// </summary>
     private void StageThreadRegistrations(int[] threadIds, int n) {
+        int main = MainThreadMarker.MainThreadId;
+        if (main != 0 && main != _announcedMainThreadId) {
+            // the main lane may have been announced as a unity job before the first frame
+            // marked it; forgetting the id makes the next sample re-announce it as Main.
+            _knownThreadIds.Remove(main);
+            _announcedMainThreadId = main;
+        }
+
         for (int i = 0; i < n; i++) {
             int id = threadIds[i];
             if (!_knownThreadIds.Add(id))
@@ -337,8 +346,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         _knownThreadIds.Remove(threadId);
     }
 
-    private ThreadRole RoleFor(int threadId, string name) {
-        if (threadId == _mainThreadId)
+    private static ThreadRole RoleFor(int threadId, string name) {
+        if (threadId != 0 && threadId == MainThreadMarker.MainThreadId)
             return ThreadRole.Main;
         if (name.Length == 0)
             return ThreadRole.UnityJob;

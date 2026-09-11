@@ -3,6 +3,7 @@ using System.Reflection;
 using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Observers;
+using RimWorks.RimObs.Transport;
 
 namespace RimWorks.RimObs.Patching;
 
@@ -53,6 +54,7 @@ internal static class FrameTickPatches {
     // frames keep rendering while the colony is paused, ticks dont, so this is the drain site
     // that lets a patch request land on a paused game.
     private static void FrameBeginPrefix() {
+        MainThreadMarker.Mark();
         FrameTickCounters.BeginFrame();
         ControlServices.Queue.Drain();
         AutoInstrumentRunner.Pump();

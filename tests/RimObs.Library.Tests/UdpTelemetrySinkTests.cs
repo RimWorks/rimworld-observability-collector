@@ -15,6 +15,69 @@ namespace RimWorks.RimObs.Tests;
 public sealed class UdpTelemetrySinkTests : IDisposable {
     public void Dispose() {
         SectionRegistry.Clear();
+        MainThreadMarker.ResetForTests();
+    }
+
+    // regression: the sink captured its constructing thread as main, but rimworld constructs
+    // mods on the threaded-loading worker, so the real main thread shipped as a unity job.
+    [Fact]
+    public void The_frame_thread_is_reannounced_as_main_once_marked() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+        MainThreadMarker.ResetForTests();
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 250;
+
+        List<(int Id, int Role)> announced = new();
+        using CancellationTokenSource stop = new();
+        Thread listener = new(() => {
+            IPEndPoint any = new(IPAddress.Any, 0);
+            while (!stop.IsCancellationRequested) {
+                try {
+                    byte[] bytes = receiver.Receive(ref any);
+                    TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
+                    if (envelope.BatchType != BatchType.ThreadRegistrations)
+                        continue;
+                    ThreadRegistrationsBatch lanes = WireCodec.Deserialize<ThreadRegistrationsBatch>(envelope.Payload);
+                    lock (announced) {
+                        for (int i = 0; i < lanes.ThreadIds.Length; i++)
+                            announced.Add((lanes.ThreadIds[i], lanes.Roles[i]));
+                    }
+                }
+                catch (SocketException) {
+                }
+                catch (ObjectDisposedException) {
+                    return;
+                }
+            }
+        }) {
+            IsBackground = true,
+        };
+        listener.Start();
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        sink.Start();
+        SectionHandle handle = SectionRegistry.Register("test.main-lane");
+
+        // sampled before any frame has run: no thread can be called main yet.
+        sink.RecordSection(handle.Id, parentId: -1, nodeId: 1, parentNodeId: -1, startTimestamp: 0L, elapsedTicks: 1L, allocBytes: 0L);
+        Thread.Sleep(300);
+
+        int me = Environment.CurrentManagedThreadId;
+        lock (announced)
+            announced.Should().NotContain((me, (int)ThreadRole.Main));
+
+        // the first frame prefix marks this thread; the next sample must re-announce the lane.
+        MainThreadMarker.Mark();
+        sink.RecordSection(handle.Id, parentId: -1, nodeId: 2, parentNodeId: -1, startTimestamp: 0L, elapsedTicks: 1L, allocBytes: 0L);
+        Thread.Sleep(300);
+
+        stop.Cancel();
+        listener.Join(TimeSpan.FromSeconds(2));
+
+        lock (announced)
+            announced.Should().Contain((me, (int)ThreadRole.Main));
     }
 
     private static int GetFreePort() {
@@ -105,6 +168,8 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
         sink.Start();
 
+        // the frame prefix has marked this thread, so its lane announces as Main.
+        MainThreadMarker.Mark();
         SectionHandle handle = SectionRegistry.Register("test.lanes");
         for (int i = 0; i < 8; i++)
             sink.RecordSection(handle.Id, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: i, elapsedTicks: 100, allocBytes: 0L);
