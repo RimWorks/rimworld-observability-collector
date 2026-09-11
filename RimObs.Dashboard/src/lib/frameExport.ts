@@ -16,7 +16,7 @@ export interface AutoInstrumentProvenance {
     filters: string;
     ignore: string;
     /** the scan cap in force; a wide filter past it means silent gaps, not loss. */
-    max_targets: number | null;
+    max_targets?: number | null;
 }
 
 const NO_DROPS: DroppedCounts = { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 };

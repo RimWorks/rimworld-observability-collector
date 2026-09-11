@@ -120,6 +120,8 @@
     // set while paused or stepping. null means follow the newest frame.
     let pinnedOrdinal = $state<number | null>(null);
     let pinnedRes = $state<FrameResponse | null>(null);
+    // a strip drag pins an inclusive ordinal range instead of one frame.
+    let pinnedRange = $state<{ from: number; to: number } | null>(null);
     const MAIN_FALLBACK: ThreadLane = {
         id: 0,
         name: 'MainThread',
@@ -166,6 +168,36 @@
 
         paused = true;
         void showOrdinal(ordinal ?? pinnedOrdinal ?? liveOrdinal);
+    }
+
+    function pauseRange(fromOrdinal: number, toOrdinal: number): void {
+        if (!paused) {
+            frozenStrip = framesRes?.data?.strip ?? null;
+            frozenRoots = liveRoots;
+        }
+
+        paused = true;
+        pinnedRange = { from: fromOrdinal, to: toOrdinal };
+        timeline?.refit();
+        void fetchRange(fromOrdinal, toOrdinal);
+    }
+
+    async function fetchRange(fromOrdinal: number, toOrdinal: number): Promise<void> {
+        try {
+            const range = await api.frameRange(fromOrdinal, toOrdinal - fromOrdinal + 1);
+            if (pinnedRange?.from !== fromOrdinal || pinnedRange?.to !== toOrdinal) return;
+            const frames = range.frames.filter(
+                (f) => f.capture_ordinal >= fromOrdinal && f.capture_ordinal <= toOrdinal,
+            );
+            const at = frames.at(-1);
+            if (!at) throw new Error('evicted');
+            pinnedOrdinal = at.capture_ordinal;
+            pinnedWindow = frames;
+            pinnedRes = { ...range, frame: at };
+        } catch {
+            // the ring evicted the whole range between the drag and the fetch.
+            if (pinnedRange?.from === fromOrdinal && pinnedRange?.to === toOrdinal) resume();
+        }
     }
 
     // a shareable json snapshot: one frame, or everything the collector's ring still holds.
@@ -221,6 +253,7 @@
         // every user-driven selection funnels through here, and live-follow never does, so
         // this is the one place a refit belongs.
         timeline?.refit();
+        pinnedRange = null;
         pinnedOrdinal = ordinal;
         if (ordinal === null) {
             pinnedRes = null;
@@ -565,6 +598,11 @@
         const newest = framesRes?.data?.stats?.newest_ordinal ?? 0;
         const ordinal = pinnedOrdinal;
         if (!live || ordinal === null || newest - ordinal > PIN_REFRESH_WINDOW) return;
+        const range = pinnedRange;
+        if (range) {
+            void fetchRange(range.from, range.to);
+            return;
+        }
         void fetchPinned(ordinal);
     });
     let bundleWindow = $derived(
@@ -924,6 +962,7 @@
             slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
             selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
             onSelect={(o) => pauseAt(o)}
+            onSelectRange={pauseRange}
         />
     {/if}
 

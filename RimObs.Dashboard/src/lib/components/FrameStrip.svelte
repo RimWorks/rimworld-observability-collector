@@ -23,6 +23,7 @@
         gcOrdinals = [],
         slots = DEFAULT_STRIP_SLOTS,
         onSelect,
+        onSelectRange,
     }: {
         ordinals: readonly number[];
         durationsUs: readonly number[];
@@ -32,6 +33,8 @@
         /** the ring's capacity. bars fill these slots left to right and never resize. */
         slots?: number;
         onSelect?: (ordinal: number) => void;
+        /** drag across bars: the flame loads this inclusive ordinal range. */
+        onSelectRange?: (fromOrdinal: number, toOrdinal: number) => void;
     } = $props();
 
     const HEIGHT_PX = 132 + GC_BAND_PX;
@@ -123,7 +126,45 @@
         return barIndexAt(e.clientX - rect.left, rect.width, bars.length, slots);
     }
 
+    let dragFrom = $state(-1);
+    let dragTo = $state(-1);
+    let dragJustEnded = false;
+    let dragging = $derived(dragFrom >= 0 && dragTo >= 0 && dragFrom !== dragTo);
+
+    function handlePointerDown(e: PointerEvent): void {
+        if (e.button !== 0) return;
+        const i = indexFromEvent(e);
+        if (i < 0) return;
+        dragFrom = i;
+        dragTo = i;
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+
+    function handlePointerMove(e: PointerEvent): void {
+        if (dragFrom < 0) return;
+        const i = indexFromEvent(e);
+        if (i >= 0) dragTo = i;
+    }
+
+    function handlePointerUp(): void {
+        if (dragging) {
+            const a = bars[Math.min(dragFrom, dragTo)];
+            const b = bars[Math.max(dragFrom, dragTo)];
+            if (a && b) {
+                onSelectRange?.(a.ordinal, b.ordinal);
+                // the click that follows pointerup would immediately re-pin a single frame.
+                dragJustEnded = true;
+            }
+        }
+        dragFrom = -1;
+        dragTo = -1;
+    }
+
     function handleClick(e: MouseEvent): void {
+        if (dragJustEnded) {
+            dragJustEnded = false;
+            return;
+        }
         const i = indexFromEvent(e);
         if (i >= 0) onSelect?.(bars[i].ordinal);
     }
@@ -189,6 +230,9 @@
                 onclick={handleClick}
                 onkeydown={handleKeydown}
                 onmousemove={handleMove}
+                onpointerdown={handlePointerDown}
+                onpointermove={handlePointerMove}
+                onpointerup={handlePointerUp}
                 onmouseleave={() => (hoverIndex = -1)}
                 tabindex="0"
                 role="slider"
@@ -200,6 +244,14 @@
                     ? `${current.ordinal} · ${ns(current.durationUs * 1000)}`
                     : undefined}
             ></canvas>
+            {#if dragging}
+                <div
+                    class="rangesel"
+                    style="left: {(Math.min(dragFrom, dragTo) * widthPx) /
+                        slots}px; width: {((Math.abs(dragTo - dragFrom) + 1) * widthPx) / slots}px"
+                    data-testid="strip-range"
+                ></div>
+            {/if}
             {#if hovered}
                 <div
                     class="hover-tip"
@@ -302,6 +354,15 @@
     }
     canvas:focus-visible {
         box-shadow: var(--ring-focus);
+    }
+    .rangesel {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 1;
+        background: color-mix(in srgb, var(--cyan) 18%, transparent);
+        border-inline: 1px solid var(--cyan);
+        pointer-events: none;
     }
     .hover-tip {
         position: absolute;

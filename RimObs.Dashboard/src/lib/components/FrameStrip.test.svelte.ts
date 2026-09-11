@@ -142,6 +142,63 @@ describe('FrameStrip selection', () => {
         expect(onSelect).toHaveBeenCalledWith(5);
     });
 
+    it('reports a dragged ordinal range and suppresses the trailing click', async () => {
+        const onSelect = vi.fn();
+        const onSelectRange = vi.fn();
+        render(FrameStrip, {
+            ordinals: ORDINALS,
+            durationsUs: DURATIONS,
+            slots: FULL,
+            onSelect,
+            onSelectRange,
+        });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+        canvas.setPointerCapture = () => {};
+
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 0, clientX: 40, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointermove', { clientX: 120, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointerup', { clientX: 120, clientY: 10, bubbles: true }),
+        );
+        await fireEvent.click(canvas, { clientX: 120, clientY: 10 });
+
+        expect(onSelectRange).toHaveBeenCalledTimes(1);
+        const [from, to] = onSelectRange.mock.calls[0];
+        expect(from).toBeLessThan(to);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('a plain click still selects one frame with the range handler wired', async () => {
+        const onSelect = vi.fn();
+        const onSelectRange = vi.fn();
+        render(FrameStrip, {
+            ordinals: ORDINALS,
+            durationsUs: DURATIONS,
+            slots: FULL,
+            onSelect,
+            onSelectRange,
+        });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+        canvas.setPointerCapture = () => {};
+
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointerup', { clientX: 100, clientY: 10, bubbles: true }),
+        );
+        await fireEvent.click(canvas, { clientX: 100, clientY: 10 });
+
+        expect(onSelectRange).not.toHaveBeenCalled();
+        expect(onSelect).toHaveBeenCalledWith(5);
+    });
+
     it('ignores a click past the newest frame of a part-filled ring', async () => {
         const onSelect = vi.fn();
         render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: 200, onSelect });
