@@ -66,7 +66,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, request.SessionId, StringComparison.Ordinal))
             return Task.FromResult(new BundleExportResult { Status = BundleExportStatus.UnknownSession });
 
-        FrameSnapshot[] frames = SealedFrames(request.Includes);
+        FrameSnapshot[] frames = ReadFrames(request.Includes, seal: true);
         BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -94,7 +94,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, sessionId, StringComparison.Ordinal))
             return new BundleEstimateResult { Status = BundleExportStatus.UnknownSession };
 
-        FrameSnapshot[] frames = SealedFrames(includes);
+        FrameSnapshot[] frames = ReadFrames(includes, seal: false);
         BundleEstimateInput estimateInput = BuildEstimateInput(includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -107,12 +107,13 @@ public sealed class BundleExportService {
         };
     }
 
-    // a bundle is a one-shot read, so it seals the ring itself rather than waiting out the quiet
-    // deadline and shipping a zip that is missing the newest frames.
-    private FrameSnapshot[] SealedFrames(IReadOnlySet<BundleContentKey> includes) {
+    // only the export seals, so it ships the newest frames; an estimate is a preview the dashboard
+    // fires on every toggle, so it undercounts the open frames rather than truncating the live ring.
+    private FrameSnapshot[] ReadFrames(IReadOnlySet<BundleContentKey> includes, bool seal) {
         if (!includes.Contains(BundleContentKey.Frames))
             return [];
-        _aggregator.Frames.Flush();
+        if (seal)
+            _aggregator.Frames.Flush();
         return _aggregator.Frames.Snapshot();
     }
 

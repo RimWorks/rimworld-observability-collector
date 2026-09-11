@@ -239,6 +239,33 @@ public class BundleExportServiceTests {
     }
 
     [Fact]
+    public async Task Estimate_LeavesTheOpenFrameAlone() {
+        SessionAggregator aggregator = BuildAggregator();
+        aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        service.Estimate("sess-test", new HashSet<BundleContentKey> { BundleContentKey.Frames })
+            .Status.Should().Be(BundleExportStatus.Ok);
+        aggregator.Frames.Add(1, 11, -1, 101, -1, 1100L, 500L);
+        aggregator.Frames.LateSamples.Should().Be(0);
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = await zip.GetEntry("frames.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
+
+        JsonElement frames = doc.RootElement.GetProperty("frames");
+        frames.GetArrayLength().Should().Be(1);
+        frames[0].GetProperty("node_count").GetInt32().Should().Be(2);
+    }
+
+    [Fact]
     public async Task Export_FramesEntryCarriesTheStopwatchFrequency() {
         SessionAggregator aggregator = BuildAggregator();
         aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
