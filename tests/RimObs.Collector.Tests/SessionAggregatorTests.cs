@@ -1,3 +1,4 @@
+using System;
 using RimWorks.RimObs.Collector.Aggregation;
 using RimWorks.RimObs.Wire;
 using FluentAssertions;
@@ -219,6 +220,8 @@ public sealed class SessionAggregatorTests {
     [Fact]
     public void A_new_session_resets_the_frame_ring_so_ordinals_can_restart() {
         SessionAggregator aggregator = new();
+        // long enough that the test reads as a live stream whatever the machine is doing.
+        aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
         aggregator.OnSectionBatch(new SectionBatch {
             SectionIds = [10, 10],
@@ -227,7 +230,8 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [500L, 400L],
             FrameOrdinals = [5000, 5001],
         });
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5001);
+        // the stream is live, so Latest serves the frame behind the newest.
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5000);
 
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
         aggregator.OnSectionBatch(new SectionBatch {
@@ -238,13 +242,15 @@ public sealed class SessionAggregatorTests {
             FrameOrdinals = [1, 2],
         });
 
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
         aggregator.Frames.LateSamples.Should().Be(0);
     }
 
     [Fact]
     public void A_repeated_session_meta_heartbeat_does_not_clear_the_frame_ring() {
         SessionAggregator aggregator = new();
+        // long enough that the test reads as a live stream whatever the machine is doing.
+        aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
         aggregator.OnSectionBatch(new SectionBatch {
             SectionIds = [10, 10],
@@ -257,7 +263,7 @@ public sealed class SessionAggregatorTests {
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
 
         aggregator.Frames.Count.Should().Be(2);
-        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
+        aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
     }
 
     [Fact]

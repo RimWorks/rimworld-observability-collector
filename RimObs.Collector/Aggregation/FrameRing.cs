@@ -46,6 +46,12 @@ public sealed class FrameRing {
     /// </summary>
     public const int DefaultOpenFrameWindow = 16;
 
+    /// <summary>
+    /// How long without a sample means the stream stopped rather than paused between drains.
+    /// The sender flushes every 100ms, so this is two and a half drains of slack.
+    /// </summary>
+    public static readonly TimeSpan DefaultQuietPeriod = TimeSpan.FromMilliseconds(250);
+
     private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
     private readonly SortedDictionary<int, OpenFrame> _open = [];
@@ -56,12 +62,19 @@ public sealed class FrameRing {
     private int _sealedThrough;
     private long _preFrameSamples;
     private long _lateSamples;
+    private long _lastSampleStamp;
 
     public FrameRing(int capacity = DefaultCapacity) {
         _buffer = new FrameSnapshot[Math.Max(1, capacity)];
     }
 
     public int Capacity => _buffer.Length;
+
+    /// <summary>Time source for the quiet check. Swappable so tests can drive it.</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    /// <summary>Silence after which <see cref="Latest"/> stops holding the newest frame back.</summary>
+    public TimeSpan QuietPeriod { get; set; } = DefaultQuietPeriod;
 
     /// <summary>How many newer ordinals must land before a frame seals. Live setting, floors at 1.</summary>
     public int OpenFrameWindow {
@@ -122,6 +135,7 @@ public sealed class FrameRing {
             open.ElapsedTicks.Add(elapsedTicks);
             open.AllocBytes.Add(allocBytes);
             open.ThreadIds.Add(threadId);
+            _lastSampleStamp = Clock.GetTimestamp();
             if (threadId != 0)
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
@@ -138,11 +152,20 @@ public sealed class FrameRing {
         }
     }
 
+    /// <summary>
+    /// The newest frame that has had a full drain cycle: one ordinal behind the newest while
+    /// samples keep arriving, the true newest once the stream goes quiet.
+    /// </summary>
     public FrameSnapshot? Latest() {
         lock (_gate) {
+            bool live = _lastSampleStamp != 0 && Clock.GetElapsedTime(_lastSampleStamp) < QuietPeriod;
+            int ceiling = live ? _newestOrdinal - 1 : int.MaxValue;
             FrameSnapshot? newest = null;
-            foreach (KeyValuePair<int, OpenFrame> entry in _open)
+            foreach (KeyValuePair<int, OpenFrame> entry in _open) {
+                if (entry.Key > ceiling)
+                    break;
                 newest = entry.Value.Materialize(entry.Key);
+            }
             if (newest is not null)
                 return newest;
             if (_count == 0)
@@ -319,6 +342,7 @@ public sealed class FrameRing {
             _sealedThrough = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
+            _lastSampleStamp = 0;
             _open.Clear();
         }
     }

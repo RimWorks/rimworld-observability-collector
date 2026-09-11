@@ -25,12 +25,20 @@ public sealed class FramesEndpointsTests {
         return port;
     }
 
+    // these tests send one batch and then stop, which is a quiet stream: the ring should
+    // serve its newest frame instead of waiting out a drain cycle.
+    private static SessionAggregator QuietAggregator(WebApplication app) {
+        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.Frames.QuietPeriod = TimeSpan.Zero;
+        return aggregator;
+    }
+
     [Fact]
     public async Task Latest_returns_the_newest_sealed_frame_in_microseconds() {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-test-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-endpoint",
             StopwatchFrequency = 10_000_000L,
@@ -67,7 +75,7 @@ public sealed class FramesEndpointsTests {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-anchor-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-anchor",
             StopwatchFrequency = 10_000_000L,
@@ -109,7 +117,7 @@ public sealed class FramesEndpointsTests {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-node-ids-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-node-ids",
             StopwatchFrequency = 10_000_000L,
@@ -172,7 +180,7 @@ public sealed class FramesEndpointsTests {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-freq-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-freq",
             StopwatchFrequency = 10_000_000L,
@@ -211,8 +219,46 @@ public sealed class FramesEndpointsTests {
         }
     }
 
-    private static void SeedFiveFrames(WebApplication app, string sessionId) {
+    // a live stream is still filling its newest frame, so /frames/latest must serve the one
+    // behind it while the strip still shows both.
+    [Fact]
+    public async Task Latest_holds_back_the_newest_frame_of_a_live_stream() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-live-token");
+        WebApplication app = Program.BuildApp([], port, token);
         SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-live",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 10],
+            ParentIds = [-1, -1],
+            StartTimestamps = [100L, 1100L],
+            ElapsedTicks = [500L, 400L],
+            FrameOrdinals = [1, 2],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("frame").GetProperty("capture_ordinal").GetInt32().Should().Be(1);
+            doc.RootElement.GetProperty("strip").GetProperty("ordinals")
+                .EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1, 2);
+            doc.RootElement.GetProperty("stats").GetProperty("newest_ordinal").GetInt32().Should().Be(2);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    private static void SeedFiveFrames(WebApplication app, string sessionId) {
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = sessionId,
             StopwatchFrequency = 10_000_000L,
@@ -319,7 +365,7 @@ public sealed class FramesEndpointsTests {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-threads-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-threads",
             StopwatchFrequency = 10_000_000L,
@@ -373,7 +419,7 @@ public sealed class FramesEndpointsTests {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-threads-v8-token");
         WebApplication app = Program.BuildApp([], port, token);
-        SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
+        SessionAggregator aggregator = QuietAggregator(app);
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-threads-v8",
             StopwatchFrequency = 10_000_000L,
