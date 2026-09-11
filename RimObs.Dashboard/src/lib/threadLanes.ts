@@ -28,9 +28,7 @@ export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
     );
     return kept
         .map((t) =>
-            t.role === ThreadRole.Main && t.id !== mainId
-                ? { ...t, role: ThreadRole.UnityJob }
-                : t,
+            t.role === ThreadRole.Main && t.id !== mainId ? { ...t, role: ThreadRole.UnityJob } : t,
         )
         .sort((a, b) => {
             const rank = (t: ThreadLane) => (t.role === ThreadRole.Main ? 0 : 1);
