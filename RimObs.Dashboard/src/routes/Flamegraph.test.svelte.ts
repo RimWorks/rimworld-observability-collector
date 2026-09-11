@@ -567,9 +567,10 @@ describe('Flamegraph page', () => {
             frame: { ...FRAMES_BODY.frame, node_count: 9, duration_us: 4045 },
         });
         render(Flamegraph);
+        // 9 nodes x 73.44ns = 661ns floor over a 4045us frame.
         await waitFor(() =>
             expect(screen.getByTestId('footer-overhead').textContent).toBe(
-                'overhead 73 ns/scope (~0.02% of frame)',
+                'overhead ≥661 ns (~0.02% of frame, 73 ns/scope)',
             ),
         );
         expect(screen.queryByTestId('footer-timerres')).toBeNull();

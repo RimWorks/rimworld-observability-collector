@@ -208,7 +208,7 @@
     "flamegraph.overhead": "overhead",
     "flamegraph.overhead.offrame": "of frame",
     "flamegraph.timerres": "timer res",
-    "flamegraph.overhead.hint": "An estimate, not a measurement: scope count times a benchmarked 73.4ns per scope, smoothed and refreshed once a second. Timing the profiler with itself would change the number it reports.",
+    "flamegraph.overhead.hint": "A floor, not a measurement: scope count times a benchmarked 73.4ns per scope, smoothed once a second. Under auto-instrument the real cost is higher, because filtered and muted scopes still pay entry time that never becomes a node.",
     "tip.tree.patched": "Other mods patch this method too. Their timings land inside this section. Patched by:",
     "tree.pie.other": "other",
     "flamegraph.resetView": "Reset view",

@@ -161,7 +161,7 @@
     "flamegraph.overhead": "开销",
     "flamegraph.overhead.offrame": "占帧",
     "flamegraph.timerres": "计时器精度",
-    "flamegraph.overhead.hint": "这是估算值，不是实测值：按每个作用域 73.4 纳秒的基准开销乘以作用域数量得出，每秒平滑刷新一次。用性能分析器测量它自身会改变它报告的数字。",
+    "flamegraph.overhead.hint": "这是下限而非实测值：作用域数量乘以基准测得的每作用域73.4纳秒，每秒平滑一次。开启自动插桩时实际开销更高，因为被过滤和静音的作用域仍然消耗入口时间，却不会生成节点。",
     "tip.tree.patched": "其他模组也修补了这个方法。它们的耗时会计入本区段。修补者：",
     "tree.pie.other": "其他",
     "flamegraph.resetView": "重置视图",

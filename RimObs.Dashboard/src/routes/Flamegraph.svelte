@@ -637,11 +637,13 @@
     // instead of one blurb covering two different facts.
     let overheadText = $derived.by(() => {
         if (PER_SAMPLE_OVERHEAD_NS <= 0) return '';
-        const pctSuffix =
-            overhead.percent > 0
-                ? ` (~${percent2(overhead.percent)} ${t('flamegraph.overhead.offrame')})`
-                : '';
-        return `${t('flamegraph.overhead')} ${nsPerScopeText()} ns/scope${pctSuffix}`;
+        const frameUs = frame?.duration_us ?? 0;
+        if (overhead.percent <= 0 || frameUs <= 0)
+            return `${t('flamegraph.overhead')} ${nsPerScopeText()} ns/scope`;
+        // lead with the per-frame total, marked a floor: filtered scopes still pay entry
+        // cost the node count cannot see, so per-scope alone reads as free.
+        const estUs = (overhead.percent / 100) * frameUs;
+        return `${t('flamegraph.overhead')} ≥${ns(Math.round(estUs * 1000))} (~${percent2(overhead.percent)} ${t('flamegraph.overhead.offrame')}, ${nsPerScopeText()} ns/scope)`;
     });
     let timerResLine = $derived(
         timerResNs > 0 ? `${t('flamegraph.timerres')} ${timerResText(timerResNs)} ns` : '',

@@ -161,7 +161,7 @@
     "flamegraph.overhead": "Overhead",
     "flamegraph.overhead.offrame": "des Frames",
     "flamegraph.timerres": "Timer-Auflösung",
-    "flamegraph.overhead.hint": "Eine Schätzung, keine Messung: Anzahl der Scopes mal einem gemessenen Referenzwert von 73,4 ns pro Scope, geglättet und einmal pro Sekunde aktualisiert. Den Profiler mit sich selbst zu timen würde die gemeldete Zahl verändern.",
+    "flamegraph.overhead.hint": "Eine Untergrenze, keine Messung: Anzahl der Scopes mal gemessenen 73,4ns pro Scope, sekündlich geglättet. Mit Auto-Instrumentierung liegen die echten Kosten höher, weil gefilterte und stummgeschaltete Scopes Eintrittszeit kosten, die nie zu einem Knoten wird.",
     "tip.tree.patched": "Andere Mods patchen diese Methode ebenfalls. Ihre Laufzeiten landen in diesem Abschnitt. Gepatcht von:",
     "tree.pie.other": "Sonstige",
     "flamegraph.resetView": "Ansicht zurücksetzen",
