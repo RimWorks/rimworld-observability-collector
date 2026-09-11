@@ -1,5 +1,5 @@
 import type { ThreadLane } from './api';
-import type { FrameNodes } from './frameTree';
+import { UNKNOWN_LANE, type FrameNodes, type TreeNode } from './frameTree';
 
 /** Mirrors RimObs.Wire.ThreadRole. */
 export const ThreadRole = {
@@ -61,4 +61,52 @@ export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
             const rank = (t: ThreadLane) => (t.role === ThreadRole.Main ? 0 : 1);
             return rank(a) - rank(b) || a.id - b.id;
         });
+}
+
+export interface LaneBand {
+    id: number;
+    rows: number;
+}
+
+export interface LaneBands {
+    bands: LaneBand[];
+    /** lookup for the hot loops. a lane missing from this map does not draw at all. */
+    offsets: Map<number, number>;
+    rows: number;
+}
+
+/**
+ * One flame band per lane, stacked in the order given. A lane with nothing in the window
+ * still takes a row, so the gutter label stays level with the band it names.
+ */
+export function laneBands(lanes: ThreadLane[], nodes: TreeNode[], maxDepth: number): LaneBands {
+    const deepest = new Map<number, number>();
+    for (const n of nodes) {
+        const lane = n.laneId ?? UNKNOWN_LANE;
+        const depth = Math.min(n.depth, maxDepth - 1);
+        if (depth > (deepest.get(lane) ?? 0)) deepest.set(lane, depth);
+    }
+
+    const bands: LaneBand[] = [];
+    const offsets = new Map<number, number>();
+    let rows = 0;
+    for (const lane of lanes) {
+        let depth = deepest.get(lane.id) ?? 0;
+        offsets.set(lane.id, rows);
+        if (lane.role === ThreadRole.Main) {
+            // a v8 bundle has no thread ids, and the page has always drawn those on main.
+            offsets.set(UNKNOWN_LANE, rows);
+            depth = Math.max(depth, deepest.get(UNKNOWN_LANE) ?? 0);
+        }
+        bands.push({ id: lane.id, rows: depth + 1 });
+        rows += depth + 1;
+    }
+    return { bands, offsets, rows };
+}
+
+/** canvas row for a node, or -1 when its lane is not drawn. */
+export function laneRow(bands: LaneBands | undefined, node: TreeNode): number {
+    if (!bands) return node.depth;
+    const offset = bands.offsets.get(node.laneId ?? UNKNOWN_LANE);
+    return offset === undefined ? -1 : offset + node.depth;
 }

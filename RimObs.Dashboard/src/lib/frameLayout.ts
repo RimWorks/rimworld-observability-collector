@@ -1,4 +1,8 @@
 import type { TreeNode } from './frameTree';
+import { laneRow, type LaneBands } from './threadLanes';
+
+// deeper than the stage is tall on purpose; .stage takes over with a native scrollbar.
+export const MAX_DEPTH = 128;
 
 export interface LayoutOptions {
     viewStartUs: number;
@@ -12,9 +16,12 @@ export interface LayoutOptions {
     to?: number;
     /** 1 = force-hidden regardless of duration, e.g. the search filter. */
     hidden?: Uint8Array;
+    /** absent means one band: every node draws at its own depth. */
+    bands?: LaneBands;
 }
 
 export interface Quad {
+    /** canvas row, which is the node's depth plus its lane's band offset. */
     depth: number;
     startUs: number;
     endUs: number;
@@ -22,6 +29,8 @@ export interface Quad {
     sectionId: number;
     count: number;
     firstIndex: number;
+    /** depth inside the lane, for shading. defaults to `depth`. */
+    nest?: number;
 }
 
 // a node under the threshold goes, and so does everything beneath it.
@@ -49,15 +58,16 @@ function isHidden(n: TreeNode, i: number, folded: Uint8Array, opts: LayoutOption
     return n.endUs <= opts.viewStartUs || n.startUs >= opts.viewEndUs;
 }
 
-function quadOf(n: TreeNode, i: number): Quad {
+function quadOf(n: TreeNode, i: number, row: number): Quad {
     return {
-        depth: n.depth,
+        depth: row,
         startUs: n.startUs,
         endUs: n.endUs,
         totalUs: n.durUs,
         sectionId: n.sectionId,
         count: 1,
         firstIndex: i,
+        nest: n.depth,
     };
 }
 
@@ -82,15 +92,17 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
 
     for (let i = from; i < to; i++) {
         const n = tree[i];
-        if (isHidden(n, i, folded, opts)) continue;
+        const row = laneRow(opts.bands, n);
+        // a row below zero means the node's lane is filtered out of the canvas entirely.
+        if (row < 0 || isHidden(n, i, folded, opts)) continue;
 
         if (n.durUs >= minUs) {
-            flush(n.depth);
-            out.push(quadOf(n, i));
+            flush(row);
+            out.push(quadOf(n, i, row));
             continue;
         }
 
-        const run = open.get(n.depth);
+        const run = open.get(row);
         if (run && n.startUs - run.endUs <= minUs) {
             run.endUs = Math.max(run.endUs, n.endUs);
             run.totalUs += n.durUs;
@@ -99,8 +111,8 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
             continue;
         }
 
-        flush(n.depth);
-        open.set(n.depth, quadOf(n, i));
+        flush(row);
+        open.set(row, quadOf(n, i, row));
     }
 
     for (const run of open.values()) out.push(run);
@@ -110,11 +122,11 @@ export function layoutFrame(tree: TreeNode[], opts: LayoutOptions): Quad[] {
 
 // depth plus time containment, not a lookup: a run's tree indices are not contiguous.
 // the LAST candidate, not the first, stops a node on a run boundary hitting the prior run.
-export function quadIndexForNode(quads: Quad[], node: TreeNode): number {
+export function quadIndexForNode(quads: Quad[], node: TreeNode, row = node.depth): number {
     let candidate = -1;
     for (let i = 0; i < quads.length; i++) {
         const q = quads[i];
-        if (q.depth === node.depth && q.startUs <= node.startUs) candidate = i;
+        if (q.depth === row && q.startUs <= node.startUs) candidate = i;
     }
     if (candidate === -1) return -1;
     return node.startUs < quads[candidate].endUs ? candidate : -1;

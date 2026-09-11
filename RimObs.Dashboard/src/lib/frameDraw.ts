@@ -96,9 +96,10 @@ function luminance(rgb: string): number {
     return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
-// deeper bars sit lighter, so nesting reads without a border on every quad.
+// deeper bars sit lighter, so nesting reads without a border on every quad. nest, not the
+// row: a second band starts over at its own depth 0.
 function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
-    const lift = Math.min(q.depth, 5) * 0.07 + 0.12 + (lifted ? HOVER_LIFT : 0);
+    const lift = Math.min(q.nest ?? q.depth, 5) * 0.07 + 0.12 + (lifted ? HOVER_LIFT : 0);
     const base =
         q.count > 1 && q.sectionId < 0
             ? opts.theme.collapsed

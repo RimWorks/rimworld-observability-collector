@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import type { TreeNode } from '../frameTree';
-    import { quadIndexForNode } from '../frameLayout';
+    import { quadIndexForNode, MAX_DEPTH } from '../frameLayout';
+    import { laneRow, type LaneBands } from '../threadLanes';
     import {
         EMPTY_SERIES,
         layoutSeries,
@@ -44,20 +45,21 @@
         names,
         selectedNode = $bindable(-1),
         selectedOrdinal = null,
+        bands,
         onContext,
     }: {
         series?: FrameSeries;
         selectedOrdinal?: number | null;
         names: Map<number, { name: string; subsystem: string | null }>;
         selectedNode?: number;
+        /** one flame band per thread lane. absent draws every node in one band. */
+        bands?: LaneBands;
         onContext?: (p: { sectionId: number; x: number; y: number }) => void;
     } = $props();
 
     const ANIM_MS = 180;
     const ZOOM_IN = 0.9;
     const ZOOM_OUT = 1 / 0.9;
-    // deeper than the stage is tall on purpose; .stage takes over with a native scrollbar.
-    const MAX_DEPTH = 128;
 
     // matches --ease-out (theme.css) closely enough at 180ms.
     const EASE = (x: number): number => 1 - (1 - x) ** 5;
@@ -73,7 +75,7 @@
     // focus and selectedNode write each other on every flush.
     export function focusNode(index: number): void {
         const node = series.nodes[index];
-        if (node) focus = { depth: node.depth, atUs: node.startUs };
+        if (node) focus = { row: laneRow(bands, node), atUs: node.startUs };
     }
 
     // the window holds many frames so a user can zoom out to them, but landing on the whole
@@ -147,6 +149,7 @@
             minWidthPx: 2,
             minVisibleDurationUs,
             hidden: hiddenMask,
+            bands,
         }),
     );
     let gaps = $derived(visibleGaps(series.gaps, layoutView.startUs, layoutView.endUs));
@@ -155,23 +158,38 @@
     );
     let shownFrames = $derived(Math.max(0, shown.hi - shown.lo + 1));
 
-    // depth of the whole window, capped like the layout, so height is stable instead of
+    // rows of the whole window, capped like the layout, so height is stable instead of
     // resizing every time a zoom step folds or reveals a row.
     let deepestDepth = $derived(
         series.nodes.reduce((max, n) => Math.max(max, Math.min(n.depth, MAX_DEPTH - 1)), 0),
     );
-    let heightPx = $derived(Math.max(1, deepestDepth + 1) * ROW_HEIGHT);
+    let rowCount = $derived(bands ? bands.rows : deepestDepth + 1);
+    let heightPx = $derived(Math.max(1, rowCount) * ROW_HEIGHT);
 
     let focus = $state<Focus | null>(null);
-    let hoverAt = $state<{ depth: number; atUs: number } | null>(null);
+    let hoverAt = $state<{ row: number; atUs: number } | null>(null);
 
-    let focusIndex = $derived(focus ? resolveFocusIndex(series, focus.depth, focus.atUs) : -1);
-    let hoverIndex = $derived(hoverAt ? hitTestSeries(series, hoverAt.depth, hoverAt.atUs) : -1);
+    let focusIndex = $derived(focus ? resolveFocusIndex(series, focus.row, focus.atUs, bands) : -1);
+    let hoverIndex = $derived(
+        hoverAt ? hitTestSeries(series, hoverAt.row, hoverAt.atUs, bands) : -1,
+    );
     let focusQuadIndex = $derived(
-        focusIndex >= 0 ? quadIndexForNode(quads, series.nodes[focusIndex]) : -1,
+        focusIndex >= 0
+            ? quadIndexForNode(
+                  quads,
+                  series.nodes[focusIndex],
+                  laneRow(bands, series.nodes[focusIndex]),
+              )
+            : -1,
     );
     let hoverQuadIndex = $derived(
-        hoverIndex >= 0 ? quadIndexForNode(quads, series.nodes[hoverIndex]) : -1,
+        hoverIndex >= 0
+            ? quadIndexForNode(
+                  quads,
+                  series.nodes[hoverIndex],
+                  laneRow(bands, series.nodes[hoverIndex]),
+              )
+            : -1,
     );
 
     // stable on purpose: a per-frame label re-announces at 4Hz. numbers live in the StatCards.
@@ -240,7 +258,7 @@
         const idx = resolveCursorIndex(series.nodes, next);
         if (idx < 0) return null;
         const node = series.nodes[idx];
-        focus = { depth: node.depth, atUs: node.startUs };
+        focus = { row: laneRow(bands, node), atUs: node.startUs };
         zoomToNode(node);
         return entryOfNode(series, idx)?.ordinal ?? null;
     }
@@ -267,6 +285,7 @@
         void names;
         void matchIds;
         void hiddenMask;
+        void bands;
         dirty = true;
     });
 
@@ -331,7 +350,7 @@
         const idx = focusIndex >= 0 ? focusIndex : 0;
         const next = moveFocus(series.nodes, idx, move);
         const node = series.nodes[next];
-        if (node) focus = { depth: node.depth, atUs: node.startUs };
+        if (node) focus = { row: laneRow(bands, node), atUs: node.startUs };
     }
 
     function handleKeydown(event: KeyboardEvent): void {
@@ -384,14 +403,14 @@
         }
     }
 
-    function posToView(clientX: number, clientY: number): { depth: number; atUs: number } {
+    function posToView(clientX: number, clientY: number): { row: number; atUs: number } {
         const rect = canvasEl!.getBoundingClientRect();
         const x = clientX - rect.left;
         const y = clientY - rect.top;
         const atUs =
             effectiveView.startUs +
             (x / Math.max(rect.width, 1)) * (effectiveView.endUs - effectiveView.startUs);
-        return { depth: Math.floor(y / ROW_HEIGHT), atUs };
+        return { row: Math.floor(y / ROW_HEIGHT), atUs };
     }
 
     let dragState: {
@@ -435,15 +454,15 @@
         const wasDrag = dragState?.moved ?? false;
         dragState = null;
         if (wasDrag) return;
-        const { depth, atUs } = posToView(event.clientX, event.clientY);
-        const idx = hitTestSeries(series, depth, atUs);
+        const { row, atUs } = posToView(event.clientX, event.clientY);
+        const idx = hitTestSeries(series, row, atUs, bands);
         if (idx >= 0) zoomToNode(series.nodes[idx]);
     }
 
     function handleContextMenu(event: MouseEvent): void {
         if (empty || !canvasEl || !onContext) return;
-        const { depth, atUs } = posToView(event.clientX, event.clientY);
-        const idx = hitTestSeries(series, depth, atUs);
+        const { row, atUs } = posToView(event.clientX, event.clientY);
+        const idx = hitTestSeries(series, row, atUs, bands);
         if (idx < 0) return;
         event.preventDefault();
         onContext({ sectionId: series.nodes[idx].sectionId, x: event.clientX, y: event.clientY });

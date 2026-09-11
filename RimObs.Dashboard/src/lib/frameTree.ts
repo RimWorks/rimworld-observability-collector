@@ -81,6 +81,8 @@ export interface TreeNode {
     startUs: number;
     durUs: number;
     endUs: number;
+    /** thread the node ran on. absent when the producer sent no thread ids. */
+    laneId?: number;
     /** bytes allocated inside this scope. absent when the runtime has no allocation hook. */
     allocBytes?: number;
     /** aggregated nodes stand in for many calls; a live frame node is one call. */
@@ -88,6 +90,9 @@ export interface TreeNode {
 }
 
 export const NO_PARENT = -1;
+
+/** lane id for a node the producer sent no thread id for. it rides the main thread's band. */
+export const UNKNOWN_LANE = -1;
 
 export interface FrameTree {
     nodes: TreeNode[];
@@ -107,14 +112,15 @@ function sortByInterval(n: number, relStart: number[], dur_us: number[]): number
     return order;
 }
 
-// an unresolved parent id falls back to the innermost still-open container, walked in
-// sorted order so an orphan's fallback reflects real containment, not wire arrival order.
+// an unresolved parent id falls back to the innermost open container on its OWN lane, walked
+// in sorted order so the fallback reflects real containment, not wire arrival order.
 function resolveParents(
     order: number[],
     parent_node_ids: number[],
     node_ids: number[],
     relStart: number[],
     relEnd: number[],
+    lanes: number[],
 ): { parentWire: number[]; orphanCount: number } {
     // order holds exactly the n valid wire indices; node_ids can run longer when a shorter
     // sibling array (e.g. dur_us) truncated the frame, and an id past n must stay unresolved.
@@ -123,24 +129,31 @@ function resolveParents(
     for (let i = 0; i < n; i++) idToWire.set(node_ids[i], i);
 
     const parentWire = new Array<number>(n).fill(NO_PARENT);
-    const openStack: number[] = [];
+    const openByLane = new Map<number, number[]>();
     let orphanCount = 0;
 
     for (const i of order) {
-        while (openStack.length > 0 && relEnd[openStack.at(-1)!] <= relStart[i]) {
-            openStack.pop();
+        const lane = lanes[i];
+        let open = openByLane.get(lane);
+        if (!open) openByLane.set(lane, (open = []));
+        while (open.length > 0 && relEnd[open.at(-1)!] <= relStart[i]) {
+            open.pop();
         }
         const parentNodeId = parent_node_ids[i];
         if (parentNodeId !== NO_PARENT) {
             const wire = idToWire.get(parentNodeId);
             if (wire === undefined) {
                 orphanCount++;
-                parentWire[i] = openStack.length > 0 ? openStack.at(-1)! : NO_PARENT;
-            } else {
+                parentWire[i] = open.length > 0 ? open.at(-1)! : NO_PARENT;
+            } else if (lanes[wire] === lane) {
                 parentWire[i] = wire;
+            } else {
+                // the thread that queued a job opens its scope, so the wire does point across
+                // lanes. that is not a dropped sample, so it does not count as an orphan.
+                parentWire[i] = open.length > 0 ? open.at(-1)! : NO_PARENT;
             }
         }
-        openStack.push(i);
+        open.push(i);
     }
 
     return { parentWire, orphanCount };
@@ -173,11 +186,13 @@ interface DrawColumns {
     relEnd: number[];
     dur_us: number[];
     alloc_bytes: number[] | undefined;
+    lanes: number[] | undefined;
 }
 
 function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
     const { order, parentWire, depth, section_ids, node_ids, relStart, relEnd, dur_us } = cols;
     const alloc = cols.alloc_bytes;
+    const lanes = cols.lanes;
     const nodes: TreeNode[] = [];
     const wireToOutput = new Array<number>(parentWire.length).fill(-1);
 
@@ -195,6 +210,7 @@ function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
                 durUs: dur_us[i],
                 endUs: relEnd[i],
                 allocBytes: alloc?.[i] ?? 0,
+                laneId: lanes?.[i],
             });
         }
         return wireToOutput[i];
@@ -211,6 +227,8 @@ interface ResolvedFrame {
     relEnd: number[];
     parentWire: number[];
     orphanCount: number;
+    /** undefined when the producer sent no thread ids, so every node shares one lane. */
+    lanes: number[] | undefined;
 }
 
 /**
@@ -233,6 +251,7 @@ export function resolveFrameParents(nodes: FrameNodes, origin = 0): ResolvedFram
         relEnd[i] = relStart[i] + dur_us[i];
     }
 
+    const lanes = laneColumn(nodes.thread_ids, n);
     const order = sortByInterval(n, relStart, dur_us);
     const { parentWire, orphanCount } = resolveParents(
         order,
@@ -240,8 +259,17 @@ export function resolveFrameParents(nodes: FrameNodes, origin = 0): ResolvedFram
         node_ids,
         relStart,
         relEnd,
+        lanes ?? new Array<number>(n).fill(UNKNOWN_LANE),
     );
-    return { n, order, relStart, relEnd, parentWire, orphanCount };
+    return { n, order, relStart, relEnd, parentWire, orphanCount, lanes };
+}
+
+// a short thread_ids array leaves its tail unknown rather than truncating the frame.
+function laneColumn(thread_ids: number[] | undefined, n: number): number[] | undefined {
+    if (!thread_ids?.length) return undefined;
+    const lanes = new Array<number>(n);
+    for (let i = 0; i < n; i++) lanes[i] = thread_ids[i] ?? UNKNOWN_LANE;
+    return lanes;
 }
 
 // parent_node_ids address nodes exactly; parent_ids hold SECTION ids and cannot, because
@@ -250,7 +278,7 @@ export function buildFrameTree(frame: FrameData): FrameTree {
     // an imported bundle is a user-supplied zip, so nodes can be missing entirely.
     if (!frame.nodes) return { nodes: [], orphanCount: 0 };
     const { section_ids, node_ids, dur_us, alloc_bytes } = frame.nodes;
-    const { n, order, relStart, relEnd, parentWire, orphanCount } = resolveFrameParents(
+    const { n, order, relStart, relEnd, parentWire, orphanCount, lanes } = resolveFrameParents(
         frame.nodes,
         frame.start_us,
     );
@@ -267,6 +295,7 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         relEnd,
         dur_us,
         alloc_bytes,
+        lanes,
     });
 
     return { nodes, orphanCount };

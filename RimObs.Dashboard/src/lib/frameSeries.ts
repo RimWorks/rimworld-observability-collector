@@ -1,5 +1,6 @@
 import { buildFrameTree, type FrameData, type TreeNode } from './frameTree';
 import { layoutFrame, type LayoutOptions, type Quad } from './frameLayout';
+import { laneRow, type LaneBands } from './threadLanes';
 
 export interface FrameEntry {
     ordinal: number;
@@ -174,28 +175,38 @@ export function entryOfNode(series: FrameSeries, nodeIndex: number): FrameEntry 
     return null;
 }
 
-export function hitTestSeries(series: FrameSeries, depth: number, atUs: number): number {
+export function hitTestSeries(
+    series: FrameSeries,
+    row: number,
+    atUs: number,
+    bands?: LaneBands,
+): number {
     const ei = entryIndexAt(series.entries, atUs);
     if (ei < 0) return -1;
     const e = series.entries[ei];
     for (let i = e.nodeStart; i < e.nodeEnd; i++) {
         const n = series.nodes[i];
-        if (n.depth === depth && atUs >= n.startUs && atUs < n.endUs) return i;
+        if (laneRow(bands, n) === row && atUs >= n.startUs && atUs < n.endUs) return i;
     }
     return -1;
 }
 
 // dur_us of 0 is routine at microsecond resolution, and a half-open hit test never matches
 // one, so a focus parked on such a node falls back to an exact start match.
-export function resolveFocusIndex(series: FrameSeries, depth: number, atUs: number): number {
-    const hit = hitTestSeries(series, depth, atUs);
+export function resolveFocusIndex(
+    series: FrameSeries,
+    row: number,
+    atUs: number,
+    bands?: LaneBands,
+): number {
+    const hit = hitTestSeries(series, row, atUs, bands);
     if (hit >= 0) return hit;
     const ei = entryIndexAt(series.entries, atUs);
     const from = ei < 0 ? 0 : series.entries[ei].nodeStart;
     const to = ei < 0 ? series.nodes.length : series.entries[ei].nodeEnd;
     for (let i = from; i < to; i++) {
         const n = series.nodes[i];
-        if (n.depth === depth && n.startUs === atUs) return i;
+        if (laneRow(bands, n) === row && n.startUs === atUs) return i;
     }
     return -1;
 }

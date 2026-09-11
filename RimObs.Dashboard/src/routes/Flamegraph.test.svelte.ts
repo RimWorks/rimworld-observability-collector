@@ -1655,3 +1655,82 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-0').textContent).toContain('16.20 ms');
     });
 });
+
+// the canvas is the point of the lanes: a lane the user cannot see must not draw either.
+describe('Flamegraph flame bands', () => {
+    // section 40 runs on lane 2, and its parent id names the main-thread root that queued it.
+    const LANE_FRAMES_BODY = {
+        ...FRAMES_BODY,
+        frame: {
+            ...FRAMES_BODY.frame,
+            node_count: 3,
+            nodes: {
+                section_ids: [30, 10, 40],
+                parent_ids: [10, -1, 10],
+                node_ids: [2, 1, 3],
+                parent_node_ids: [1, -1, 1],
+                start_us: [100, 0, 200],
+                dur_us: [400, 16200, 800],
+                thread_ids: [1, 1, 2],
+            },
+        },
+    };
+
+    async function drawnRows(): Promise<Array<[number, number]>> {
+        const { drawTimeline } = await import('../lib/frameDraw');
+        await waitFor(() => expect(vi.mocked(drawTimeline)).toHaveBeenCalled());
+        const quads = vi.mocked(drawTimeline).mock.lastCall![1];
+        return quads.map((q) => [q.sectionId, q.depth] as [number, number]).sort();
+    }
+
+    beforeEach(() => {
+        mockFetch(LANE_FRAMES_BODY);
+    });
+
+    afterEach(() => {
+        userPrefs.reset();
+    });
+
+    it('draws the main thread only, exactly as it did before lanes existed', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await waitFor(async () =>
+            expect(await drawnRows()).toEqual([
+                [10, 0],
+                [30, 1],
+            ]),
+        );
+    });
+
+    it('stacks a worker lane below every row the main band needs', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await waitFor(async () =>
+            expect(await drawnRows()).toEqual([
+                [10, 0],
+                [30, 1],
+                [40, 2],
+            ]),
+        );
+    });
+
+    it('stops drawing a lane the thread filter turns off', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
+        await waitFor(async () => expect((await drawnRows()).length).toBe(3));
+
+        await openFooterTab('threads');
+        await fireEvent.click(await screen.findByTestId('thread-row-2'));
+
+        await waitFor(async () =>
+            expect(await drawnRows()).toEqual([
+                [10, 0],
+                [30, 1],
+            ]),
+        );
+    });
+});

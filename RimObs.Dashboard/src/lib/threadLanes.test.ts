@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { laneBusyNs, laneLabel, orderLanes, ThreadRole } from './threadLanes';
+import { laneBands, laneBusyNs, laneLabel, laneRow, orderLanes, ThreadRole } from './threadLanes';
 import type { ThreadLane } from './api';
-import type { FrameNodes } from './frameTree';
+import type { FrameNodes, TreeNode } from './frameTree';
 
 const t = (over: Partial<ThreadLane> = {}): ThreadLane => ({
     id: 1,
@@ -159,5 +159,74 @@ describe('laneBusyNs', () => {
         f.thread_ids = [];
         expect(laneBusyNs(f, 1)).toBe(0);
         expect(laneBusyNs(f, 2)).toBe(0);
+    });
+});
+
+const MAX_DEPTH = 128;
+const main = (id = 1) => t({ id, role: ThreadRole.Main });
+const n = (depth: number, laneId?: number): TreeNode => ({
+    depth,
+    laneId,
+    sectionId: 1,
+    nodeId: 1,
+    parentIndex: -1,
+    startUs: 0,
+    durUs: 1,
+    endUs: 1,
+});
+
+describe('laneBands', () => {
+    it('stacks each lane below the rows the one above it needs', () => {
+        const bands = laneBands(
+            [main(), t({ id: 2 })],
+            [n(0, 1), n(2, 1), n(0, 2), n(1, 2)],
+            MAX_DEPTH,
+        );
+        expect(bands.offsets.get(1)).toBe(0);
+        expect(bands.offsets.get(2)).toBe(3);
+        expect(bands.rows).toBe(5);
+        expect(bands.bands.map((b) => b.rows)).toEqual([3, 2]);
+    });
+
+    // the gutter draws a row for it either way, so the band has to hold that row open.
+    it('gives a lane with nothing in the window one row', () => {
+        const bands = laneBands([main(), t({ id: 2 })], [n(0, 1)], MAX_DEPTH);
+        expect(bands.offsets.get(2)).toBe(1);
+        expect(bands.rows).toBe(2);
+    });
+
+    it('leaves out a lane nobody selected', () => {
+        const bands = laneBands([main()], [n(0, 1), n(0, 2)], MAX_DEPTH);
+        expect(bands.offsets.has(2)).toBe(false);
+        expect(laneRow(bands, n(0, 2))).toBe(-1);
+    });
+
+    // a v8 bundle sends no thread ids at all, and the page has always drawn those on main.
+    it('draws nodes with no lane in the main band', () => {
+        const bands = laneBands([main(), t({ id: 2 })], [n(0), n(1), n(0, 2)], MAX_DEPTH);
+        expect(laneRow(bands, n(1))).toBe(1);
+        expect(bands.offsets.get(2)).toBe(2);
+    });
+
+    it('drops nodes with no lane when main is deselected', () => {
+        const bands = laneBands([t({ id: 2 })], [n(0), n(0, 2)], MAX_DEPTH);
+        expect(laneRow(bands, n(0))).toBe(-1);
+        expect(laneRow(bands, n(0, 2))).toBe(0);
+    });
+
+    it('caps a band at the layout depth limit', () => {
+        const bands = laneBands([main(), t({ id: 2 })], [n(500, 1), n(0, 2)], 4);
+        expect(bands.rows).toBe(5);
+        expect(bands.offsets.get(2)).toBe(4);
+    });
+
+    it('is empty when every lane is off', () => {
+        expect(laneBands([], [n(0, 1)], MAX_DEPTH).rows).toBe(0);
+    });
+});
+
+describe('laneRow', () => {
+    it('falls back to the node depth with no bands at all', () => {
+        expect(laneRow(undefined, n(3, 9))).toBe(3);
     });
 });

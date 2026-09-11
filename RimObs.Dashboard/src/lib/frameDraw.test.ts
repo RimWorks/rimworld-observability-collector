@@ -655,3 +655,24 @@ describe('readTheme', () => {
         el.remove();
     });
 });
+
+// the canvas stacks one band per thread lane, so a quad's row is its lane offset plus its
+// own depth. the drawer only ever sees the finished row.
+describe('thread bands', () => {
+    it('draws a band-two row at its offset row, not at the lane depth', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad({ depth: 3, nest: 0 })], opts({ heightPx: 200 }));
+        const rect = calls.find((c) => c.op === 'fillRect');
+        expect(rect?.args[1]).toBe(3 * ROW_HEIGHT);
+    });
+
+    it('tints a band root like a root, not like a deep node', () => {
+        const root = recorder();
+        drawTimeline(root.ctx, [quad({ depth: 0, nest: 0 })], opts({ heightPx: 200 }));
+
+        const banded = recorder();
+        drawTimeline(banded.ctx, [quad({ depth: 6, nest: 0 })], opts({ heightPx: 200 }));
+
+        expect(fillStyleForRect(banded.calls, 0)).toBe(fillStyleForRect(root.calls, 0));
+    });
+});

@@ -63,7 +63,9 @@
         speedMultiplier,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
-    import { laneLabel, orderLanes, ThreadRole } from '../lib/threadLanes';
+    import { laneBands, laneLabel, orderLanes, ThreadRole } from '../lib/threadLanes';
+    import { MAX_DEPTH } from '../lib/frameLayout';
+    import { ROW_HEIGHT } from '../lib/frameDraw';
     import { userPrefs } from '../lib/userPrefs.svelte';
 
     // the whole spread against the frame budget, coloured by how much of it each one eats
@@ -566,6 +568,9 @@
         if (treeCache.size > 4 * MAX_WINDOW_FRAMES) treeCache.clear();
         return buildSeries(windowFrames, treeCache);
     });
+    // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
+    // label always sits level with the flame it names.
+    let bands = $derived(laneBands(visibleLanes, series.nodes, MAX_DEPTH));
     // the call tree stays on one frame, so its row indices need rebasing onto the window.
     let currentEntry = $derived(
         series.entries.find((e) => e.ordinal === frame?.capture_ordinal) ?? null,
@@ -933,11 +938,12 @@
 
         <div class="stage" class:split={treeOpen}>
             <div class="gutter">
-                <div class="lane">GC &mdash;</div>
-                {#each visibleLanes as lane (lane.id)}
+                <div class="lane gc">GC &mdash;</div>
+                {#each visibleLanes as lane, i (lane.id)}
                     <div
                         class="lane"
                         class:main={lane.role === ThreadRole.Main}
+                        style="height: {(bands.bands[i]?.rows ?? 1) * ROW_HEIGHT}px"
                         data-testid="lane-{lane.id}"
                     >
                         {laneLabel(lane)}
@@ -951,6 +957,7 @@
                 <FrameTimeline
                     bind:this={timeline}
                     {series}
+                    {bands}
                     {names}
                     selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
                     bind:selectedNode
@@ -1495,13 +1502,17 @@
     }
     .gutter {
         border-right: 1px solid var(--border);
-        padding: calc(24px * var(--f)) var(--s-2) var(--s-2) var(--s-2);
+        padding: 0 var(--s-2) var(--s-2) var(--s-2);
         font-size: var(--f-ui);
         background: var(--bg-base);
     }
     .lane {
         color: var(--text-dim);
-        padding: 2px 0;
+        overflow: hidden;
+    }
+    /* the timeline's ruler is one row tall, and canvas row 0 starts directly under it. */
+    .lane.gc {
+        height: 18px;
     }
     .lane.main {
         color: var(--text);

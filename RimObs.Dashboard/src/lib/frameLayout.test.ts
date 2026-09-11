@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { foldFrame, layoutFrame, quadIndexForNode, type LayoutOptions } from './frameLayout';
 import type { TreeNode } from './frameTree';
+import { laneBands, laneRow, ThreadRole } from './threadLanes';
 
 function node(depth: number, startUs: number, durUs: number, sectionId = 1): TreeNode {
     return {
@@ -239,5 +240,47 @@ describe('quadIndexForNode', () => {
 
         const boundaryNode = node(1, 12, 5);
         expect(quadIndexForNode(quads, boundaryNode)).toBe(-1);
+    });
+});
+
+describe('layoutFrame thread bands', () => {
+    const lane = (n: TreeNode, laneId: number): TreeNode => ({ ...n, laneId });
+    const bands = laneBands(
+        [
+            { id: 1, name: '', role: ThreadRole.Main, busy_ns: 0 },
+            { id: 2, name: 'worker', role: ThreadRole.UnityJob, busy_ns: 0 },
+        ],
+        [lane(node(0, 0, 100), 1), lane(node(1, 0, 50), 1), lane(node(0, 0, 100), 2)],
+        128,
+    );
+
+    it('drops a worker quad below the rows main needs', () => {
+        const tree = [lane(node(0, 0, 400), 1), lane(node(1, 0, 400), 1), lane(node(0, 0, 400), 2)];
+        const quads = layoutFrame(tree, { ...OPTS, bands });
+        expect(quads.map((q) => q.depth)).toEqual([0, 1, 2]);
+        // the tint follows nesting inside the lane, so a band never starts out washed out.
+        expect(quads.map((q) => q.nest)).toEqual([0, 1, 0]);
+    });
+
+    it('draws nothing for a lane the filter turned off', () => {
+        const tree = [lane(node(0, 0, 400), 1), lane(node(0, 0, 400), 3)];
+        const quads = layoutFrame(tree, { ...OPTS, bands });
+        expect(quads).toHaveLength(1);
+        expect(quads[0].firstIndex).toBe(0);
+    });
+
+    // two lanes both hold a depth 0, and merging them would draw one bar over the other.
+    it('never collapses two lanes into one run', () => {
+        const tree = [lane(node(0, 10, 1), 1), lane(node(0, 11, 1), 2), lane(node(0, 12, 1), 1)];
+        const quads = layoutFrame(tree, { ...OPTS, bands });
+        expect(quads.map((q) => q.depth)).toEqual([0, 2]);
+        expect(quads[0].count).toBe(2);
+        expect(quads[1].count).toBe(1);
+    });
+
+    it('finds the quad for a node in the second band', () => {
+        const tree = [lane(node(0, 0, 400), 1), lane(node(0, 0, 400), 2)];
+        const quads = layoutFrame(tree, { ...OPTS, bands });
+        expect(quadIndexForNode(quads, tree[1], laneRow(bands, tree[1]))).toBe(1);
     });
 });

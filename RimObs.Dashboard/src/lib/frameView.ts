@@ -6,7 +6,8 @@ export interface ViewRange {
 }
 
 export interface Focus {
-    depth: number;
+    /** canvas row, not tree depth: two lanes both have a depth 0. */
+    row: number;
     atUs: number;
 }
 

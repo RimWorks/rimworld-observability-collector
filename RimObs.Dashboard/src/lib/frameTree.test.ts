@@ -299,6 +299,97 @@ describe('buildFrameTree', () => {
     });
 });
 
+describe('buildFrameTree thread lanes', () => {
+    // same tuple as frame(), plus the lane the node ran on.
+    function laneFrame(
+        rows: Array<
+            [section: number, parentNodeId: number, start: number, dur: number, lane: number]
+        >,
+    ): FrameData {
+        const f = frame(rows.map(([s, p, start, dur]) => [s, p, start, dur]));
+        f.nodes.thread_ids = rows.map((r) => r[4]);
+        return f;
+    }
+
+    it('carries the lane onto every node', () => {
+        const { nodes } = buildFrameTree(
+            laneFrame([
+                [10, -1, 0, 100, 1],
+                [20, -1, 10, 30, 2],
+            ]),
+        );
+        expect(nodes.map((n) => n.laneId)).toEqual([1, 2]);
+    });
+
+    it('leaves the lane unset when the producer sent no thread ids', () => {
+        const { nodes } = buildFrameTree(frame([[7, -1, 0, 50]]));
+        expect(nodes[0].laneId).toBeUndefined();
+    });
+
+    // the thread that queues a job opens the scope it runs in, so this parent id is real.
+    it('roots a worker node whose parent id names a main-thread node', () => {
+        const { nodes } = buildFrameTree(
+            laneFrame([
+                [20, 2, 10, 30, 2],
+                [10, -1, 0, 100, 1],
+            ]),
+        );
+        expect(nodes.map((n) => n.sectionId)).toEqual([10, 20]);
+        expect(nodes[1].parentIndex).toBe(NO_PARENT);
+        expect(nodes.map((n) => n.depth)).toEqual([0, 0]);
+    });
+
+    it('does not count a cross-lane parent as an orphan', () => {
+        const { orphanCount } = buildFrameTree(
+            laneFrame([
+                [20, 2, 10, 30, 2],
+                [10, -1, 0, 100, 1],
+            ]),
+        );
+        expect(orphanCount).toBe(0);
+    });
+
+    it('still nests a worker node under a container on its own lane', () => {
+        const { nodes } = buildFrameTree(
+            laneFrame([
+                [21, 2, 15, 10, 2],
+                [20, -1, 10, 30, 2],
+                [10, -1, 0, 100, 1],
+            ]),
+        );
+        expect(nodes.map((n) => n.sectionId)).toEqual([10, 20, 21]);
+        expect(nodes.map((n) => n.depth)).toEqual([0, 0, 1]);
+        expect(nodes[2].parentIndex).toBe(1);
+    });
+
+    // the defect this splits: the innermost open container was a main-thread node, so a
+    // worker's orphan landed in main's flame.
+    it('re-parents an orphan onto its own lane, never the innermost main node', () => {
+        const { nodes } = buildFrameTree(
+            laneFrame([
+                [21, 99, 30, 10, 2],
+                [20, -1, 0, 80, 2],
+                [10, -1, 20, 50, 1],
+            ]),
+        );
+        expect(nodes.map((n) => n.sectionId)).toEqual([20, 10, 21]);
+        expect(nodes[2].parentIndex).toBe(0);
+        expect(nodes.map((n) => n.depth)).toEqual([0, 0, 1]);
+    });
+
+    it('leaves an orphan with no same-lane container at the top of its lane', () => {
+        const { nodes, orphanCount } = buildFrameTree(
+            laneFrame([
+                [21, 99, 30, 10, 2],
+                [10, -1, 0, 100, 1],
+            ]),
+        );
+        expect(nodes.map((n) => n.sectionId)).toEqual([10, 21]);
+        expect(nodes[1].parentIndex).toBe(NO_PARENT);
+        expect(orphanCount).toBe(1);
+    });
+});
+
 describe('buildFrameTree alloc bytes', () => {
     it('carries alloc_bytes onto the node it belongs to', () => {
         const f = frame([
