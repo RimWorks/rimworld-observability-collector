@@ -206,6 +206,30 @@ public sealed class RingBufferTests {
         set.Dropped.Should().Be(16);
     }
 
+    // A lane that drained zero is not the same as a lane that is empty: the owner can publish a
+    // final sample between the drain and the IsAlive check. Reaping must never swallow it.
+    [Fact]
+    public void A_reaped_lane_gives_up_its_last_sample_or_counts_it_dropped() {
+        SampleRingSet set = new(4);
+
+        Thread worker = new(() => set.TryWrite(42, -1, 0, -1, 0, 0, 1).Should().BeTrue());
+        worker.Start();
+        worker.Join();
+
+        SampleBatch batch = new SampleBatch(16);
+
+        // a drain with no budget cannot take the sample, but it still sees the dead owner and reaps
+        set.Drain(batch, 0).Should().Be(0);
+        set.LaneCount.Should().Be(0);
+
+        long drained = 0;
+        int n;
+        while ((n = set.Drain(batch, 16)) > 0)
+            drained += n;
+
+        (drained + set.Dropped).Should().Be(1);
+    }
+
     [Fact]
     public void Reaping_a_lane_reports_the_thread_id_it_freed() {
         SampleRingSet set = new(16);

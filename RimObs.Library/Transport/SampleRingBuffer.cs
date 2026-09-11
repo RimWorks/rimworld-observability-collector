@@ -81,6 +81,22 @@ internal sealed class SampleRingBuffer {
             Volatile.Write(ref _read, expected - 1);
         return n;
     }
+
+    /// <summary>
+    /// Throws away every published sample still in the ring and returns how many there were.
+    /// Only for a lane being reaped, where there is nowhere left to put them.
+    /// </summary>
+    public int DiscardAll() {
+        int n = 0;
+        long expected = _read + 1;
+        while (Volatile.Read(ref _slots[(int)((expected - 1) & _mask)].Sequence) == expected) {
+            n++;
+            expected++;
+        }
+        if (n > 0)
+            Volatile.Write(ref _read, expected - 1);
+        return n;
+    }
 }
 
 /// <summary>
@@ -147,8 +163,13 @@ internal sealed class SampleRingSet {
                 _cursor = (idx + 1) % lanes.Length;
                 return n;
             }
-            if (!lane.Owner.IsAlive)
-                Reap(lane);
+            if (!lane.Owner.IsAlive) {
+                int last = Reap(lane, batch, maxCount);
+                if (last > 0) {
+                    _cursor = (idx + 1) % lanes.Length;
+                    return last;
+                }
+            }
         }
         return 0;
     }
@@ -180,20 +201,26 @@ internal sealed class SampleRingSet {
         return ring;
     }
 
-    private void Reap(Lane lane) {
+    /// <summary>
+    /// Removes a dead thread's lane, draining it one last time first, since the owner can publish
+    /// between the empty drain and the IsAlive check. Returns what went into the batch.
+    /// </summary>
+    private int Reap(Lane lane, SampleBatch batch, int maxCount) {
         Lane[] old;
         Lane[] shrunk;
         do {
             old = Volatile.Read(ref _lanes);
             int at = Array.IndexOf(old, lane);
             if (at < 0)
-                return;
+                return 0;
             shrunk = new Lane[old.Length - 1];
             Array.Copy(old, shrunk, at);
             Array.Copy(old, at + 1, shrunk, at, old.Length - at - 1);
         }
         while (Interlocked.CompareExchange(ref _lanes, shrunk, old) != old);
-        Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped);
+        int taken = lane.Ring.Drain(batch, maxCount);
+        Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped + lane.Ring.DiscardAll());
         LaneReaped?.Invoke(lane.Owner.ManagedThreadId);
+        return taken;
     }
 }
