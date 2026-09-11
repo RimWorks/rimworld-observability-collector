@@ -187,15 +187,21 @@
             pinnedWindow = [];
             return;
         }
+        await fetchPinned(ordinal);
+    }
+
+    async function fetchPinned(ordinal: number): Promise<void> {
         try {
             // one request for the whole window ending at the pin, so the flame keeps its
             // context instead of collapsing to the single frame under the cursor.
             const range = await api.frameRange(ordinal - MAX_WINDOW_FRAMES + 1);
+            if (pinnedOrdinal !== ordinal) return;
             const at = range.frames.find((f) => f.capture_ordinal === ordinal);
             if (!at) throw new Error('evicted');
             pinnedWindow = range.frames.filter((f) => f.capture_ordinal <= ordinal);
             pinnedRes = { ...range, frame: at };
         } catch {
+            if (pinnedOrdinal !== ordinal) return;
             // the ring evicted it between the click and the fetch. fall back to live.
             pinnedOrdinal = null;
             pinnedRes = null;
@@ -535,6 +541,16 @@
     $effect(() => {
         if (!live || pinned) return;
         liveWindow = pushFrame(liveWindow, framesRes?.data?.frame ?? null);
+    });
+
+    // lanes drain up to a window behind, so a pin parked on a recent frame may have fetched
+    // it mid-flight. refresh it on each poll until it is old enough that no lane can add to it.
+    const PIN_REFRESH_WINDOW = 32;
+    $effect(() => {
+        const newest = framesRes?.data?.stats?.newest_ordinal ?? 0;
+        const ordinal = pinnedOrdinal;
+        if (!live || ordinal === null || newest - ordinal > PIN_REFRESH_WINDOW) return;
+        void fetchPinned(ordinal);
     });
     let bundleWindow = $derived(
         importedFrames

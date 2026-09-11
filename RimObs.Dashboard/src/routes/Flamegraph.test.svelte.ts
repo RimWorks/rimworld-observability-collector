@@ -782,6 +782,28 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
     });
 
+    // a pin parked on a recent frame may have fetched it mid-flight; while lanes can still
+    // drain into it, each poll refreshes the pinned fetch instead of freezing the partial.
+    it('refreshes a pinned recent frame on the next poll', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        const rangeCalls = () =>
+            vi.mocked(fetch).mock.calls.filter((c) => requestUrl(c[0]).includes('/frames?count'))
+                .length;
+        await waitFor(() => expect(rangeCalls()).toBeGreaterThan(0));
+        const before = rangeCalls();
+
+        // the pinned ordinal is within the refresh window of the newest, so the poll refetches.
+        mockFetch({
+            ...FRAMES_BODY,
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 4325 },
+        });
+        await waitFor(() => expect(rangeCalls()).toBeGreaterThan(before));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+    });
+
     // Neo freezes the history with the frame and marks the gap on resume. a strip that keeps
     // filling while paused hides the fact that the run either side of the pause is not continuous.
     it('freezes the frame history while paused and resumes from live after', async () => {
