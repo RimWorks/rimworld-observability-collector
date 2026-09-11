@@ -233,5 +233,7 @@
     "tip.threads.mainOnly": "Dibuja un solo carril para el hilo principal y oculta los demás. Desactívalo para ver al lado los hilos de trabajos de Unity y los de los mods, que es como detectas el trabajo que corre junto al bucle de ticks.",
     "tip.settings.language": "Idioma solo del panel. No cambia el idioma de RimWorld ni los nombres de sección que informa el juego.",
     "tip.settings.sessionName": "Un nombre para esta ejecución. Aparece en la lista de sesiones y en las comparaciones, así que ponle algo que reconozcas la semana que viene.",
-    "settings.readonly": "Solo lectura"
+    "settings.readonly": "Solo lectura",
+    "flamegraph.exportFrame": "Exportar fotograma",
+    "flamegraph.exportRing": "Exportar anillo"
 }

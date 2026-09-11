@@ -279,5 +279,7 @@
     "tip.threads.mainOnly": "Draws one lane for the main thread and hides the rest. Turn it off to see Unity job threads and mod threads next to it, which is how you spot work that runs beside the tick loop.",
     "tip.settings.language": "Language for the dashboard only. It does not change RimWorld's own language or the section names the game reports.",
     "tip.settings.sessionName": "A name for this run. It shows in the session list and in comparisons, so give it something you would recognise next week.",
-    "settings.readonly": "Read-only"
+    "settings.readonly": "Read-only",
+    "flamegraph.exportFrame": "Export frame",
+    "flamegraph.exportRing": "Export ring"
 }

@@ -1658,6 +1658,22 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-2')).toBeInTheDocument();
     });
 
+    it('downloads the current frame as a standalone json export', async () => {
+        const urls: unknown[] = [];
+        URL.createObjectURL = vi.fn((b: unknown) => {
+            urls.push(b);
+            return 'blob:frame';
+        });
+        URL.revokeObjectURL = vi.fn();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('export-frame'));
+
+        expect(urls).toHaveLength(1);
+        expect(urls[0]).toBeInstanceOf(Blob);
+    });
+
     // with factory prefs the panel must be a way in, not a dead set of rows: the first click
     // leaves main-thread-only and draws the clicked lane next to main.
     it('unlocks main-thread-only when a filter row is clicked with default prefs', async () => {

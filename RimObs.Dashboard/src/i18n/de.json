@@ -233,5 +233,7 @@
     "tip.threads.mainOnly": "Zeichnet nur die Spur des Haupt-Threads und blendet die anderen aus. Schalte es aus, um Unity-Job-Threads und Mod-Threads daneben zu sehen. So erkennst du Arbeit, die neben der Tick-Schleife läuft.",
     "tip.settings.language": "Sprache nur für das Dashboard. Sie ändert weder RimWorlds eigene Sprache noch die Bereichsnamen, die das Spiel meldet.",
     "tip.settings.sessionName": "Ein Name für diesen Durchlauf. Er erscheint in der Sitzungsliste und in Vergleichen, wähle also etwas, das du nächste Woche wiedererkennst.",
-    "settings.readonly": "Nur lesbar"
+    "settings.readonly": "Nur lesbar",
+    "flamegraph.exportFrame": "Frame exportieren",
+    "flamegraph.exportRing": "Ring exportieren"
 }

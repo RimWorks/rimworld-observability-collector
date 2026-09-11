@@ -42,9 +42,10 @@
     import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
     import { liveConfig } from '../lib/liveConfig.svelte';
     import { sectionSearch } from '../lib/sectionSearchState.svelte';
-    import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+    import { SvelteSet } from 'svelte/reactivity';
     import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
+    import { buildFrameExport, exportFileName } from '../lib/frameExport';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
     import {
         estimateOverheadUs,
@@ -165,6 +166,41 @@
 
         paused = true;
         void showOrdinal(ordinal ?? pinnedOrdinal ?? liveOrdinal);
+    }
+
+    // a shareable json snapshot: one frame, or everything the collector's ring still holds.
+    function saveExport(
+        kind: 'frame' | 'ring',
+        frames: FrameData[],
+        stopwatchFrequency: number,
+    ): void {
+        if (frames.length === 0) return;
+        const payload = buildFrameExport(
+            kind,
+            frames,
+            framesRes?.data?.threads ?? [],
+            names,
+            stopwatchFrequency,
+        );
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = exportFileName(
+            kind,
+            kind === 'frame' ? (frame?.capture_ordinal ?? null) : null,
+        );
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function exportFrame(): void {
+        if (frame) saveExport('frame', [frame], stopwatchFrequency);
+    }
+
+    async function exportRing(): Promise<void> {
+        const range = await api.frameRange(undefined, 0);
+        saveExport('ring', range.frames, range.stopwatch_frequency);
     }
 
     function resume(): void {
@@ -556,15 +592,6 @@
             selectedLanes.add(lane.id);
         }
     });
-    // a lane shows while its thread has nodes in recent frames and lingers about a second
-    // after going quiet, so sporadic workers do not flicker in and out of the gutter.
-    const LANE_LINGER_FRAMES = 60;
-    const laneLastSeen = new SvelteMap<number, number>();
-    $effect(() => {
-        const f = frame;
-        if (!f) return;
-        for (const id of f.nodes.thread_ids ?? []) laneLastSeen.set(id, f.capture_ordinal);
-    });
     let laneCallCounts = $derived.by(() => {
         const counts = new Map<number, number>();
         for (const id of frame?.nodes.thread_ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -583,15 +610,14 @@
             busyNs: laneBusyNs(frame.nodes, lane.id),
         };
     }
+    // strict rule: a lane draws only when the current frame holds its calls. main stays.
     let visibleLanes = $derived.by(() => {
         if (allLanes.length === 0) return [MAIN_FALLBACK];
         if (userPrefs.mainThreadOnly) return allLanes.filter((l) => l.role === ThreadRole.Main);
-        const newest = frame?.capture_ordinal ?? 0;
         return allLanes.filter(
             (l) =>
                 selectedLanes.has(l.id) &&
-                (l.role === ThreadRole.Main ||
-                    (laneLastSeen.get(l.id) ?? -1) >= newest - LANE_LINGER_FRAMES),
+                (l.role === ThreadRole.Main || (laneCallCounts.get(l.id) ?? 0) > 0),
         );
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
@@ -781,6 +807,18 @@
                 >
             </div>
             <span class="rightpair">
+                <button
+                    type="button"
+                    class="clearring"
+                    onclick={exportFrame}
+                    data-testid="export-frame">{t('flamegraph.exportFrame')}</button
+                >
+                <button
+                    type="button"
+                    class="clearring"
+                    onclick={() => void exportRing()}
+                    data-testid="export-ring">{t('flamegraph.exportRing')}</button
+                >
                 <button
                     type="button"
                     class="clearring"

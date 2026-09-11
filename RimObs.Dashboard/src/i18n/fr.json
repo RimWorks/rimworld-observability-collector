@@ -233,5 +233,7 @@
     "tip.threads.mainOnly": "N'affiche que la piste du thread principal et masque les autres. Désactive l'option pour voir à côté les threads de jobs Unity et les threads de mods, ce qui révèle le travail exécuté en parallèle de la boucle de ticks.",
     "tip.settings.language": "Langue du tableau de bord uniquement. Cela ne change ni la langue de RimWorld ni les noms de section rapportés par le jeu.",
     "tip.settings.sessionName": "Un nom pour cette exécution. Il apparaît dans la liste des sessions et dans les comparaisons, alors choisissez quelque chose que vous reconnaîtrez la semaine prochaine.",
-    "settings.readonly": "Lecture seule"
+    "settings.readonly": "Lecture seule",
+    "flamegraph.exportFrame": "Exporter la frame",
+    "flamegraph.exportRing": "Exporter l'anneau"
 }
