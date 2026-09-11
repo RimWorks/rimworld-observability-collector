@@ -655,9 +655,13 @@
         background: var(--bg-surface);
         outline: none;
     }
+    /* sticky, so the time axis survives however tall the lane bands stack the canvas */
     .ruler {
-        position: relative;
+        position: sticky;
+        top: 0;
+        z-index: 2;
         height: 18px;
+        background: var(--bg);
         border-bottom: 1px solid var(--border-soft);
     }
     .ruler span {
