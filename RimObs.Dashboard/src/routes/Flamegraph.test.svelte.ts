@@ -641,6 +641,45 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('drop-preframe')).toHaveTextContent('0');
     });
 
+    // a bundle never climbs, so the live "is it still happening" test would never fire on one.
+    it('raises the lossy badge for an imported bundle that recorded drops', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+
+        await screen.findByTestId('frame-scrub');
+        expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
+        expect(screen.getByTestId('lossy-count')).toHaveTextContent('3');
+    });
+
+    it('drops the live badge when switching to a clean bundle', async () => {
+        let late = 0;
+        mockFetch();
+        const base = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url.includes('/file/frames.json')) {
+                return jsonResponse({
+                    ...BUNDLE_FRAMES_BODY,
+                    dropped: { pre_frame_samples: 0, late_samples: 0 },
+                });
+            }
+            if (!url.includes('/frames/latest')) return base(input, init);
+            return jsonResponse({
+                ...FRAMES_BODY,
+                dropped: { pre_frame_samples: 12, late_samples: late },
+            });
+        }) as unknown as typeof fetch;
+
+        const { getByLabelText } = render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+        late = 500;
+        await waitFor(() => expect(screen.getByTestId('lossy-badge')).toBeInTheDocument());
+
+        await openFile(getByLabelText);
+        await screen.findByTestId('frame-scrub');
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
+    });
+
     it('colors imported bars by the bundle hotspots subsystem, not the live sections', async () => {
         const { drawTimeline } = await import('../lib/frameDraw');
         const { getByLabelText } = render(Flamegraph);

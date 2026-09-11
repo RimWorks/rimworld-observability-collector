@@ -648,14 +648,23 @@
     const DROP_WINDOW_POLLS = 32;
     let dropWindow = $state<number[]>([]);
     $effect(() => {
-        if (!live || !liveRes) return;
+        if (!live) {
+            untrack(() => {
+                dropWindow = [];
+            });
+            return;
+        }
+        if (!liveRes) return;
         const total = dropped.pre_frame_samples + dropped.late_samples;
         untrack(() => {
             dropWindow = [...dropWindow, total].slice(-DROP_WINDOW_POLLS);
         });
     });
+    // an import is a still picture, so there is no climb to watch: any drops in it are the news.
     let lossy = $derived(
-        dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0],
+        live
+            ? dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0]
+            : dropped.pre_frame_samples + dropped.late_samples > 0,
     );
     let stopwatchFrequency = $derived(
         (live ? liveRes?.stopwatch_frequency : importedFrames?.stopwatch_frequency) ?? 0,
