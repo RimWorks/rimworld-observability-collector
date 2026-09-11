@@ -76,15 +76,19 @@ public sealed class FrameRingTests {
         ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
     }
 
+    // pause and step must ALWAYS land on a main-thread frame, so a frame that seals without
+    // its main lane is dropped and its stray worker samples count as late.
     [Fact]
-    public void A_workerless_main_frame_and_a_sealed_worker_frame_both_serve() {
+    public void A_frame_sealing_without_its_main_lane_is_dropped_as_late() {
         FrameRing ring = new(64) { Clock = new ManualClock(), OpenFrameWindow = 2 };
         ring.Add(1, 20, -1, 10, -1, 1000L, 200L, 0L, 7, mainLane: false);
         for (int ordinal = 2; ordinal <= 4; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
 
-        // 1 sealed when 3 arrived; sealed data is final, so it serves even without main.
-        ring.FindByOrdinal(1).Should().NotBeNull();
+        ring.FindByOrdinal(1).Should().BeNull();
+        ring.LateSamples.Should().Be(1);
+        ring.Flush();
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4);
     }
 
     // a paused game sends nothing more, so its last frame has had its drain cycle and is the

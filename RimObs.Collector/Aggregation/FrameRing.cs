@@ -388,6 +388,12 @@ public sealed class FrameRing {
             OpenFrame open = _open[ordinal];
             _open.Remove(ordinal);
             _sealedThrough = ordinal;
+            // a frame whose main lane never landed is an anomaly, and navigation is anchored
+            // on main; its stray worker samples count as late rather than becoming a frame.
+            if (!open.HasMain) {
+                _lateSamples += open.SectionIds.Count;
+                continue;
+            }
             _buffer[_next] = open.Materialize(ordinal);
             _next = (_next + 1) % _buffer.Length;
             if (_count < _buffer.Length)
