@@ -71,10 +71,32 @@ public sealed class FrameRingTests {
 
         ring.Latest()!.CaptureOrdinal.Should().Be(2);
 
-        // the stream picking back up holds the open frames back again.
+        // the stream picking back up drops the live ceiling under 2, but a served ordinal never
+        // goes back down: the dashboard would freeze on the truncated 2 it already drew.
         ring.Add(3, 10, -1, 300, -1, 3000L, 500L);
 
-        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.Latest()!.CaptureOrdinal.Should().Be(2);
+    }
+
+    // a stall longer than the quiet period serves an open frame early. the sender waking up must
+    // not walk Latest back below it.
+    [Fact]
+    public void Latest_never_returns_an_ordinal_below_one_it_already_served() {
+        ManualClock clock = new();
+        FrameRing ring = new(64) { Clock = clock, OpenFrameWindow = 4 };
+        for (int ordinal = 1; ordinal <= 6; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+
+        clock.Advance(ring.QuietPeriod);
+        int served = ring.Latest()!.CaptureOrdinal;
+        served.Should().Be(6);
+
+        for (int ordinal = 7; ordinal <= 12; ordinal++) {
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+            int next = ring.Latest()!.CaptureOrdinal;
+            next.Should().BeGreaterThanOrEqualTo(served);
+            served = next;
+        }
     }
 
     // holding a frame back is a read-side rule, not a seal: a lane draining late still lands.

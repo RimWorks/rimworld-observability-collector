@@ -60,6 +60,7 @@ public sealed class FrameRing {
     private int _count;
     private int _newestOrdinal;
     private int _sealedThrough;
+    private int _servedOrdinal;
     private long _preFrameSamples;
     private long _lateSamples;
     private long _lastSampleStamp;
@@ -162,17 +163,20 @@ public sealed class FrameRing {
             // the same watermark SealThrough uses: a frame any lane can still add to is not
             // servable, because the dashboard never backfills an ordinal it has already drawn.
             int ceiling = live ? _newestOrdinal - _window : int.MaxValue;
+            // a quiet gap serves an open frame, and the next sample drops the ceiling back under
+            // it. never walk backwards, or the dashboard freezes on that truncated frame forever.
+            if (ceiling < _servedOrdinal)
+                ceiling = _servedOrdinal;
             FrameSnapshot? newest = null;
             foreach (KeyValuePair<int, OpenFrame> entry in _open) {
                 if (entry.Key > ceiling)
                     break;
                 newest = entry.Value.Materialize(entry.Key);
             }
-            if (newest is not null)
-                return newest;
-            if (_count == 0)
-                return null;
-            return _buffer[(_next - 1 + _buffer.Length) % _buffer.Length];
+            newest ??= _count == 0 ? null : _buffer[(_next - 1 + _buffer.Length) % _buffer.Length];
+            if (newest is not null && newest.CaptureOrdinal > _servedOrdinal)
+                _servedOrdinal = newest.CaptureOrdinal;
+            return newest;
         }
     }
 
@@ -342,6 +346,7 @@ public sealed class FrameRing {
             _count = 0;
             _newestOrdinal = 0;
             _sealedThrough = 0;
+            _servedOrdinal = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
             _lastSampleStamp = 0;
