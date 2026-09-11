@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { laneBands, laneBusyNs, laneLabel, laneRow, orderLanes, ThreadRole } from './threadLanes';
+import {
+    laneBands,
+    laneBusyNs,
+    laneLabel,
+    laneRow,
+    lanesFromNodes,
+    orderLanes,
+    ThreadRole,
+} from './threadLanes';
 import type { ThreadLane } from './api';
 import type { FrameNodes, TreeNode } from './frameTree';
 
@@ -222,6 +230,25 @@ describe('laneBands', () => {
 
     it('is empty when every lane is off', () => {
         expect(laneBands([], [n(0, 1)], MAX_DEPTH).rows).toBe(0);
+    });
+});
+
+// a bundle ships thread ids on every node but no thread list. before this, the page fell back
+// to a single id-0 lane, no node matched a band, and the canvas came out blank.
+describe('lanesFromNodes', () => {
+    it('gives an imported frame a band per thread id it carries', () => {
+        const tree = [n(0, 1), n(1, 1), n(0, 4)];
+        const lanes = lanesFromNodes(tree);
+        expect(lanes.map((l) => l.id)).toEqual([1, 4]);
+        expect(lanes[0].role).toBe(ThreadRole.Main);
+        expect(lanes[1].role).toBe(ThreadRole.UnityJob);
+
+        const bands = laneBands(lanes, tree, MAX_DEPTH);
+        expect(tree.map((node) => laneRow(bands, node))).toEqual([0, 1, 2]);
+    });
+
+    it('is empty when no node names a thread', () => {
+        expect(lanesFromNodes([n(0), n(1)])).toEqual([]);
     });
 });
 

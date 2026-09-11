@@ -63,7 +63,13 @@
         speedMultiplier,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
-    import { laneBands, laneLabel, orderLanes, ThreadRole } from '../lib/threadLanes';
+    import {
+        laneBands,
+        laneLabel,
+        lanesFromNodes,
+        orderLanes,
+        ThreadRole,
+    } from '../lib/threadLanes';
     import { MAX_DEPTH } from '../lib/frameLayout';
     import { ROW_HEIGHT } from '../lib/frameDraw';
     import { userPrefs } from '../lib/userPrefs.svelte';
@@ -522,27 +528,6 @@
         live ? (liveRes?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
     );
 
-    let allLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
-    // an imported bundle and the first poll carry no thread list, and the page has always drawn
-    // a main lane. keep drawing it.
-    // a lane starts drawn and stays that way unless the filter panel turns it off; seeded
-    // tracks what has been offered so the effect cannot undo a click.
-    const seededLanes = new Set<number>();
-    const selectedLanes = new SvelteSet<number>();
-    $effect(() => {
-        for (const lane of allLanes) {
-            if (seededLanes.has(lane.id)) continue;
-            seededLanes.add(lane.id);
-            selectedLanes.add(lane.id);
-        }
-    });
-    let visibleLanes = $derived.by(() => {
-        if (allLanes.length === 0) return [MAIN_FALLBACK];
-        return userPrefs.mainThreadOnly
-            ? allLanes.filter((l) => l.role === ThreadRole.Main)
-            : allLanes.filter((l) => selectedLanes.has(l.id));
-    });
-
     // the live poll still carries one frame; the window is accumulated here so the timeline
     // spans many without a second request per tick.
     let liveWindow = $state<FrameData[]>([]);
@@ -567,6 +552,27 @@
     let series = $derived.by(() => {
         if (treeCache.size > 4 * MAX_WINDOW_FRAMES) treeCache.clear();
         return buildSeries(windowFrames, treeCache);
+    });
+    let polledLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
+    // a bundle carries no thread list, so its lanes come back off the nodes' own thread ids.
+    // with neither, draw the main lane the page has always drawn.
+    let allLanes = $derived(polledLanes.length > 0 ? polledLanes : lanesFromNodes(series.nodes));
+    // a lane starts drawn and stays that way unless the filter panel turns it off; seeded
+    // tracks what has been offered so the effect cannot undo a click.
+    const seededLanes = new Set<number>();
+    const selectedLanes = new SvelteSet<number>();
+    $effect(() => {
+        for (const lane of allLanes) {
+            if (seededLanes.has(lane.id)) continue;
+            seededLanes.add(lane.id);
+            selectedLanes.add(lane.id);
+        }
+    });
+    let visibleLanes = $derived.by(() => {
+        if (allLanes.length === 0) return [MAIN_FALLBACK];
+        return userPrefs.mainThreadOnly
+            ? allLanes.filter((l) => l.role === ThreadRole.Main)
+            : allLanes.filter((l) => selectedLanes.has(l.id));
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
     // label always sits level with the flame it names.

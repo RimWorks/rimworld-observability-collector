@@ -63,6 +63,19 @@ export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
         });
 }
 
+/**
+ * A bundle ships node thread ids but no thread list, so the lanes are whatever the nodes name.
+ * Lowest id wins main, which is how orderLanes ranks a live session too.
+ */
+export function lanesFromNodes(nodes: TreeNode[]): ThreadLane[] {
+    const ids = new Set<number>();
+    for (const n of nodes) {
+        const id = n.laneId ?? UNKNOWN_LANE;
+        if (id !== UNKNOWN_LANE) ids.add(id);
+    }
+    return orderLanes([...ids].map((id) => ({ id, name: '', role: ThreadRole.Main, busy_ns: 0 })));
+}
+
 export interface LaneBand {
     id: number;
     rows: number;
