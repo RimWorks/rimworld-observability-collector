@@ -35,9 +35,3 @@ export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
             return rank(a) - rank(b) || a.id - b.id;
         });
 }
-
-/** Both arguments are nanoseconds; the frame duration from the api is microseconds. */
-export function busyFraction(t: ThreadLane, frameNs: number): number {
-    if (frameNs <= 0) return 0;
-    return Math.min(1, Math.max(0, t.busy_ns / frameNs));
-}

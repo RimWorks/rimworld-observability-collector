@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { laneLabel, orderLanes, busyFraction, ThreadRole } from './threadLanes';
+import { laneLabel, orderLanes, ThreadRole } from './threadLanes';
 import type { ThreadLane } from './api';
 
 const t = (over: Partial<ThreadLane> = {}): ThreadLane => ({
@@ -70,23 +70,5 @@ describe('orderLanes', () => {
         const input = [t({ id: 5 }), t({ id: 2 })];
         orderLanes(input);
         expect(input.map((l) => l.id)).toEqual([5, 2]);
-    });
-});
-
-describe('busyFraction', () => {
-    it('is the share of the frame the lane was busy', () => {
-        expect(busyFraction(t({ busy_ns: 500 }), 1000)).toBe(0.5);
-    });
-
-    it('is zero for a frame with no duration rather than dividing by zero', () => {
-        expect(busyFraction(t({ busy_ns: 500 }), 0)).toBe(0);
-    });
-
-    it('clamps a lane busier than the frame to one', () => {
-        expect(busyFraction(t({ busy_ns: 4000 }), 1000)).toBe(1);
-    });
-
-    it('clamps a negative busy value to zero', () => {
-        expect(busyFraction(t({ busy_ns: -10 }), 1000)).toBe(0);
     });
 });
