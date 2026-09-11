@@ -38,7 +38,7 @@
         type SeriesCacheEntry,
     } from '../lib/frameSeries';
     import { flattenCallNodes, sessionTotalUs } from '../lib/sessionTree';
-    import type { CallTreeResponse } from '../lib/api';
+    import type { CallTreeResponse, ThreadLane } from '../lib/api';
     import { buildBars, stepOrdinal, DEFAULT_STRIP_SLOTS } from '../lib/frameStrip';
     import { liveConfig } from '../lib/liveConfig.svelte';
     import { sectionSearch } from '../lib/sectionSearchState.svelte';
@@ -108,6 +108,12 @@
     // set while paused or stepping. null means follow the newest frame.
     let pinnedOrdinal = $state<number | null>(null);
     let pinnedRes = $state<FrameResponse | null>(null);
+    const MAIN_FALLBACK: ThreadLane = {
+        id: 0,
+        name: 'MainThread',
+        role: ThreadRole.Main,
+        busy_ns: 0,
+    };
     const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [] };
     // the baseline is a median over 128 frames, so it says nothing about a session total.
     const NO_BASELINE = new Map<number, number>();
@@ -513,9 +519,14 @@
     );
 
     let allLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
-    let visibleLanes = $derived(
-        userPrefs.mainThreadOnly ? allLanes.filter((l) => l.role === ThreadRole.Main) : allLanes,
-    );
+    // an imported bundle and the first poll carry no thread list, and the page has always drawn
+    // a main lane. keep drawing it.
+    let visibleLanes = $derived.by(() => {
+        const lanes = userPrefs.mainThreadOnly
+            ? allLanes.filter((l) => l.role === ThreadRole.Main)
+            : allLanes;
+        return lanes.length > 0 ? lanes : [MAIN_FALLBACK];
+    });
 
     // the live poll still carries one frame; the window is accumulated here so the timeline
     // spans many without a second request per tick.

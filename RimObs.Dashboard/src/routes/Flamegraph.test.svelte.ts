@@ -1583,4 +1583,23 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-2').textContent).toContain('PathfindingWorker');
         expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
+
+    it('still draws a main lane when the response carries no threads', async () => {
+        mockFetch({ ...FRAMES_BODY, threads: undefined });
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        expect(screen.getByTestId('lane-0').textContent).toContain('MainThread');
+        expect(screen.getByTestId('lane-0').textContent).toContain('16.20 ms');
+    });
+
+    it('still draws a main lane for an imported bundle', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
+
+        await screen.findByTestId('frame-scrub');
+        expect(screen.getByTestId('lane-0').textContent).toContain('MainThread');
+        expect(screen.getByTestId('lane-0').textContent).toContain('16.20 ms');
+    });
 });
