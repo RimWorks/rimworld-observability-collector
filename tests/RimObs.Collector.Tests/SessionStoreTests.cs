@@ -120,6 +120,25 @@ public sealed class SessionStoreTests : IDisposable {
         store.ReadSessionMeta("nope").Should().BeNull();
     }
 
+    // regression: sessions/{id}/threads threw 'no such table: threads' for any session db
+    // recorded before the lane feature, since read-only opens never migrate.
+    [Fact]
+    public void GetThreads_returns_empty_for_a_pre_upgrade_database() {
+        using (SessionStore store = SessionStore.Open(_dbPath)) {
+        }
+        SqliteConnection.ClearAllPools();
+        using (SqliteConnection setup = new($"Data Source={_dbPath}")) {
+            setup.Open();
+            using SqliteCommand drop = setup.CreateCommand();
+            drop.CommandText = "DROP TABLE threads;";
+            drop.ExecuteNonQuery();
+        }
+        SqliteConnection.ClearAllPools();
+
+        using SessionStore reopened = SessionStore.OpenReadOnly(_dbPath);
+        reopened.GetThreads().Should().BeEmpty();
+    }
+
     [Fact]
     public void Open_with_mismatched_schema_drops_and_recreates_tables() {
         Directory.CreateDirectory(_tempDir);

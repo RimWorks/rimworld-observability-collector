@@ -364,6 +364,12 @@ ON CONFLICT(thread_id) DO UPDATE SET
     public List<ThreadInfo> GetThreads() {
         ThrowIfDisposed();
 
+        // a session recorded before schema v7 has no threads table; no lanes is the honest answer.
+        using SqliteCommand probe = _connection.CreateCommand();
+        probe.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'threads';";
+        if (Convert.ToInt32(probe.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+            return [];
+
         using SqliteCommand cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT thread_id, name, role, busy_ticks FROM threads ORDER BY thread_id;";
 
