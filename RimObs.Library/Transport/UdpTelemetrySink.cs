@@ -91,6 +91,11 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     public long SamplesSent => Interlocked.Read(ref _sent);
     public long BytesSent => Interlocked.Read(ref _bytesSent);
     public long SamplesDropped => _ring.Dropped;
+
+    /// <summary>Ring drops since the current session began; the counter itself never resets.</summary>
+    public long SessionSamplesDropped => _ring.Dropped - Volatile.Read(ref _dropBaseline);
+
+    private long _dropBaseline;
     public long SendErrors => Interlocked.Read(ref _sendErrors);
     public Exception? LastSendError => Volatile.Read(ref _lastSendError);
     public long GcEventsDropped => _gcQueue.Dropped;
@@ -153,6 +158,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     /// </summary>
     public void RestartMetaBurst() {
         Volatile.Write(ref _metaTicks, 0);
+        // a new session reports only its own loss; the old session's drops stay behind.
+        Volatile.Write(ref _dropBaseline, _ring.Dropped);
     }
 
     private void SendSessionMeta() {
@@ -166,7 +173,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             GameVersion = string.Empty,
             ControlPort = server?.Port ?? 0,
             ControlSecret = server?.Secret ?? string.Empty,
-            SamplesDropped = _ring.Dropped,
+            SamplesDropped = SessionSamplesDropped,
         };
         SendBatch(BatchType.SessionMeta, meta);
     }

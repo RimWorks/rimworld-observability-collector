@@ -85,6 +85,23 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         return ((IPEndPoint)probe.Client.LocalEndPoint!).Port;
     }
 
+    // regression: the ring drop counter is process-lifetime, so a new in-game session used to
+    // inherit the previous session's drops in its SessionMeta and exports.
+    [Fact]
+    public void A_new_session_starts_its_reported_drops_at_zero() {
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: GetFreePort());
+        sink.SetRingCapacity(256);
+        for (int i = 0; i < 400; i++)
+            sink.RecordSection(sectionId: i, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: 0L, elapsedTicks: 1L, allocBytes: 0L);
+
+        sink.SessionSamplesDropped.Should().BeGreaterThan(0);
+
+        sink.RestartMetaBurst();
+
+        sink.SessionSamplesDropped.Should().Be(0);
+        sink.SamplesDropped.Should().BeGreaterThan(0);
+    }
+
     [Fact]
     public void Constructor_throws_on_null_owner_id() {
         Action act = () => _ = new UdpTelemetrySink(null!);
