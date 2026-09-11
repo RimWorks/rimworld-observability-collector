@@ -1838,6 +1838,7 @@ describe('Flamegraph thread lanes', () => {
             enabled: true,
             filters: '*',
             ignore: 'System.*',
+            max_targets: 8192,
         });
     });
 

@@ -18,6 +18,7 @@ class LiveConfig {
                   enabled: auto.enabled ?? false,
                   filters: auto.filters ?? '',
                   ignore: auto.ignore ?? '',
+                  max_targets: auto.max_targets ?? null,
               }
             : null;
     }
