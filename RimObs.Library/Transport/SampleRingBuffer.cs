@@ -202,10 +202,14 @@ internal sealed class SampleRingSet {
     }
 
     /// <summary>
-    /// Removes a dead thread's lane, draining it one last time first, since the owner can publish
-    /// between the empty drain and the IsAlive check. Returns what went into the batch.
+    /// Drains a dead thread's lane one last time, since the owner can publish between the empty
+    /// drain and the IsAlive check. Removes it only once it hands over nothing, so NameFor still resolves.
     /// </summary>
     private int Reap(Lane lane, SampleBatch batch, int maxCount) {
+        int taken = lane.Ring.Drain(batch, maxCount);
+        if (taken > 0)
+            return taken;
+
         Lane[] old;
         Lane[] shrunk;
         do {
@@ -218,9 +222,8 @@ internal sealed class SampleRingSet {
             Array.Copy(old, at + 1, shrunk, at, old.Length - at - 1);
         }
         while (Interlocked.CompareExchange(ref _lanes, shrunk, old) != old);
-        int taken = lane.Ring.Drain(batch, maxCount);
         Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped + lane.Ring.DiscardAll());
         LaneReaped?.Invoke(lane.Owner.ManagedThreadId);
-        return taken;
+        return 0;
     }
 }

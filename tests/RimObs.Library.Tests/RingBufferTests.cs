@@ -250,6 +250,32 @@ public sealed class RingBufferTests {
         reaped.Should().Equal(workerId);
     }
 
+    // The reaped samples reach the caller before the lane goes, so the name it stamps on them is
+    // still the dead thread's and not an empty string.
+    [Fact]
+    public void A_reaped_lanes_last_samples_still_resolve_the_owner_name() {
+        SampleRingSet set = new(16);
+        List<int> reaped = new();
+        set.LaneReaped = id => reaped.Add(id);
+
+        int workerId = 0;
+        Thread worker = new(() => {
+            workerId = Environment.CurrentManagedThreadId;
+            set.TryWrite(1, -1, 0, -1, 0, 0, 1);
+        }) { Name = "MyModWorker" };
+        worker.Start();
+        worker.Join();
+
+        SampleBatch batch = new SampleBatch(16);
+        set.Drain(batch, 16).Should().Be(1);
+        batch.ThreadIds[0].Should().Be(workerId);
+        set.NameFor(workerId).Should().Be("MyModWorker");
+        reaped.Should().BeEmpty();
+
+        set.Drain(batch, 16).Should().Be(0);
+        reaped.Should().Equal(workerId);
+    }
+
     [Fact]
     [Trait("Category", "Benchmark")]
     public void Steady_state_writes_allocate_nothing() {
