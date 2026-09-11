@@ -1607,6 +1607,19 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 
+    it('drops the main lane too when the thread filter deselects it', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('lane-1')).toBeInTheDocument());
+
+        await openFooterTab('threads');
+        await fireEvent.click(await screen.findByTestId('thread-row-1'));
+
+        await waitFor(() => expect(screen.queryByTestId('lane-1')).toBeNull());
+        expect(screen.getByTestId('lane-2')).toBeInTheDocument();
+    });
+
     it('still draws a main lane when the response carries no threads', async () => {
         mockFetch({ ...FRAMES_BODY, threads: undefined });
         render(Flamegraph);

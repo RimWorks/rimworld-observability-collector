@@ -534,12 +534,11 @@
             selectedLanes.add(lane.id);
         }
     });
-    // main is the frame's own scope, so the filter can only ever hide workers.
     let visibleLanes = $derived.by(() => {
-        const lanes = userPrefs.mainThreadOnly
+        if (allLanes.length === 0) return [MAIN_FALLBACK];
+        return userPrefs.mainThreadOnly
             ? allLanes.filter((l) => l.role === ThreadRole.Main)
-            : allLanes.filter((l) => l.role === ThreadRole.Main || selectedLanes.has(l.id));
-        return lanes.length > 0 ? lanes : [MAIN_FALLBACK];
+            : allLanes.filter((l) => selectedLanes.has(l.id));
     });
 
     // the live poll still carries one frame; the window is accumulated here so the timeline
