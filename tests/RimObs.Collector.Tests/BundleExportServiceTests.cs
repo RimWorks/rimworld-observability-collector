@@ -208,8 +208,8 @@ public class BundleExportServiceTests {
             zip.Entries.Select(e => e.FullName).Where(n => n != "manifest.json"));
     }
 
-    // the export seals the ring itself, so the newest frame is in the zip even though no newer
-    // ordinal ever arrived to close it.
+    // the snapshot previews open frames, so the newest frame is in the zip even though no
+    // newer ordinal ever arrived to close it.
     [Fact]
     public async Task Export_FramesEntryCarriesTheWholeRing() {
         SessionAggregator aggregator = BuildAggregator();
@@ -238,11 +238,39 @@ public class BundleExportServiceTests {
         doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(2);
     }
 
+    // pressing the export button is a read. lane 7's drain for the exported frames has not
+    // landed yet, and it still has to, or a hitch node is lost from the live ring forever.
+    [Fact]
+    public async Task Export_DoesNotDropTheLanesStillDraining() {
+        SessionAggregator aggregator = BuildAggregator();
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            aggregator.Frames.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L, 0L, 1);
+        BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+        for (int ordinal = 1; ordinal <= 3; ordinal++)
+            aggregator.Frames.Add(ordinal, 20, -1, ordinal * 100 + 1, -1, ordinal * 1000L + 100L, 9_000_000L, 0L, 7);
+
+        result.Status.Should().Be(BundleExportStatus.Ok);
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = await zip.GetEntry("frames.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
+        JsonElement frames = doc.RootElement.GetProperty("frames");
+        frames.GetArrayLength().Should().Be(3);
+        frames[2].GetProperty("capture_ordinal").GetInt32().Should().Be(3);
+
+        aggregator.Frames.LateSamples.Should().Be(0);
+        aggregator.Frames.FindByOrdinal(1)!.ThreadIds.Should().Equal(1, 7);
+    }
+
     [Fact]
     public async Task Estimate_LeavesTheOpenFrameAlone() {
         SessionAggregator aggregator = BuildAggregator();
-        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        aggregator.Frames.NowUtc = () => clock;
         aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
         BundleExportService service = new BundleExportService(aggregator, collectorVersion: "0.1.0");
 

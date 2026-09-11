@@ -66,7 +66,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, request.SessionId, StringComparison.Ordinal))
             return Task.FromResult(new BundleExportResult { Status = BundleExportStatus.UnknownSession });
 
-        FrameSnapshot[] frames = ReadFrames(request.Includes, seal: true);
+        FrameSnapshot[] frames = ReadFrames(request.Includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -94,7 +94,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, sessionId, StringComparison.Ordinal))
             return new BundleEstimateResult { Status = BundleExportStatus.UnknownSession };
 
-        FrameSnapshot[] frames = ReadFrames(includes, seal: false);
+        FrameSnapshot[] frames = ReadFrames(includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -107,13 +107,11 @@ public sealed class BundleExportService {
         };
     }
 
-    // only the export seals, so it ships the newest frames; an estimate is a preview the dashboard
-    // fires on every toggle, so it undercounts the open frames rather than truncating the live ring.
-    private FrameSnapshot[] ReadFrames(IReadOnlySet<BundleContentKey> includes, bool seal) {
+    // the snapshot already previews open frames, so the newest frame ships without sealing
+    // the live ring out from under the lanes still draining.
+    private FrameSnapshot[] ReadFrames(IReadOnlySet<BundleContentKey> includes) {
         if (!includes.Contains(BundleContentKey.Frames))
             return [];
-        if (seal)
-            _aggregator.Frames.Flush();
         return _aggregator.Frames.Snapshot();
     }
 

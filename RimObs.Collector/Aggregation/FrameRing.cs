@@ -34,7 +34,8 @@ public sealed record FrameRingStats(
 
 /// <summary>
 /// Frames cut out of the sample stream by their ordinal, newest last. A frame stays open until
-/// <see cref="OpenFrameWindow"/> newer ones land, or until the stream goes quiet.
+/// <see cref="OpenFrameWindow"/> newer ones land, so a lane draining late can still add to it,
+/// but every read serves the open frames too, rebuilt fresh whenever new samples arrived.
 /// </summary>
 public sealed class FrameRing {
     public const int DefaultCapacity = 2000;
@@ -44,9 +45,6 @@ public sealed class FrameRing {
     /// frames per lane, so this leaves every lane room to report before the cut.
     /// </summary>
     public const int DefaultOpenFrameWindow = 16;
-
-    // measured ring-wide, not per frame: any sample arriving keeps a slow frame open.
-    private const int QuietMillis = 200;
 
     private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
@@ -58,14 +56,10 @@ public sealed class FrameRing {
     private int _sealedThrough;
     private long _preFrameSamples;
     private long _lateSamples;
-    private DateTime _lastAddUtc = DateTime.MinValue;
 
     public FrameRing(int capacity = DefaultCapacity) {
         _buffer = new FrameSnapshot[Math.Max(1, capacity)];
     }
-
-    // test seam: park the clock past the quiet deadline instead of sleeping for it.
-    internal Func<DateTime> NowUtc { get; set; } = () => DateTime.UtcNow;
 
     public int Capacity => _buffer.Length;
 
@@ -87,8 +81,7 @@ public sealed class FrameRing {
     public int Count {
         get {
             lock (_gate) {
-                SealStale();
-                return _count;
+                return _count + _open.Count;
             }
         }
     }
@@ -129,7 +122,6 @@ public sealed class FrameRing {
             open.ElapsedTicks.Add(elapsedTicks);
             open.AllocBytes.Add(allocBytes);
             open.ThreadIds.Add(threadId);
-            _lastAddUtc = NowUtc();
             if (threadId != 0)
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
@@ -139,7 +131,7 @@ public sealed class FrameRing {
         }
     }
 
-    /// <summary>Seals every open frame, so a stopped stream still lands its newest frames.</summary>
+    /// <summary>Seals every open frame, for teardown. The only reader-facing way to move the watermark.</summary>
     public void Flush() {
         lock (_gate) {
             SealThrough(int.MaxValue);
@@ -148,7 +140,11 @@ public sealed class FrameRing {
 
     public FrameSnapshot? Latest() {
         lock (_gate) {
-            SealStale();
+            FrameSnapshot? newest = null;
+            foreach (KeyValuePair<int, OpenFrame> entry in _open)
+                newest = entry.Value.Materialize(entry.Key);
+            if (newest is not null)
+                return newest;
             if (_count == 0)
                 return null;
             return _buffer[(_next - 1 + _buffer.Length) % _buffer.Length];
@@ -157,20 +153,13 @@ public sealed class FrameRing {
 
     public FrameSnapshot[] Snapshot() {
         lock (_gate) {
-            SealStale();
-            if (_count == 0)
-                return [];
-            FrameSnapshot[] frames = new FrameSnapshot[_count];
-            int start = _count < _buffer.Length ? 0 : _next;
-            for (int i = 0; i < _count; i++)
-                frames[i] = _buffer[(start + i) % _buffer.Length];
-            return frames;
+            return View();
         }
     }
 
     /// <summary>
     /// Swaps in a buffer of a new size, keeping the newest frames that still fit. Shrinking
-    /// drops the oldest; the open frame and the drop counters survive either way.
+    /// drops the oldest; the open frames and the drop counters survive either way.
     /// </summary>
     public void Resize(int capacity) {
         int size = Math.Max(1, capacity);
@@ -191,15 +180,14 @@ public sealed class FrameRing {
     /// <summary>One (ordinal, duration) pair per frame, newest last, for the frame strip.</summary>
     public (int Ordinal, long DurationTicks)[] SnapshotStrip(int count) {
         lock (_gate) {
-            SealStale();
-            int take = Math.Min(count <= 0 ? _count : count, _count);
+            FrameSnapshot[] view = View();
+            int take = Math.Min(count <= 0 ? view.Length : count, view.Length);
             if (take == 0)
                 return [];
             (int, long)[] strip = new (int, long)[take];
-            int start = _count < _buffer.Length ? 0 : _next;
             // walk the newest `take`, so a strip narrower than the ring shows the recent end.
             for (int i = 0; i < take; i++) {
-                FrameSnapshot frame = _buffer[(start + _count - take + i) % _buffer.Length];
+                FrameSnapshot frame = view[view.Length - take + i];
                 strip[i] = (frame.CaptureOrdinal, frame.DurationTicks);
             }
             return strip;
@@ -212,31 +200,23 @@ public sealed class FrameRing {
     /// </summary>
     public FrameSnapshot? FindByOrdinal(int ordinal) {
         lock (_gate) {
-            SealStale();
-            int start = _count < _buffer.Length ? 0 : _next;
-            int lo = 0;
-            int hi = _count - 1;
-            while (lo <= hi) {
-                int mid = lo + ((hi - lo) / 2);
-                FrameSnapshot frame = _buffer[(start + mid) % _buffer.Length];
-                if (frame.CaptureOrdinal == ordinal)
-                    return frame;
-                if (frame.CaptureOrdinal < ordinal)
-                    lo = mid + 1;
-                else
-                    hi = mid - 1;
-            }
+            if (_open.TryGetValue(ordinal, out OpenFrame? open))
+                return open.Materialize(ordinal);
+            FrameSnapshot[] view = View();
+            int at = LowerBound(view, ordinal);
+            if (at < view.Length && view[at].CaptureOrdinal == ordinal)
+                return view[at];
             return null;
         }
     }
 
-    // first index whose ordinal is >= target. caller holds _gate.
-    private int LowerBound(int start, int target) {
+    // first index whose ordinal is >= target.
+    private static int LowerBound(FrameSnapshot[] frames, int target) {
         int lo = 0;
-        int hi = _count;
+        int hi = frames.Length;
         while (lo < hi) {
             int mid = lo + ((hi - lo) / 2);
-            if (_buffer[(start + mid) % _buffer.Length].CaptureOrdinal < target)
+            if (frames[mid].CaptureOrdinal < target)
                 lo = mid + 1;
             else
                 hi = mid;
@@ -250,21 +230,17 @@ public sealed class FrameRing {
     /// </summary>
     public FrameSnapshot[] Range(int fromOrdinal, int count) {
         lock (_gate) {
-            SealStale();
-            int take = Math.Min(count <= 0 ? _count : count, _count);
+            FrameSnapshot[] view = View();
+            int take = Math.Min(count <= 0 ? view.Length : count, view.Length);
             if (take == 0)
                 return [];
-            int start = _count < _buffer.Length ? 0 : _next;
             // an evicted `from` lands on the oldest frame still held, so the run is clipped
             // rather than empty; holes inside the run just stay missing.
-            int first = fromOrdinal < 0 ? Math.Max(0, _count - take) : LowerBound(start, fromOrdinal);
-            int n = Math.Min(take, _count - first);
+            int first = fromOrdinal < 0 ? Math.Max(0, view.Length - take) : LowerBound(view, fromOrdinal);
+            int n = Math.Min(take, view.Length - first);
             if (n <= 0)
                 return [];
-            FrameSnapshot[] frames = new FrameSnapshot[n];
-            for (int i = 0; i < n; i++)
-                frames[i] = _buffer[(start + first + i) % _buffer.Length];
-            return frames;
+            return view[first..(first + n)];
         }
     }
 
@@ -273,7 +249,7 @@ public sealed class FrameRing {
     /// is what the call tree compares a row against.
     /// </summary>
     public Dictionary<int, long> BaselineMedians(int frames) {
-        FrameSnapshot[] recent = SnapshotStrip(0).Length == 0 ? [] : Snapshot();
+        FrameSnapshot[] recent = Snapshot();
         if (recent.Length == 0)
             return [];
         int take = Math.Min(frames <= 0 ? recent.Length : frames, recent.Length);
@@ -343,23 +319,25 @@ public sealed class FrameRing {
             _sealedThrough = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
-            _lastAddUtc = DateTime.MinValue;
             _open.Clear();
         }
     }
 
-    /// <summary>
-    /// Previews open frames on a read, so a paused game serves its tail. Nothing is committed:
-    /// a frame stalled mid-hitch stays open and can still land the node that caused it.
-    /// </summary>
-    private void SealStale() {
-        if (_lastAddUtc > NowUtc().AddMilliseconds(-QuietMillis))
-            return;
+    // every open ordinal sits above _sealedThrough and every ring ordinal at or below it, so
+    // sealed frames plus open previews concatenate into one ascending run. caller holds _gate.
+    private FrameSnapshot[] View() {
+        FrameSnapshot[] frames = new FrameSnapshot[_count + _open.Count];
+        int start = _count < _buffer.Length ? 0 : _next;
+        for (int i = 0; i < _count; i++)
+            frames[i] = _buffer[(start + i) % _buffer.Length];
+        int n = _count;
         foreach (KeyValuePair<int, OpenFrame> entry in _open)
-            Seal(entry.Key, entry.Value);
+            frames[n++] = entry.Value.Materialize(entry.Key);
+        return frames;
     }
 
-    // seals open frames up to `watermark`, oldest first so the ring stays ascending.
+    // commits open frames up to `watermark` into the ring, oldest first. the only writer of
+    // _sealedThrough, so a read can never turn a lane's pending drain late.
     private void SealThrough(int watermark) {
         while (_open.Count > 0) {
             int ordinal = _open.Keys.First();
@@ -368,62 +346,11 @@ public sealed class FrameRing {
             OpenFrame open = _open[ordinal];
             _open.Remove(ordinal);
             _sealedThrough = ordinal;
-            Seal(ordinal, open);
+            _buffer[_next] = open.Materialize(ordinal);
+            _next = (_next + 1) % _buffer.Length;
+            if (_count < _buffer.Length)
+                _count++;
         }
-    }
-
-    private void Seal(int ordinal, OpenFrame open) {
-        if (open.SectionIds.Count == 0 || open.SealedCount == open.SectionIds.Count)
-            return;
-
-        bool replace = open.SealedCount >= 0;
-        open.SealedCount = open.SectionIds.Count;
-
-        long start = long.MaxValue;
-        long end = long.MinValue;
-        for (int i = 0; i < open.StartTicks.Count; i++) {
-            long nodeStart = open.StartTicks[i];
-            long nodeEnd = nodeStart + open.ElapsedTicks[i];
-            if (nodeStart < start)
-                start = nodeStart;
-            if (nodeEnd > end)
-                end = nodeEnd;
-        }
-
-        FrameSnapshot snapshot = new(
-            ordinal,
-            start,
-            end,
-            [.. open.SectionIds],
-            [.. open.ParentIds],
-            [.. open.NodeIds],
-            [.. open.ParentNodeIds],
-            [.. open.StartTicks],
-            [.. open.ElapsedTicks],
-            [.. open.AllocBytes],
-            // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
-            open.HasThreadIds ? [.. open.ThreadIds] : []);
-
-        if (replace) {
-            ReplaceInRing(ordinal, snapshot);
-            return;
-        }
-
-        _buffer[_next] = snapshot;
-        _next = (_next + 1) % _buffer.Length;
-        if (_count < _buffer.Length)
-            _count++;
-    }
-
-    // located by ordinal rather than a cached index, so eviction and Resize need no bookkeeping.
-    private void ReplaceInRing(int ordinal, FrameSnapshot snapshot) {
-        int start = _count < _buffer.Length ? 0 : _next;
-        int at = LowerBound(start, ordinal);
-        if (at >= _count)
-            return;
-        int slot = (start + at) % _buffer.Length;
-        if (_buffer[slot].CaptureOrdinal == ordinal)
-            _buffer[slot] = snapshot;
     }
 
     private sealed class OpenFrame {
@@ -437,7 +364,37 @@ public sealed class FrameRing {
         public readonly List<int> ThreadIds = [];
         public bool HasThreadIds;
 
-        // -1 until a preview puts this frame in the ring; then the node count it was written at.
-        public int SealedCount = -1;
+        private FrameSnapshot? _snapshot;
+
+        // cached until the next sample lands, so steady reads reuse one snapshot.
+        public FrameSnapshot Materialize(int ordinal) {
+            if (_snapshot is not null && _snapshot.NodeCount == SectionIds.Count)
+                return _snapshot;
+
+            long start = long.MaxValue;
+            long end = long.MinValue;
+            for (int i = 0; i < StartTicks.Count; i++) {
+                long nodeStart = StartTicks[i];
+                long nodeEnd = nodeStart + ElapsedTicks[i];
+                if (nodeStart < start)
+                    start = nodeStart;
+                if (nodeEnd > end)
+                    end = nodeEnd;
+            }
+
+            return _snapshot = new FrameSnapshot(
+                ordinal,
+                start,
+                end,
+                [.. SectionIds],
+                [.. ParentIds],
+                [.. NodeIds],
+                [.. ParentNodeIds],
+                [.. StartTicks],
+                [.. ElapsedTicks],
+                [.. AllocBytes],
+                // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
+                HasThreadIds ? [.. ThreadIds] : []);
+        }
     }
 }

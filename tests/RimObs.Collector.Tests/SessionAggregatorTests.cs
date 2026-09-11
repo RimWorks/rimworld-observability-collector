@@ -69,7 +69,6 @@ public sealed class SessionAggregatorTests {
             ParentNodeIds = [-1],
             AllocBytes = [512L],
         });
-        agg.Frames.GoQuiet();
 
         agg.Frames.FindByOrdinal(1)!.NodeAllocBytes.Should().Equal(512L);
     }
@@ -228,7 +227,6 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [500L, 400L],
             FrameOrdinals = [5000, 5001],
         });
-        aggregator.Frames.GoQuiet();
         aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(5001);
 
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
@@ -239,7 +237,6 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [50L, 40L],
             FrameOrdinals = [1, 2],
         });
-        aggregator.Frames.GoQuiet();
 
         aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
         aggregator.Frames.LateSamples.Should().Be(0);
@@ -258,7 +255,6 @@ public sealed class SessionAggregatorTests {
         });
 
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
-        aggregator.Frames.GoQuiet();
 
         aggregator.Frames.Count.Should().Be(2);
         aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(2);
@@ -274,7 +270,6 @@ public sealed class SessionAggregatorTests {
             ElapsedTicks = [500L, 200L, 400L],
             FrameOrdinals = [1, 1, 2],
         });
-        aggregator.Frames.GoQuiet();
 
         FrameSnapshot? frame = aggregator.Frames.FindByOrdinal(1);
 

@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using RimWorks.RimObs.Collector.Aggregation;
 using FluentAssertions;
@@ -8,52 +7,80 @@ namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class FrameRingTests {
     private static FrameRing RingWithWindow(int capacity, int window) =>
-        new FrameRing(capacity) { OpenFrameWindow = window }.StayLive();
+        new(capacity) { OpenFrameWindow = window };
 
-    // a read seals whatever the stream has gone quiet on, so the newest frame lands in the ring
-    // without the next batch and without anyone calling Flush.
+    // lane 7 drains a full interval behind lane 1, so its ordinals land below frames a read
+    // already served. they must slot in ascending, not append behind higher ordinals.
     [Fact]
-    public void The_newest_frame_seals_on_a_read_once_the_stream_goes_quiet() {
-        FrameRing ring = new FrameRing(8).StayLive();
+    public void A_lane_draining_behind_a_read_keeps_the_frames_ascending() {
+        FrameRing ring = new(8);
+        foreach (int ordinal in new[] { 2, 4, 6 })
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
+        ring.Latest();
+
+        ring.Add(3, 20, -1, 30, -1, 3100L, 200L, 0L, 7);
+        ring.Add(5, 20, -1, 50, -1, 5100L, 200L, 0L, 7);
+
+        ring.LateSamples.Should().Be(0);
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4, 5, 6);
+        ring.FindByOrdinal(5).Should().NotBeNull();
+        ring.Range(3, 10).Select(f => f.CaptureOrdinal).Should().Equal(3, 4, 5, 6);
+        ring.Latest()!.CaptureOrdinal.Should().Be(6);
+    }
+
+    // the sender drains every 100ms, so the stream never goes quiet during play. reads still
+    // have to serve the newest reported frame, not newest minus the open window.
+    [Fact]
+    public void Reads_serve_the_newest_frame_while_the_stream_is_live() {
+        FrameRing ring = new(64);
+        for (int ordinal = 1; ordinal <= 5; ordinal++) {
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
+            ring.Latest()!.CaptureOrdinal.Should().Be(ordinal);
+        }
+
+        ring.Add(1, 20, -1, 99, -1, 1100L, 200L, 0L, 7);
+
+        ring.LateSamples.Should().Be(0);
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void The_newest_frame_is_readable_the_moment_it_is_reported() {
+        FrameRing ring = new(8);
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
-
-        ring.Latest().Should().BeNull();
-
-        ring.GoQuiet();
 
         ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.Count.Should().Be(1);
     }
 
-    // a lane that reports a drain interval late still has to land, so a fresh frame stays open.
+    // a lane that reports a drain interval late still has to land, so a frame a read already
+    // served keeps taking samples and the next read sees the corrected frame.
     [Fact]
-    public void A_frame_still_being_reported_stays_open_on_a_read() {
-        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        FrameRing ring = new(8) { NowUtc = () => clock };
+    public void A_frame_already_served_is_corrected_on_the_next_read() {
+        FrameRing ring = new(8);
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
-        ring.Snapshot().Should().BeEmpty();
-        ring.Latest().Should().BeNull();
-        ring.Count.Should().Be(0);
-    }
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(1, 2);
 
-    // a 500ms hitch frame reports its cheap sections first and the expensive one last. the
-    // stream is still live the whole time, so the hitch frame must not seal without it.
-    [Fact]
-    public void A_hitch_frame_stays_open_while_other_frames_keep_arriving() {
-        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        FrameRing ring = new(8) { NowUtc = () => clock };
-        ring.Add(1, 10, -1, 100, -1, 100L, 500L);
-
-        clock = clock.AddMilliseconds(250);
-        ring.Add(2, 10, -1, 200, -1, 700L, 400L);
-        ring.Latest().Should().BeNull();
-
-        clock = clock.AddMilliseconds(250);
         ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
 
         ring.LateSamples.Should().Be(0);
-        ring.GoQuiet();
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
+    // a 500ms hitch frame reports its cheap sections first and the expensive one last. reads
+    // in between serve the partial frame, and the hitch node still lands when it drains.
+    [Fact]
+    public void A_hitch_frame_stays_open_while_other_frames_keep_arriving() {
+        FrameRing ring = new(8);
+        ring.Add(1, 10, -1, 100, -1, 100L, 500L);
+        ring.Add(2, 10, -1, 200, -1, 700L, 400L);
+        ring.Latest()!.CaptureOrdinal.Should().Be(2);
+
+        ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
+
+        ring.LateSamples.Should().Be(0);
         ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
     }
 
@@ -61,14 +88,12 @@ public sealed class FrameRingTests {
     // dashboard polls. the read must not commit the frame out from under the expensive node.
     [Fact]
     public void A_frame_read_during_a_stall_still_takes_the_node_that_caused_it() {
-        FrameRing ring = new FrameRing(8).StayLive();
+        FrameRing ring = new(8);
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
 
-        ring.GoQuiet();
         ring.FindByOrdinal(1)!.NodeCount.Should().Be(1);
 
         ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
-        ring.GoQuiet();
 
         ring.LateSamples.Should().Be(0);
         ring.Count.Should().Be(1);
@@ -80,11 +105,9 @@ public sealed class FrameRingTests {
     // whatever was sealed a window ago.
     [Fact]
     public void A_paused_stream_serves_every_frame_it_had_open() {
-        FrameRing ring = new FrameRing(64).StayLive();
+        FrameRing ring = new(64);
         for (int ordinal = 1; ordinal <= 5; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
-
-        ring.GoQuiet();
 
         ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3, 4, 5);
         ring.ComputeStats().NewestOrdinal.Should().Be(5);
@@ -109,7 +132,7 @@ public sealed class FrameRingTests {
     // already reported. every frame has to keep both lanes' nodes.
     [Fact]
     public void Frames_keep_the_nodes_of_every_lane_that_reports_them() {
-        FrameRing ring = new FrameRing(8).StayLive();
+        FrameRing ring = new(8);
         for (int ordinal = 1; ordinal <= 3; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
         for (int ordinal = 1; ordinal <= 3; ordinal++)
@@ -138,22 +161,18 @@ public sealed class FrameRingTests {
         ring.FindByOrdinal(5)!.ThreadIds.Should().Equal(1, 7);
     }
 
-    // the window is the only rule while samples keep arriving, so a wide window really is wide.
-    // the dashboard polls every 16ms, and a read used to seal any frame untouched for 200ms.
+    // the window is the only rule while samples keep arriving, so a wide window really is
+    // wide: 39 newer frames and 39 reads later, lane 7's drain for frame 1 still lands.
     [Fact]
-    public void A_wide_window_holds_a_frame_open_past_the_quiet_deadline() {
-        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    public void A_wide_window_holds_a_frame_open_across_many_reads() {
         FrameRing ring = RingWithWindow(64, 64);
-        ring.NowUtc = () => clock;
         ring.Add(1, 10, -1, 100, -1, 100L, 500L, 0L, 1);
 
         for (int ordinal = 2; ordinal <= 40; ordinal++) {
-            clock = clock.AddMilliseconds(16);
             ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
-            ring.Latest();
+            ring.Latest()!.CaptureOrdinal.Should().Be(ordinal);
         }
 
-        clock = clock.AddMilliseconds(16);
         ring.Add(1, 20, -1, 999, -1, 150L, 200L, 0L, 7);
 
         ring.LateSamples.Should().Be(0);
@@ -166,14 +185,12 @@ public sealed class FrameRingTests {
         FrameRing ring = RingWithWindow(8, 1);
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(1, 20, 10, 101, 100, 150L, 200L);
-
-        ring.Latest().Should().BeNull();
-
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
-        FrameSnapshot? sealedFrame = ring.Latest();
-        sealedFrame.Should().NotBeNull();
-        sealedFrame!.CaptureOrdinal.Should().Be(1);
+        ring.Add(1, 30, -1, 102, -1, 300L, 100L);
+
+        ring.LateSamples.Should().Be(1);
+        FrameSnapshot sealedFrame = ring.FindByOrdinal(1)!;
         sealedFrame.NodeCount.Should().Be(2);
         sealedFrame.SectionIds.Should().Equal(10, 20);
         sealedFrame.ParentIds.Should().Equal(-1, 10);
@@ -187,7 +204,7 @@ public sealed class FrameRingTests {
 
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
-        FrameSnapshot sealedFrame = ring.Latest()!;
+        FrameSnapshot sealedFrame = ring.FindByOrdinal(1)!;
         sealedFrame.NodeIds.Should().Equal(100, 101);
         sealedFrame.ParentNodeIds.Should().Equal(-1, 100);
     }
@@ -200,8 +217,7 @@ public sealed class FrameRingTests {
         ring.Add(2, 30, -1, 200, -1, 700L, 400L);
         ring.Add(3, 10, -1, 300, -1, 900L, 100L);
 
-        FrameSnapshot secondFrame = ring.Latest()!;
-        secondFrame.CaptureOrdinal.Should().Be(2);
+        FrameSnapshot secondFrame = ring.FindByOrdinal(2)!;
         secondFrame.NodeIds.Should().Equal(200);
         secondFrame.ParentNodeIds.Should().Equal(-1);
     }
@@ -213,7 +229,7 @@ public sealed class FrameRingTests {
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
-        FrameSnapshot frame = ring.Latest()!;
+        FrameSnapshot frame = ring.FindByOrdinal(1)!;
 
         frame.StartTicks.Should().Be(100L);
         frame.EndTicks.Should().Be(600L);
@@ -228,8 +244,8 @@ public sealed class FrameRingTests {
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
         ring.PreFrameSamples.Should().Be(1);
-        ring.Latest()!.CaptureOrdinal.Should().Be(1);
-        ring.Latest()!.NodeCount.Should().Be(1);
+        ring.Latest()!.CaptureOrdinal.Should().Be(2);
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(1);
     }
 
     [Fact]
@@ -241,7 +257,8 @@ public sealed class FrameRingTests {
         ring.Add(1, 99, -1, 300, -1, 10L, 10L);
 
         ring.LateSamples.Should().Be(1);
-        ring.Count.Should().Be(1);
+        ring.Count.Should().Be(2);
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(2, 3);
     }
 
     [Fact]
@@ -250,18 +267,18 @@ public sealed class FrameRingTests {
         for (int ordinal = 1; ordinal <= 4; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 100L);
 
-        ring.Count.Should().Be(2);
-        ring.Latest()!.CaptureOrdinal.Should().Be(3);
+        ring.Latest()!.CaptureOrdinal.Should().Be(4);
 
         FrameRingStats stats = ring.ComputeStats();
 
-        stats.FrameCount.Should().Be(2);
+        // frames 2 and 3 are what the ring kept; 4 is still open and previews on top.
+        stats.FrameCount.Should().Be(3);
         stats.OldestOrdinal.Should().Be(2);
-        stats.NewestOrdinal.Should().Be(3);
+        stats.NewestOrdinal.Should().Be(4);
     }
 
     // the bundle exporter snapshots the ring once and must price that snapshot, not the ring,
-    // which keeps sealing frames while the zip is being written.
+    // which keeps taking frames while the zip is being written.
     [Fact]
     public void StatsFor_describes_the_array_it_is_given_not_the_live_ring() {
         FrameRing ring = RingWithWindow(8, 1);
@@ -275,8 +292,8 @@ public sealed class FrameRingTests {
         FrameRingStats fromSnapshot = FrameRing.StatsFor(snapshot);
 
         fromSnapshot.FrameCount.Should().Be(snapshot.Length);
-        fromSnapshot.NewestOrdinal.Should().Be(3);
-        ring.ComputeStats().NewestOrdinal.Should().Be(9);
+        fromSnapshot.NewestOrdinal.Should().Be(4);
+        ring.ComputeStats().NewestOrdinal.Should().Be(10);
     }
 
     [Fact]
@@ -326,8 +343,8 @@ public sealed class FrameRingTests {
 
         (int Ordinal, long DurationTicks)[] strip = ring.SnapshotStrip(3);
 
-        strip.Select(e => e.Ordinal).Should().Equal(3, 4, 5);
-        strip[0].DurationTicks.Should().Be(30);
+        strip.Select(e => e.Ordinal).Should().Equal(4, 5, 6);
+        strip[0].DurationTicks.Should().Be(40);
     }
 
     [Fact]
@@ -336,19 +353,18 @@ public sealed class FrameRingTests {
         ring.Add(1, 10, -1, 100, -1, 1000L, 50L);
         ring.Add(2, 10, -1, 200, -1, 2000L, 50L);
 
-        ring.SnapshotStrip(100).Should().HaveCount(1);
-        ring.SnapshotStrip(0).Should().HaveCount(1);
+        ring.SnapshotStrip(100).Should().HaveCount(2);
+        ring.SnapshotStrip(0).Should().HaveCount(2);
         RingWithWindow(8, 1).SnapshotStrip(10).Should().BeEmpty();
     }
 
     [Fact]
     public void BaselineMedians_takes_the_median_of_each_sections_per_frame_total() {
         FrameRing ring = RingWithWindow(16, 1);
-        // section 10 costs 100, 200 then 300 ticks across three sealed frames.
+        // section 10 costs 100, 200 then 300 ticks across three frames.
         long[] costs = [100, 200, 300];
         for (int f = 0; f < 3; f++)
             ring.Add(f + 1, 10, -1, f + 1, -1, f * 1000L, costs[f]);
-        ring.Add(99, 10, -1, 99, -1, 99000L, 1L);
 
         ring.BaselineMedians(128)[10].Should().Be(200);
     }
@@ -359,8 +375,9 @@ public sealed class FrameRingTests {
         FrameRing ring = RingWithWindow(16, 1);
         ring.Add(1, 10, -1, 1, -1, 0L, 50L);
         ring.Add(1, 10, -1, 2, -1, 100L, 70L);
-        ring.Add(2, 10, -1, 3, -1, 1000L, 500L);
+        ring.Add(2, 10, -1, 3, -1, 1000L, 90L);
 
+        // frame totals are 120 and 90; unsummed repeats would put 50 or 70 in the pot.
         ring.BaselineMedians(128)[10].Should().Be(120);
     }
 
@@ -369,7 +386,6 @@ public sealed class FrameRingTests {
         FrameRing ring = RingWithWindow(16, 1);
         for (int f = 1; f <= 5; f++)
             ring.Add(f, 10, -1, f, -1, f * 1000L, f * 100L);
-        ring.Add(99, 10, -1, 99, -1, 99000L, 1L);
 
         // frames 3, 4 and 5 cost 300, 400 and 500, so the window median is 400.
         ring.BaselineMedians(3)[10].Should().Be(400);
@@ -388,7 +404,7 @@ public sealed class FrameRingTests {
         ring.Add(6, 10, -1, 200, -1, 700L, 400L);
         ring.Add(1, 99, -1, 300, -1, 10L, 10L);
 
-        ring.Count.Should().Be(1);
+        ring.Count.Should().Be(2);
         ring.PreFrameSamples.Should().Be(1);
         ring.LateSamples.Should().Be(1);
 
@@ -403,7 +419,7 @@ public sealed class FrameRingTests {
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
 
-        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.Latest()!.CaptureOrdinal.Should().Be(2);
         ring.LateSamples.Should().Be(0);
     }
 
@@ -413,7 +429,6 @@ public sealed class FrameRingTests {
         long[] durations = [100L, 900L, 200L, 300L];
         for (int i = 0; i < durations.Length; i++)
             ring.Add(i + 1, 10, -1, i * 100, -1, i * 10_000L, durations[i]);
-        ring.Add(durations.Length + 1, 10, -1, 400, -1, 90_000L, 50L);
 
         FrameRingStats stats = ring.ComputeStats();
 
@@ -438,16 +453,14 @@ public sealed class FrameRingTests {
     }
 
     [Fact]
-    public void Snapshot_returns_every_sealed_frame_oldest_first() {
+    public void Snapshot_returns_every_frame_oldest_first() {
         FrameRing ring = RingWithWindow(4, 1);
         for (int ordinal = 1; ordinal <= 3; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
 
         FrameSnapshot[] frames = ring.Snapshot();
 
-        frames.Should().HaveCount(2);
-        frames[0].CaptureOrdinal.Should().Be(1);
-        frames[1].CaptureOrdinal.Should().Be(2);
+        frames.Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3);
     }
 
     [Fact]
@@ -458,9 +471,7 @@ public sealed class FrameRingTests {
 
         FrameSnapshot[] frames = ring.Snapshot();
 
-        frames.Should().HaveCount(2);
-        frames[0].CaptureOrdinal.Should().Be(3);
-        frames[1].CaptureOrdinal.Should().Be(4);
+        frames.Select(f => f.CaptureOrdinal).Should().Equal(3, 4, 5);
     }
 
     [Fact]
@@ -471,24 +482,21 @@ public sealed class FrameRingTests {
 
         FrameSnapshot[] frames = ring.Snapshot();
 
-        frames.Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4);
+        frames.Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4, 5);
     }
 
     [Fact]
-    public void Snapshot_is_empty_before_the_first_frame_seals() {
-        DateTime clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        FrameRing ring = new(4) { OpenFrameWindow = 1, NowUtc = () => clock };
+    public void Snapshot_serves_the_open_frame_before_it_seals() {
+        FrameRing ring = RingWithWindow(4, 1);
         ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
 
-        ring.Snapshot().Should().BeEmpty();
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(1);
     }
 
     private static FrameRing RingOfOrdinals(int capacity, params int[] ordinals) {
         FrameRing ring = RingWithWindow(capacity, 1);
         foreach (int ordinal in ordinals)
             ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
-        // the last frame stays open until a higher ordinal lands, so close it out.
-        ring.Add(int.MaxValue, 10, -1, 0, -1, long.MaxValue / 2, 1L);
         return ring;
     }
 
@@ -510,7 +518,7 @@ public sealed class FrameRingTests {
     public void Range_clips_to_the_oldest_frame_still_held_when_from_was_evicted() {
         FrameRing ring = RingOfOrdinals(3, 1, 2, 3, 4, 5);
 
-        ring.Range(1, 10).Select(f => f.CaptureOrdinal).Should().Equal(3, 4, 5);
+        ring.Range(1, 10).Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4, 5);
     }
 
     [Fact]
@@ -542,7 +550,7 @@ public sealed class FrameRingTests {
         ring.Resize(16);
 
         ring.Capacity.Should().Be(16);
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3, 4);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3, 4, 5);
     }
 
     [Fact]
@@ -554,8 +562,7 @@ public sealed class FrameRingTests {
         ring.Resize(2);
 
         ring.Capacity.Should().Be(2);
-        ring.Count.Should().Be(2);
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(4, 5);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(4, 5, 6);
     }
 
     [Fact]
@@ -566,7 +573,7 @@ public sealed class FrameRingTests {
 
         ring.Resize(4);
 
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3);
     }
 
     // a resized ring still has to wrap correctly, or the strip reorders after the next writes.
@@ -580,7 +587,7 @@ public sealed class FrameRingTests {
         for (int ordinal = 7; ordinal <= 9; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
 
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(6, 7, 8);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(6, 7, 8, 9);
     }
 
     [Fact]
@@ -589,7 +596,7 @@ public sealed class FrameRingTests {
         for (int ordinal = 1; ordinal <= 900; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
 
-        ring.SnapshotStrip(0).Should().HaveCount(899);
+        ring.SnapshotStrip(0).Should().HaveCount(900);
     }
 
     // clearing is a user action that throws away history, so it has to actually empty the ring
@@ -618,6 +625,6 @@ public sealed class FrameRingTests {
         for (int ordinal = 7; ordinal <= 9; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
 
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(7, 8);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(7, 8, 9);
     }
 }
