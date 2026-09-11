@@ -246,6 +246,11 @@ export interface InstrumentationSearchResponse {
     results: MethodDescriptor[];
 }
 
+export interface InstrumentationAssembliesResponse {
+    schema_version: number;
+    assemblies: string[];
+}
+
 export interface InstrumentationPatchEntry {
     id: number;
     typeFullName: string;
@@ -508,9 +513,11 @@ export const api = {
         if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
     },
     frameAt: (ordinal: number) => get<FrameResponse>(`/api/v1/frames/${ordinal}`),
-    frameRange: (from?: number, count = MAX_WINDOW_FRAMES) =>
+    frameRange: (from?: number, count = MAX_WINDOW_FRAMES, minDurUs = 0) =>
         get<FrameRangeResponse>(
-            `/api/v1/frames?count=${count}${from === undefined ? '' : `&from=${from}`}`,
+            `/api/v1/frames?count=${count}${from === undefined ? '' : `&from=${from}`}${
+                minDurUs > 0 ? `&min_dur_us=${minDurUs}` : ''
+            }`,
         ),
     frameBaseline: (frames = 128) =>
         get<{ median_us: Record<string, number> }>(`/api/v1/frames/baseline?frames=${frames}`),
@@ -570,6 +577,8 @@ export const api = {
     instrumentationPatches: () =>
         get<InstrumentationPatchesResponse>('/api/v1/instrumentation/patches'),
     instrumentationAuto: () => get<InstrumentationAutoResponse>('/api/v1/instrumentation/auto'),
+    instrumentationAssemblies: () =>
+        get<InstrumentationAssembliesResponse>('/api/v1/instrumentation/assemblies'),
     instrumentationAutoPreview: async (
         filters: string,
         ignore: string,

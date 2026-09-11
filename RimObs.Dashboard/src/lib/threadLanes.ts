@@ -127,3 +127,32 @@ export function laneRow(bands: LaneBands | undefined, node: TreeNode): number {
     const offset = bands.offsets.get(node.laneId ?? UNKNOWN_LANE);
     return offset === undefined ? -1 : offset + node.depth;
 }
+
+export interface WindowLaneStats {
+    calls: number;
+    busyNs: number;
+}
+
+/**
+ * Per-lane calls and root busy time over the newest `recentFrames` entries: the same window
+ * that decides which lanes draw, so a visible lane never reads as idle.
+ */
+export function windowLaneStats(
+    entries: { nodeStart: number; nodeEnd: number }[],
+    nodes: TreeNode[],
+    recentFrames: number,
+    mainLaneId: number,
+): Map<number, WindowLaneStats> {
+    const stats = new Map<number, WindowLaneStats>();
+    for (let e = Math.max(0, entries.length - recentFrames); e < entries.length; e++) {
+        for (let i = entries[e].nodeStart; i < entries[e].nodeEnd; i++) {
+            const node = nodes[i];
+            const lane = node.laneId ?? mainLaneId;
+            let s = stats.get(lane);
+            if (!s) stats.set(lane, (s = { calls: 0, busyNs: 0 }));
+            s.calls++;
+            if (node.parentIndex < 0) s.busyNs += (node.endUs - node.startUs) * 1000;
+        }
+    }
+    return stats;
+}

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
+using RimWorks.RimObs.Collector.Config;
 
 namespace RimWorks.RimObs.Collector.Tests;
 
@@ -770,7 +771,7 @@ public sealed class EndToEndSmokeTests {
             JsonElement auto = root.GetProperty("auto_instrument");
             auto.GetProperty("enabled").GetBoolean().Should().BeFalse();
             auto.GetProperty("filters").GetString().Should().BeEmpty();
-            auto.GetProperty("ignore").GetString().Should().BeEmpty();
+            auto.GetProperty("ignore").GetString().Should().Be(AutoInstrumentOptions.DefaultIgnore);
             auto.GetProperty("mute_trivial").GetBoolean().Should().BeTrue();
         }
         finally {

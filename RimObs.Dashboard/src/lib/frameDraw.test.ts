@@ -207,6 +207,35 @@ describe('capture gap bands', () => {
     });
 });
 
+// a frame boundary needs a visible cut: contiguous frames used to run together into one
+// unbroken flame, and nothing said where one frame ended and the next began.
+describe('frame edge rules', () => {
+    const edges = (calls: Call[]) =>
+        calls.filter((c) => c.op === 'fillRect' && c.args[2] === 2 && c.args[3] === 400);
+
+    it('draws a full-height rule at each edge inside the view', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ frameEdgesUs: [250, 500] }));
+        expect(edges(calls).map((c) => c.args)).toEqual([
+            [249, 0, 2, 400],
+            [499, 0, 2, 400],
+        ]);
+    });
+
+    it('skips edges outside the view', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ frameEdgesUs: [-50, 1500] }));
+        expect(edges(calls)).toHaveLength(0);
+    });
+
+    it('paints the rule over the quads so the cut stays visible', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [quad()], opts({ frameEdgesUs: [250] }));
+        const rects = calls.filter((c) => c.op === 'fillRect');
+        expect(rects.at(-1)!.args).toEqual([249, 0, 2, 400]);
+    });
+});
+
 describe('drawTimeline', () => {
     it('clears before it paints', () => {
         const { ctx, calls } = recorder();

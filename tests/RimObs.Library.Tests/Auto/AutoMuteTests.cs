@@ -93,4 +93,100 @@ public sealed class AutoMuteTests : IDisposable {
         for (int i = 0; i < times; i++)
             AutoMute.Observe(sectionId, selfTicks);
     }
+
+    private static long TicksPerUs => System.Diagnostics.Stopwatch.Frequency / 1_000_000L;
+
+    // "instrument everything under a budget": the judge mutes the cheapest chatty sections
+    // until the projected per-frame scope tax fits, and leaves the expensive ones measuring.
+    [Fact]
+    public void Budget_judge_mutes_the_cheapest_chatter_until_the_frame_budget_fits() {
+        AutoMute.BudgetUsPerFrame = 1;
+        AutoMute.Watch(_cheap.Id);
+        AutoMute.Watch(_costly.Id);
+        // 75ns per call: 20k cheap calls project ~15us/frame over 100 frames; way over 1us.
+        Observe(_cheap.Id, 1, 20_000);
+        Observe(_costly.Id, TicksPerUs * 500, 10);
+
+        AutoMute.JudgeBudget(framesElapsed: 100);
+
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+        SectionRegistry.IsActive(_costly.Id).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Budget_judge_leaves_everything_alone_while_the_tax_fits() {
+        AutoMute.BudgetUsPerFrame = 1000;
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 1, 100);
+
+        AutoMute.JudgeBudget(framesElapsed: 100);
+
+        SectionRegistry.IsActive(_cheap.Id).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Budget_zero_disables_the_judge() {
+        AutoMute.BudgetUsPerFrame = 0;
+        AutoMute.Watch(_costly.Id);
+        // heavy enough that the one-shot keeps it; only the budget judge could mute it.
+        Observe(_costly.Id, TicksPerUs * 500, 50_000);
+
+        AutoMute.JudgeBudget(framesElapsed: 1);
+
+        SectionRegistry.IsActive(_costly.Id).Should().BeTrue();
+    }
+
+    // the 30s config poll used to call ApplyDisabledSet and flip every judge-muted section
+    // back on, so cheap leaves kept sampling forever.
+    [Fact]
+    public void A_config_poll_does_not_unmute_a_budget_muted_section() {
+        AutoMute.BudgetUsPerFrame = 1;
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 1, 20_000);
+        AutoMute.JudgeBudget(framesElapsed: 100);
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+
+        SectionRegistry.ApplyDisabledSet([]);
+
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_config_poll_does_not_unmute_a_one_shot_muted_section() {
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 0, AutoMute.SampleCount);
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+
+        SectionRegistry.ApplyDisabledSet([]);
+
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+    }
+
+    [Fact]
+    public void An_explicit_re_enable_clears_the_auto_mute() {
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 0, AutoMute.SampleCount);
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+
+        SectionRegistry.SetActive(_cheap.Id, true);
+        SectionRegistry.ApplyDisabledSet([]);
+
+        SectionRegistry.IsActive(_cheap.Id).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Budget_judge_starts_a_fresh_window_each_pass() {
+        AutoMute.BudgetUsPerFrame = 1;
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 1, 20_000);
+        AutoMute.JudgeBudget(framesElapsed: 100);
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse();
+
+        AutoMute.Watch(_costly.Id);
+        Observe(_costly.Id, TicksPerUs * 500, 4);
+
+        // the old window's 20k calls must not count against the new pass.
+        AutoMute.JudgeBudget(framesElapsed: 100);
+        SectionRegistry.IsActive(_costly.Id).Should().BeTrue();
+    }
 }

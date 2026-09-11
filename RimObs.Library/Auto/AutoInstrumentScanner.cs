@@ -13,6 +13,27 @@ namespace RimWorks.RimObs.Auto;
 internal static class AutoInstrumentScanner {
     public const int DefaultMaxTargets = 8192;
 
+    // the instrumentation stack itself: a scope inside these re-enters the profiler.
+    // our own assemblies are exact names so the test assemblies can still scan fixtures.
+    private static readonly string[] s_BlockedAssemblyPrefixes = [
+        "Harmony", "0Harmony", "Concord", "MonoMod",
+    ];
+
+    private static readonly string[] s_BlockedAssemblyNames = ["RimObs", "RimObs.Wire"];
+
+    /// <summary>True for the patcher's and profiler's own assemblies, which never instrument.</summary>
+    public static bool IsBlockedAssembly(string assemblyName) {
+        for (int i = 0; i < s_BlockedAssemblyPrefixes.Length; i++) {
+            if (assemblyName.StartsWith(s_BlockedAssemblyPrefixes[i], StringComparison.Ordinal))
+                return true;
+        }
+        for (int i = 0; i < s_BlockedAssemblyNames.Length; i++) {
+            if (assemblyName.Equals(s_BlockedAssemblyNames[i], StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
     private const BindingFlags MethodFlags =
         BindingFlags.Public | BindingFlags.NonPublic |
         BindingFlags.Instance | BindingFlags.Static |
@@ -30,6 +51,8 @@ internal static class AutoInstrumentScanner {
 
         foreach (Assembly assembly in assemblies) {
             string name = assembly.GetName().Name ?? string.Empty;
+            if (IsBlockedAssembly(name))
+                continue;
             if (!MethodPattern.AnyAssembly(includes, name))
                 continue;
             ScanAssembly(assembly, name, includes, excludes, plan, maxTargets);

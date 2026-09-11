@@ -18,6 +18,11 @@ internal sealed class WireBufferWriter {
         _written = 0;
     }
 
+    /// <summary>Rewinds for reuse; the backing buffer and its grown capacity stay.</summary>
+    public void Reset() {
+        _written = 0;
+    }
+
     public byte[] ToArray() {
         byte[] result = new byte[_written];
         Array.Copy(_buffer, 0, result, 0, _written);

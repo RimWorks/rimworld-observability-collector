@@ -33,26 +33,28 @@ public static class Profiler {
 
     private static int s_NextThreadBlock;
 
-    [ThreadStatic]
-    private static int[]? s_Stack;
+    // one [ThreadStatic] read per Start/Stop instead of seven; mono pays ~1.6 ns per read.
+    private sealed class ThreadState {
+        public readonly int[] Sections = new int[MaxStackDepth];
+        public readonly int[] Nodes = new int[MaxStackDepth];
+        public readonly long[] Allocs = new long[MaxStackDepth];
+        public readonly long[] ChildTicks = new long[MaxStackDepth];
+        public int Depth;
+        public int ThreadBlock;
+        public int NextNodeId;
+    }
 
     [ThreadStatic]
-    private static int s_Depth;
+    private static ThreadState? t_State;
 
-    [ThreadStatic]
-    private static int[]? s_NodeStack;
-
-    [ThreadStatic]
-    private static int s_ThreadBlock;
-
-    [ThreadStatic]
-    private static int s_NextNodeId;
-
-    [ThreadStatic]
-    private static long[]? s_AllocStack;
-
-    [ThreadStatic]
-    private static long[]? s_ChildTicks;
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ThreadState InitThreadState() {
+        ThreadState state = new() {
+            ThreadBlock = (Interlocked.Increment(ref s_NextThreadBlock) & 0xFF) << 24,
+        };
+        t_State = state;
+        return state;
+    }
 
     internal static void SetSink(ISampleSink? sink) => Sink = sink;
 
@@ -73,29 +75,23 @@ public static class Profiler {
         if (!SectionRegistry.s_Active[sectionId])
             return DisabledToken;
 
+        ThreadState state = t_State ?? InitThreadState();
+
         // not pushing is what keeps the pair balanced: Stop sees DisabledToken and pops nothing.
-        int depth = s_Depth;
+        int depth = state.Depth;
         if (depth >= s_MaxDepth)
             return DisabledToken;
 
-        int[] stack = s_Stack ??= new int[MaxStackDepth];
-        if (depth < MaxStackDepth)
-            stack[depth] = sectionId;
-        s_Depth = depth + 1;
-
-        int[]? nodes = s_NodeStack;
-        if (nodes == null) {
-            nodes = s_NodeStack = new int[MaxStackDepth];
-            s_ThreadBlock = (Interlocked.Increment(ref s_NextThreadBlock) & 0xFF) << 24;
-        }
-        long[] allocs = s_AllocStack ??= new long[MaxStackDepth];
         if (depth < MaxStackDepth) {
-            s_NextNodeId = (s_NextNodeId + 1) & NodeIdCounterMask;
-            nodes[depth] = s_ThreadBlock | s_NextNodeId;
-            allocs[depth] = AllocationHook.t_Bytes;
+            state.Sections[depth] = sectionId;
+            int nodeId = (state.NextNodeId + 1) & NodeIdCounterMask;
+            state.NextNodeId = nodeId;
+            state.Nodes[depth] = state.ThreadBlock | nodeId;
+            state.Allocs[depth] = AllocationHook.t_Bytes;
         }
+        state.Depth = depth + 1;
 
-        return Stopwatch.GetTimestamp();
+        return SpinClock.Timestamp();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -103,34 +99,32 @@ public static class Profiler {
         if (token == DisabledToken)
             return;
 
-        long elapsed = Stopwatch.GetTimestamp() - token;
+        // a scope can straddle the spin clock turning on or off; the domains skew by spin lag.
+        long elapsed = SpinClock.Timestamp() - token;
+        if (elapsed < 0)
+            elapsed = 0;
 
-        int depth = s_Depth;
+        ThreadState? state = t_State;
+        int depth = 0;
         int parentId = NoParent;
         int nodeId = NoParent;
         int parentNodeId = NoParent;
         long allocBytes = 0L;
-        if (depth > 0) {
-            depth--;
-            s_Depth = depth;
-            int[]? stack = s_Stack;
-            if (stack != null && depth > 0 && depth - 1 < MaxStackDepth)
-                parentId = stack[depth - 1];
-
-            int[]? nodes = s_NodeStack;
-            if (nodes != null && depth < MaxStackDepth) {
-                nodeId = nodes[depth];
-                if (depth > 0)
-                    parentNodeId = nodes[depth - 1];
+        if (state != null && state.Depth > 0) {
+            depth = state.Depth - 1;
+            state.Depth = depth;
+            if (depth < MaxStackDepth) {
+                nodeId = state.Nodes[depth];
+                allocBytes = AllocationHook.t_Bytes - state.Allocs[depth];
+                if (depth > 0) {
+                    parentId = state.Sections[depth - 1];
+                    parentNodeId = state.Nodes[depth - 1];
+                }
             }
-
-            long[]? allocs = s_AllocStack;
-            if (allocs != null && depth < MaxStackDepth)
-                allocBytes = AllocationHook.t_Bytes - allocs[depth];
         }
 
-        if (AutoMute.Armed)
-            FoldSelfTime(sectionId, depth, elapsed);
+        if (AutoMute.Armed && state != null)
+            FoldSelfTime(state, sectionId, depth, elapsed);
 
         ISampleSink? sink = Sink;
         if (sink != null)
@@ -140,8 +134,8 @@ public static class Profiler {
     // self time needs the children's total, which only auto-mute wants. arming is one-way, so
     // the accumulators can never be read stale.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void FoldSelfTime(int sectionId, int depth, long elapsed) {
-        long[] child = s_ChildTicks ??= new long[MaxStackDepth];
+    private static void FoldSelfTime(ThreadState state, int sectionId, int depth, long elapsed) {
+        long[] child = state.ChildTicks;
         if ((uint)depth >= (uint)MaxStackDepth)
             return;
 

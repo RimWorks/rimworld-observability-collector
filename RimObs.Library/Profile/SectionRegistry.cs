@@ -11,6 +11,8 @@ internal static class SectionRegistry {
     internal static readonly string[] s_Names = new string[MaxSections];
     internal static readonly bool[] s_Active = new bool[MaxSections];
     internal static readonly string?[] s_Subsystems = new string?[MaxSections];
+    // set by AutoMute, honored by ApplyDisabledSet so the config poll cannot unmute.
+    private static readonly bool[] s_AutoMuted = new bool[MaxSections];
 
     private static readonly Dictionary<string, int> s_Lookup = new(StringComparer.Ordinal);
     private static readonly object s_Lock = new();
@@ -59,8 +61,20 @@ internal static class SectionRegistry {
         (uint)id < (uint)s_Count ? s_Subsystems[id] : null;
 
     public static void SetActive(int id, bool active) {
-        if ((uint)id < (uint)s_Count)
+        if ((uint)id < (uint)s_Count) {
             s_Active[id] = active;
+            if (active)
+                s_AutoMuted[id] = false;
+        }
+    }
+
+    public static bool IsAutoMuted(int id) => (uint)id < (uint)s_Count && s_AutoMuted[id];
+
+    public static void MuteAuto(int id) {
+        if ((uint)id < (uint)s_Count) {
+            s_AutoMuted[id] = true;
+            s_Active[id] = false;
+        }
     }
 
     public static void ApplyDisabledSet(HashSet<string> disabled) {
@@ -69,7 +83,7 @@ internal static class SectionRegistry {
 
         lock (s_Lock) {
             for (int id = 0; id < s_Count; id++)
-                s_Active[id] = !disabled.Contains(s_Names[id]);
+                s_Active[id] = !s_AutoMuted[id] && !disabled.Contains(s_Names[id]);
         }
     }
 
@@ -107,6 +121,7 @@ internal static class SectionRegistry {
             Array.Clear(s_Names, 0, s_Count);
             Array.Clear(s_Active, 0, s_Count);
             Array.Clear(s_Subsystems, 0, s_Count);
+            Array.Clear(s_AutoMuted, 0, s_Count);
             s_Lookup.Clear();
             s_PendingRegistrations.Clear();
             s_Count = 0;

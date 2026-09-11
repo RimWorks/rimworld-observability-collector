@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace RimWorks.RimObs.Profile;
 
@@ -22,7 +25,10 @@ internal static class AutoMute {
 
     private static int[]? s_Calls;
     private static long[]? s_SelfTicks;
-    private static bool[]? s_Watched;
+    // auto-instrumented and so fair game for muting; survives the one-shot judgment.
+    private static bool[]? s_Auto;
+    // still awaiting the one-shot below-measurement-cost judgment.
+    private static bool[]? s_Pending;
     private static int s_Muted;
     private static int s_Judged;
     private static long s_Budget;
@@ -30,6 +36,76 @@ internal static class AutoMute {
     public static int MutedCount => s_Muted;
 
     public static int JudgedCount => s_Judged;
+
+    /// <summary>How often the budget judge runs, in frames. ~5s at 60fps.</summary>
+    public const int JudgeWindowFrames = 300;
+
+    private static long s_BudgetUsPerFrame = 1000;
+
+    /// <summary>Per-frame scope-overhead budget in microseconds. 0 disables the budget judge.</summary>
+    public static long BudgetUsPerFrame {
+        get => Interlocked.Read(ref s_BudgetUsPerFrame);
+        set => Interlocked.Exchange(ref s_BudgetUsPerFrame, value);
+    }
+
+    private static int s_LastJudgeOrdinal;
+
+    /// <summary>Runs the budget judge once per window. Called off the main thread by the sender.</summary>
+    public static void JudgeIfDue(int frameOrdinal) {
+        int last = s_LastJudgeOrdinal;
+        if (frameOrdinal - last < JudgeWindowFrames)
+            return;
+        s_LastJudgeOrdinal = frameOrdinal;
+        if (last != 0)
+            JudgeBudget(frameOrdinal - last);
+    }
+
+    /// <summary>
+    /// Mutes the cheapest chatty sections until the projected per-frame scope tax fits the
+    /// budget, then starts a fresh counting window. Expensive sections keep measuring.
+    /// </summary>
+    public static void JudgeBudget(int framesElapsed) {
+        int[]? calls = s_Calls;
+        long[]? self = s_SelfTicks;
+        bool[]? auto = s_Auto;
+        if (calls is null || self is null || auto is null)
+            return;
+        if (!Enabled || framesElapsed <= 0 || BudgetUsPerFrame <= 0) {
+            ResetWindow(calls, self);
+            return;
+        }
+
+        long perCallTicks = Math.Max(1L, Stopwatch.Frequency * ScopeOverheadNanos / 1_000_000_000L);
+        long budgetTicks = Stopwatch.Frequency * BudgetUsPerFrame * framesElapsed / 1_000_000L;
+        long totalTicks = 0;
+        List<int> candidates = new List<int>();
+        for (int id = 0; id < calls.Length; id++) {
+            if (calls[id] == 0 || !SectionRegistry.IsActive(id))
+                continue;
+            totalTicks += calls[id] * perCallTicks;
+            if (auto[id])
+                candidates.Add(id);
+        }
+
+        if (totalTicks > budgetTicks) {
+            // cheapest mean self time first: those measure the least work per unit of tax.
+            candidates.Sort((a, b) => (self[a] / calls[a]).CompareTo(self[b] / calls[b]));
+            foreach (int id in candidates) {
+                if (totalTicks <= budgetTicks)
+                    break;
+                SectionRegistry.MuteAuto(id);
+                s_Muted++;
+                totalTicks -= calls[id] * perCallTicks;
+            }
+        }
+
+        ResetWindow(calls, self);
+    }
+
+    private static void ResetWindow(int[] calls, long[] self) {
+        Array.Clear(calls, 0, calls.Length);
+        Array.Clear(self, 0, self.Length);
+    }
 
     /// <summary>Self ticks accumulated so far. The fold in Profiler.StopById is not observable otherwise.</summary>
     internal static long SelfTicksOf(int sectionId) =>
@@ -46,16 +122,18 @@ internal static class AutoMute {
 
         s_Calls = new int[SectionRegistry.MaxSections];
         s_SelfTicks = new long[SectionRegistry.MaxSections];
-        s_Watched = new bool[SectionRegistry.MaxSections];
+        s_Auto = new bool[SectionRegistry.MaxSections];
+        s_Pending = new bool[SectionRegistry.MaxSections];
         s_Budget = Stopwatch.Frequency * ScopeOverheadNanos * SampleCount / 1_000_000_000L;
         Armed = true;
     }
 
     public static void Watch(int sectionId) {
-        bool[]? watched = s_Watched;
-        if (watched is null || (uint)sectionId >= (uint)watched.Length)
+        bool[]? auto = s_Auto;
+        if (auto is null || (uint)sectionId >= (uint)auto.Length)
             return;
-        watched[sectionId] = true;
+        auto[sectionId] = true;
+        s_Pending![sectionId] = true;
         s_Calls![sectionId] = 0;
         s_SelfTicks![sectionId] = 0;
     }
@@ -63,22 +141,22 @@ internal static class AutoMute {
     /// <summary>Hot path. Counts one call and, at the sample size, judges the section once.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Observe(int sectionId, long selfTicks) {
-        bool[]? watched = s_Watched;
-        if (watched is null || (uint)sectionId >= (uint)watched.Length || !watched[sectionId])
+        bool[]? auto = s_Auto;
+        if (auto is null || (uint)sectionId >= (uint)auto.Length || !auto[sectionId])
             return;
 
         int n = ++s_Calls![sectionId];
         s_SelfTicks![sectionId] += selfTicks;
-        if (n < SampleCount)
+        if (n != SampleCount || !s_Pending![sectionId])
             return;
 
-        watched[sectionId] = false;
+        s_Pending[sectionId] = false;
         s_Judged++;
         if (!Enabled)
             return;
 
         if (s_SelfTicks[sectionId] <= s_Budget) {
-            SectionRegistry.SetActive(sectionId, false);
+            SectionRegistry.MuteAuto(sectionId);
             s_Muted++;
         }
     }
@@ -88,9 +166,12 @@ internal static class AutoMute {
         Enabled = true;
         s_Calls = null;
         s_SelfTicks = null;
-        s_Watched = null;
+        s_Auto = null;
+        s_Pending = null;
         s_Muted = 0;
         s_Judged = 0;
         s_Budget = 0;
+        s_LastJudgeOrdinal = 0;
+        s_BudgetUsPerFrame = 1000;
     }
 }

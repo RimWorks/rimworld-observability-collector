@@ -61,9 +61,6 @@ internal sealed class MethodPattern {
         }
 
         string type = Part(text);
-        if (assembly == Any && type == Any && method == Any)
-            return null;
-
         return new MethodPattern(assembly, type, method, negate);
     }
 

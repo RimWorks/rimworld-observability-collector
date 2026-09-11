@@ -59,6 +59,8 @@ export interface DrawOptions {
     matchRange?: { startUs: number; endUs: number } | null;
     /** per-lane row counts in draw order; two or more bands get zebra fills and boundaries. */
     laneBands?: { rows: number }[];
+    /** frame start times: each edge gets a full-height rule so frames never run together. */
+    frameEdgesUs?: number[];
 }
 
 export function readTheme(el: Element): DrawTheme {
@@ -280,5 +282,18 @@ export function drawTimeline(
         labelEnd = x + LABEL_PAD + textWidth + LABEL_GAP;
     }
 
+    ctx.globalAlpha = 1;
+    drawFrameEdges(ctx, opts, pxPerUs);
     ctx.restore();
+}
+
+// over the quads on purpose: an under-the-bars rule vanishes wherever a root spans the cut.
+function drawFrameEdges(ctx: CanvasRenderingContext2D, opts: DrawOptions, pxPerUs: number): void {
+    if (!opts.frameEdgesUs?.length) return;
+    ctx.fillStyle = opts.theme.background;
+    for (const atUs of opts.frameEdgesUs) {
+        const x = (atUs - opts.view.startUs) * pxPerUs;
+        if (x <= 0 || x >= opts.widthPx) continue;
+        ctx.fillRect(x - 1, 0, 2, opts.heightPx);
+    }
 }

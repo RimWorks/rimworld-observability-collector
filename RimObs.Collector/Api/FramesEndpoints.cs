@@ -32,16 +32,20 @@ public static class FramesEndpoints {
 
         // clipped, not padded: an evicted `from` starts at the oldest frame held, and holes
         // inside the run stay missing so the client can draw them.
-        endpoints.MapGet("/api/v1/frames", (SessionAggregator aggregator, int? from, int? count) => {
+        endpoints.MapGet("/api/v1/frames", (SessionAggregator aggregator, int? from, int? count, double? min_dur_us) => {
             SessionMeta? meta = aggregator.Meta;
             double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
             long anchor = meta?.AnchorTimestamp ?? 0L;
+            // duration floor for wide selections: nodes a zoomed-out view cannot draw are
+            // most of the payload, and serializing them is what made a range take seconds.
+            long minDurTicks = min_dur_us is > 0 && usPerTick > 0 ? (long)(min_dur_us.Value / usPerTick) : 0L;
             FrameSnapshot[] frames = aggregator.Frames.Range(from ?? -1, QueryLimit.Clamp(count, 64, 256));
             object[] mapped = new object[frames.Length];
             for (int i = 0; i < frames.Length; i++)
-                mapped[i] = FramePayload.Map(frames[i], anchor, usPerTick);
+                mapped[i] = FramePayload.Map(FrameLod.Filter(frames[i], minDurTicks), anchor, usPerTick);
             return Results.Ok(new {
                 schema_version = SchemaVersion.Current,
+                lod_min_dur_us = min_dur_us is > 0 ? min_dur_us.Value : 0.0,
                 stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
                 frames = mapped,
                 strip = MapStrip(aggregator, usPerTick, 0),

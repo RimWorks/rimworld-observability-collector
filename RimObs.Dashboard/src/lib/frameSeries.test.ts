@@ -309,3 +309,29 @@ describe('pushFrame', () => {
         expect(pushFrame([], frame(1, 1000), 100, 0)).toHaveLength(1);
     });
 });
+
+// the rebuild runs on every poll, so it must reuse the cached node objects instead of
+// allocating sixty thousand fresh ones each time; only parentIndex is rewritten in place.
+describe('buildSeries cache reuse', () => {
+    it('returns the same node objects across rebuilds of an unchanged frame', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const first = buildSeries([frame(1, 1000)], cache);
+        const second = buildSeries([frame(1, 1000)], cache);
+
+        expect(second.nodes[0]).toBe(first.nodes[0]);
+        expect(second.nodes[1]).toBe(first.nodes[1]);
+    });
+
+    it('rebases parentIndex in place when a cached frame moves in the window', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const alone = buildSeries([frame(2, 1500)], cache);
+        expect(alone.nodes[1].parentIndex).toBe(0);
+
+        const together = buildSeries([frame(1, 1000), frame(2, 1500)], cache);
+
+        // frame 2 now starts at slice index 2, and its child's parent moved with it.
+        expect(together.nodes[2]).toBe(alone.nodes[0]);
+        expect(together.nodes[3]).toBe(alone.nodes[1]);
+        expect(together.nodes[3].parentIndex).toBe(2);
+    });
+});

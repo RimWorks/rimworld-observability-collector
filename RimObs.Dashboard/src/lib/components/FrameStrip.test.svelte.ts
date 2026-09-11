@@ -211,6 +211,30 @@ describe('FrameStrip selection', () => {
     });
 });
 
+// a committed drag selection must outlive the drag: the overlay stays until the caller
+// clears the range, so the user can see what the paused flame is scoped to.
+describe('FrameStrip committed range', () => {
+    it('keeps the range highlighted without an active drag', () => {
+        render(FrameStrip, {
+            ordinals: ORDINALS,
+            durationsUs: DURATIONS,
+            slots: FULL,
+            selectedRange: { from: 3, to: 7 },
+        });
+        expect(screen.getByTestId('strip-range')).toBeTruthy();
+    });
+
+    it('shows nothing when the range has scrolled out of the strip', () => {
+        render(FrameStrip, {
+            ordinals: ORDINALS,
+            durationsUs: DURATIONS,
+            slots: FULL,
+            selectedRange: { from: 100, to: 110 },
+        });
+        expect(screen.queryByTestId('strip-range')).toBeNull();
+    });
+});
+
 // clicking a bar picks a frame; before this the keyboard had no way to do the same thing,
 // while the flame timeline right below it had a full arrow model.
 describe('FrameStrip keyboard selection', () => {

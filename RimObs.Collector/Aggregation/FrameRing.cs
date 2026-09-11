@@ -52,10 +52,14 @@ public sealed class FrameRing {
     /// </summary>
     public static readonly TimeSpan DefaultQuietPeriod = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>Ceiling on the fps-derived floor, so a bogus fps report cannot pin the ring open.</summary>
+    public const int MaxFpsWindow = 256;
+
     private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
     private readonly SortedDictionary<int, OpenFrame> _open = [];
     private int _window = DefaultOpenFrameWindow;
+    private int _fpsFloor;
     private int _next;
     private int _count;
     private int _newestOrdinal;
@@ -89,6 +93,26 @@ public sealed class FrameRing {
             lock (_gate) {
                 _window = Math.Max(1, value);
             }
+        }
+    }
+
+    /// <summary>The window actually applied: the configured ordinals or the fps floor, whichever is wider.</summary>
+    public int EffectiveOpenFrameWindow {
+        get {
+            lock (_gate) {
+                return Math.Max(_window, _fpsFloor);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Scales the open window to the reported render rate. The configured window is ordinals
+    /// but drains are wall clock, so at uncapped fps it must widen to stay ~250ms of real time.
+    /// </summary>
+    public void NoteFps(double fps) {
+        int floor = fps > 0 ? (int)(fps / 4.0) : 0;
+        lock (_gate) {
+            _fpsFloor = Math.Min(floor, MaxFpsWindow);
         }
     }
 
@@ -142,7 +166,7 @@ public sealed class FrameRing {
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
                 _newestOrdinal = frameOrdinal;
-                SealThrough(_newestOrdinal - _window);
+                SealThrough(_newestOrdinal - Math.Max(_window, _fpsFloor));
             }
         }
     }
@@ -163,7 +187,7 @@ public sealed class FrameRing {
             bool live = _lastSampleStamp != 0 && Clock.GetElapsedTime(_lastSampleStamp) < QuietPeriod;
             // the same watermark SealThrough uses: a frame any lane can still add to is not
             // servable, because the dashboard never backfills an ordinal it has already drawn.
-            int ceiling = live ? _newestOrdinal - _window : int.MaxValue;
+            int ceiling = live ? _newestOrdinal - Math.Max(_window, _fpsFloor) : int.MaxValue;
             // a quiet gap serves an open frame, and the next sample drops the ceiling back under
             // it. never walk backwards, or the dashboard freezes on that truncated frame forever.
             if (ceiling < _servedOrdinal)

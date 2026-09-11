@@ -51,11 +51,29 @@ function configDoc(over: Record<string, unknown> = {}) {
     };
 }
 
+// tests override this to script the auto-instrument activity counters.
+let autoStatusBody: (() => Record<string, unknown>) | null = null;
+
 /** Answers /api/v1/config with a real document and records every POST body. */
 function mockConfig(doc: Record<string, unknown> = configDoc()) {
     let current = doc;
+    autoStatusBody = null;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : (input as Request).url;
+        if (autoStatusBody && url.endsWith('/api/v1/instrumentation/auto')) {
+            return new Response(JSON.stringify({ schema_version: 1, auto: autoStatusBody() }), {
+                status: 200,
+            });
+        }
+        if (url.includes('/api/v1/instrumentation/assemblies')) {
+            return new Response(
+                JSON.stringify({
+                    schema_version: 1,
+                    assemblies: ['Assembly-CSharp', 'Cosmere.Core'],
+                }),
+                { status: 200 },
+            );
+        }
         if (url.includes('/api/v1/instrumentation/auto/preview')) {
             return new Response(
                 JSON.stringify({
@@ -443,11 +461,10 @@ describe('SettingsPopover profiling controls', () => {
         expect(configPosts()[0]).toMatchObject({ auto_instrument: { enabled: true } });
     });
 
-    it('keeps the filter and ignore boxes disabled until auto-instrumentation is on', async () => {
+    it('keeps the filters box disabled until auto-instrumentation is on', async () => {
         await open();
 
         expect((screen.getByTestId('auto-filters') as HTMLTextAreaElement).disabled).toBe(true);
-        expect((screen.getByTestId('auto-ignore') as HTMLTextAreaElement).disabled).toBe(true);
     });
 
     // typing used to write straight to the live collector, so a filter as wide as
@@ -527,7 +544,7 @@ describe('SettingsPopover profiling controls', () => {
         expect(line.textContent).toContain('stall loading');
     });
 
-    it('posts both lists in one write when Apply is pressed', async () => {
+    it('posts the one box with its negated lines and clears the legacy ignore', async () => {
         await open(
             configDoc({
                 auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
@@ -535,18 +552,15 @@ describe('SettingsPopover profiling controls', () => {
         );
 
         await fireEvent.input(screen.getByTestId('auto-filters'), {
-            target: { value: 'Assembly-CSharp!Verse.Map::*' },
-        });
-        await fireEvent.input(screen.getByTestId('auto-ignore'), {
-            target: { value: 'Assembly-CSharp!Verse.Log::*' },
+            target: { value: 'Assembly-CSharp!Verse.Map::*\n!Assembly-CSharp!Verse.Log::*' },
         });
         await fireEvent.click(screen.getByTestId('auto-apply'));
 
         await waitFor(() => expect(configPosts()).toHaveLength(1));
         expect(configPosts()[0]).toMatchObject({
             auto_instrument: {
-                filters: 'Assembly-CSharp!Verse.Map::*',
-                ignore: 'Assembly-CSharp!Verse.Log::*',
+                filters: 'Assembly-CSharp!Verse.Map::*\n!Assembly-CSharp!Verse.Log::*',
+                ignore: '',
             },
         });
     });
@@ -676,5 +690,77 @@ describe('SettingsPopover ring capacity publishing', () => {
         await fireEvent.change(screen.getByTestId('ring-capacity'), { target: { value: '500' } });
 
         await waitFor(() => expect(liveConfig.ringCapacity).toBe(500));
+    });
+});
+
+// accepting a suggestion removes the clicked button from the panel before the popover's
+// outside-click check ran contains(), so the whole settings pane snapped shut.
+describe('SettingsPopover autocomplete', () => {
+    it('stays open when an autocomplete suggestion is clicked', async () => {
+        mockConfig(
+            configDoc({
+                auto_instrument: {
+                    enabled: true,
+                    filters: '',
+                    ignore: '',
+                    mute_trivial: false,
+                    max_targets: 8192,
+                },
+            }),
+        );
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+
+        const box = await screen.findByTestId('auto-filters');
+        await fireEvent.input(box, { target: { value: 'cos' } });
+        await waitFor(() => expect(screen.getByTestId('pattern-suggestions')).toBeInTheDocument());
+
+        const btn = screen.getAllByRole('option')[0].querySelector('button')!;
+        btn.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+
+        // the dropdown closing is the flush marker; the pane itself must survive it.
+        await waitFor(() => expect(screen.queryByTestId('pattern-suggestions')).toBeNull());
+        expect(screen.queryByTestId('auto-filters')).not.toBeNull();
+    });
+});
+
+// the patch pump drains a big filter change over minutes, and nothing said an apply was
+// still landing: the old sections kept sampling and the change looked ignored.
+describe('SettingsPopover apply progress', () => {
+    it('shows the pending count after apply and clears it when the pump drains', async () => {
+        mockConfig(
+            configDoc({
+                auto_instrument: { enabled: true, filters: '', ignore: '', mute_trivial: true },
+            }),
+        );
+        let pending = 120;
+        autoStatusBody = () => ({
+            matched: 500,
+            instrumented: 380,
+            muted: 0,
+            skippedTrivial: 0,
+            skippedOther: 0,
+            refused: 0,
+            pending,
+            skippedOverCap: 0,
+            maxTargets: 24000,
+            truncated: false,
+        });
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+
+        await fireEvent.input(await screen.findByTestId('auto-filters'), {
+            target: { value: 'Assembly-CSharp!Verse.Map::*' },
+        });
+        await fireEvent.click(screen.getByTestId('auto-apply'));
+
+        await waitFor(() =>
+            expect(screen.getByTestId('auto-applying').textContent).toContain('120'),
+        );
+
+        pending = 0;
+        await waitFor(() => expect(screen.queryByTestId('auto-applying')).toBeNull(), {
+            timeout: 4000,
+        });
     });
 });

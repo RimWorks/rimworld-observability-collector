@@ -26,8 +26,8 @@
             <h1>RimObs Diagnostic Report</h1>
             <p class="meta">
                 session <code>{data.manifest.sessionId}</code>
-                · collector <code>{data.manifest.collectorVersion}</code>
-                · {data.manifest.createdUtc}
+                | collector <code>{data.manifest.collectorVersion}</code>
+                | {data.manifest.createdUtc}
             </p>
         </header>
         <nav class="tabs">

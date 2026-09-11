@@ -18,8 +18,18 @@ export class Resource<T> {
 
     constructor(
         private readonly loader: () => Promise<T>,
-        private readonly intervalMs = 3000,
+        private intervalMs = 3000,
     ) {}
+
+    /** retunes the cadence in place, keeping data and state; rebuilding the Resource flashes. */
+    setIntervalMs(ms: number): void {
+        if (ms === this.intervalMs) return;
+        this.intervalMs = ms;
+        if (this.timer !== null) {
+            clearInterval(this.timer);
+            this.timer = ms > 0 ? setInterval(() => void this.refresh(), ms) : null;
+        }
+    }
 
     async refresh() {
         if (this.inFlight) return;

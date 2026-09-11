@@ -126,6 +126,37 @@ const STAGGERED_FRAME: FrameData = {
     },
 };
 
+// a strip drag pins an ordinal range; the view must span every frame of it, not zoom to
+// the one selected frame the way a plain click does.
+describe('FrameTimeline range fit', () => {
+    const RANGE_FRAMES: FrameData[] = [0, 1, 2].map((i) => ({
+        ...FRAME,
+        capture_ordinal: 100 + i,
+        start_us: FRAME.start_us + i * 20000,
+        end_us: FRAME.end_us + i * 20000,
+        nodes: { ...FRAME.nodes, start_us: FRAME.nodes.start_us.map((v) => v + i * 20000) },
+    }));
+
+    it('spans every frame of the selected range instead of one frame', () => {
+        render(FrameTimeline, {
+            series: buildSeries(RANGE_FRAMES),
+            names: NAMES,
+            selectedOrdinal: 102,
+            selectedRange: { from: 100, to: 102 },
+        });
+        expect(screen.getByTestId('frame-span').textContent).toContain('3');
+    });
+
+    it('still fits the one selected frame without a range', () => {
+        render(FrameTimeline, {
+            series: buildSeries(RANGE_FRAMES),
+            names: NAMES,
+            selectedOrdinal: 102,
+        });
+        expect(screen.getByTestId('frame-span').textContent).toContain('1');
+    });
+});
+
 describe('FrameTimeline', () => {
     it('resets the view back to the selected frame', async () => {
         const { component } = render(FrameTimeline, {

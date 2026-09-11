@@ -34,6 +34,10 @@ internal static class AutoInstrumentRunner {
     // queue them straight back.
     private static readonly HashSet<MethodInfo> s_Reverted = new HashSet<MethodInfo>();
 
+    // the judge mutes on the sender thread; this pump-side watermark makes the sweep run only
+    // when something new was muted.
+    private static int s_LastMutedSeen;
+
     /// <summary>
     /// Most methods this runner may keep patched. Changing it re-arms the parked settings, so
     /// the next frame rescans, and lowering it unpatches the newest targets past the new cap.
@@ -124,10 +128,28 @@ internal static class AutoInstrumentRunner {
         }
     }
 
-    /// <summary>Puts back anything an earlier filter change unpatched that now matches again.</summary>
+    /// <summary>Unpatches everything whose section the judge muted, so even the glue cost goes.</summary>
+    private static void QueueMutedRemovals() {
+        for (int i = s_Applied.Count - 1; i >= 0; i--) {
+            AppliedPatch applied = s_Applied[i];
+            if (!SectionRegistry.IsAutoMuted(applied.SectionId))
+                continue;
+
+            s_Removing.Add(applied.PatchId);
+            s_Reverted.Add(applied.Target);
+            s_Applied.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// Puts back anything an earlier filter change unpatched that now matches again. A method
+    /// whose section is still auto-muted stays out until the section is re-enabled.
+    /// </summary>
     private static void RestoreReverted(AutoInstrumentPlan plan, MethodPattern[] includes, MethodPattern[] excludes) {
         foreach (MethodInfo method in s_Reverted) {
             if (!StillWanted(method, includes, excludes))
+                continue;
+            if (SectionCatalog.TryGetSectionId(method, out int sectionId) && SectionRegistry.IsAutoMuted(sectionId))
                 continue;
 
             // the scan already counted it against the catalog entry the unpatch left behind.
@@ -206,6 +228,12 @@ internal static class AutoInstrumentRunner {
         if (AutoInstrumentRequest.TryTake(out bool enabled, out string filters, out string ignore, out bool autoMute))
             ApplyFilters(enabled ? filters : null, ignore, autoMute, Settings.CollectorRuntimeInfo.OwnerId);
 
+        int muted = AutoMute.MutedCount;
+        if (muted != s_LastMutedSeen) {
+            s_LastMutedSeen = muted;
+            QueueMutedRemovals();
+        }
+
         MethodInfo[]? pending = s_Pending;
         if (pending is null && s_RemoveNext == s_Removing.Count)
             return;
@@ -244,7 +272,7 @@ internal static class AutoInstrumentRunner {
             }
             Instrumented++;
             if (!foreign)
-                s_Applied.Add(new AppliedPatch(method, result.PatchId));
+                s_Applied.Add(new AppliedPatch(method, result.PatchId, result.SectionId));
             AutoMute.Watch(result.SectionId);
         }
         catch (System.Exception) {
@@ -270,6 +298,7 @@ internal static class AutoInstrumentRunner {
         s_Removing.Clear();
         s_RemoveNext = 0;
         s_Reverted.Clear();
+        s_LastMutedSeen = 0;
         Matched = 0;
         SkippedOverCap = 0;
         s_MaxTargets = AutoInstrumentScanner.DefaultMaxTargets;
@@ -280,13 +309,16 @@ internal static class AutoInstrumentRunner {
     }
 
     private readonly struct AppliedPatch {
-        public AppliedPatch(MethodInfo target, int patchId) {
+        public AppliedPatch(MethodInfo target, int patchId, int sectionId) {
             Target = target;
             PatchId = patchId;
+            SectionId = sectionId;
         }
 
         public MethodInfo Target { get; }
 
         public int PatchId { get; }
+
+        public int SectionId { get; }
     }
 }

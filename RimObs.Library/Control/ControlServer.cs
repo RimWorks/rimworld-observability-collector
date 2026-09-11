@@ -73,6 +73,7 @@ internal sealed class ControlServer {
         if (method == "POST" && path == "/patch") { HandlePatch(ctx); return; }
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
         if (method == "GET" && path == "/auto") { HandleAutoInstrument(ctx); return; }
+        if (method == "GET" && path == "/assemblies") { HandleAssemblies(ctx); return; }
         if (method == "POST" && path == "/auto/preview") { HandleAutoPreview(ctx); return; }
         if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
         if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
@@ -81,6 +82,17 @@ internal sealed class ControlServer {
         }
 
         ctx.Response.StatusCode = (int)HttpStatusCode.NotFound;
+    }
+
+    private void HandleAssemblies(HttpListenerContext ctx) {
+        List<string> names = new List<string>();
+        foreach (Assembly assembly in _assemblies()) {
+            string? name = assembly.GetName().Name;
+            if (!string.IsNullOrEmpty(name))
+                names.Add(name);
+        }
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        WriteResponse(ctx, WireCodec.Serialize(new ControlAssembliesResponse { Assemblies = names.ToArray() }));
     }
 
     private void HandleSearch(HttpListenerContext ctx) {

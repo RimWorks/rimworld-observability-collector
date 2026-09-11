@@ -15,6 +15,30 @@ public class AutoInstrumentScannerTests {
     private static AutoInstrumentPlan Scan(string filters, int maxTargets = AutoInstrumentScanner.DefaultMaxTargets) =>
         AutoInstrumentScanner.Scan(s_Here, MethodPattern.ParseAll(filters), maxTargets);
 
+    // the instrumentation stack must never instrument itself: a scope inside Harmony,
+    // Concord or RimObs re-enters the profiler and the game dies in ways nobody can read.
+    [Theory]
+    [InlineData("0Harmony", true)]
+    [InlineData("Harmony", true)]
+    [InlineData("Concord", true)]
+    [InlineData("Concord.Harmony", true)]
+    [InlineData("MonoMod.RuntimeDetour", true)]
+    [InlineData("RimObs", true)]
+    [InlineData("RimObs.Wire", true)]
+    [InlineData("Assembly-CSharp", false)]
+    [InlineData("Cosmere.Core", false)]
+    public void Blocks_the_instrumentation_stacks_own_assemblies(string name, bool blocked) {
+        AutoInstrumentScanner.IsBlockedAssembly(name).Should().Be(blocked);
+    }
+
+    [Fact]
+    public void Scan_skips_a_blocked_assembly_no_matter_the_filter() {
+        Assembly wire = typeof(RimWorks.RimObs.Wire.SectionBatch).Assembly;
+        AutoInstrumentPlan plan = AutoInstrumentScanner.Scan([wire], MethodPattern.ParseAll("*"), 100);
+        plan.Matched.Should().Be(0);
+        plan.Targets.Should().BeEmpty();
+    }
+
     [Fact]
     public void Empty_filter_matches_nothing() {
         AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(s_Here, [], 100);

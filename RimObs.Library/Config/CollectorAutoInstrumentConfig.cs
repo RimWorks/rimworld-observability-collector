@@ -18,4 +18,7 @@ internal sealed class CollectorAutoInstrumentConfig {
 
     [DataMember(Name = "max_targets")]
     public int? MaxTargets { get; set; }
+
+    [DataMember(Name = "overhead_budget_us")]
+    public long? OverheadBudgetUs { get; set; }
 }

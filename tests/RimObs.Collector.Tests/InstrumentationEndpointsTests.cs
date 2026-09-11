@@ -47,6 +47,38 @@ public class InstrumentationEndpointsTests {
     }
 
     [Fact]
+    public async Task Assemblies_returns_the_names_from_the_control_server() {
+        int port = PickFreePort();
+        using StubControlServer stub = new("s");
+        stub.OnAssemblies = () => new ControlAssembliesResponse {
+            Assemblies = ["Assembly-CSharp", "Cosmere.Core"],
+        };
+        stub.Start();
+
+        RimWorks.RimObs.Collector.Security.CollectorToken token =
+            RimWorks.RimObs.Collector.Security.CollectorToken.FromExplicitValue("test-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            app.Services.GetRequiredService<SessionMetaRegistry>().OnSessionMeta(new SessionMeta {
+                SessionId = "s1",
+                ControlPort = stub.Port,
+                ControlSecret = "s",
+            });
+
+            using HttpClient http = new() { BaseAddress = new System.Uri($"http://127.0.0.1:{port}") };
+            HttpResponseMessage res = await http.GetAsync("/api/v1/instrumentation/assemblies");
+            res.StatusCode.Should().Be(HttpStatusCode.OK);
+            string body = await res.Content.ReadAsStringAsync();
+            body.Should().Contain("Assembly-CSharp").And.Contain("Cosmere.Core");
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Auto_returns_the_runner_counters_from_the_control_server() {
         int port = PickFreePort();
         using StubControlServer stub = new("s");

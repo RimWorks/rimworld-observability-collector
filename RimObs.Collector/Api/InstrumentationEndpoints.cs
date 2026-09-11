@@ -31,6 +31,23 @@ public static class InstrumentationEndpoints {
             });
         });
 
+        endpoints.MapGet("/api/v1/instrumentation/assemblies", async (SessionMetaRegistry registry) => {
+            if (!registry.IsAvailable)
+                return Unavailable();
+            ControlClient client = new(registry.ControlPort, registry.ControlSecret);
+            ControlAssembliesResponse res;
+            try {
+                res = await client.AssembliesAsync();
+            }
+            catch (ControlClientException ex) {
+                return ControlFailed(ex);
+            }
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                assemblies = res.Assemblies,
+            });
+        });
+
         endpoints.MapGet("/api/v1/instrumentation/auto", async (SessionMetaRegistry registry) => {
             if (!registry.IsAvailable)
                 return Unavailable();

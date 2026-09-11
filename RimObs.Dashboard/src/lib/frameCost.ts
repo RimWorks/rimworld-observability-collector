@@ -131,3 +131,11 @@ export function deltaSeverity(deltaUs: number): -1 | 0 | 1 {
     if (deltaUs <= -DELTA_DEAD_BAND_US) return -1;
     return 0;
 }
+
+// the poll parses whatever json the collector serves, on the main thread. small frames can
+// afford one poll per frame; flood-sized frames would spend the whole 16ms budget parsing.
+export function framePollMs(nodeCount: number): number {
+    if (nodeCount >= 8000) return 150;
+    if (nodeCount >= 2000) return 50;
+    return 16;
+}

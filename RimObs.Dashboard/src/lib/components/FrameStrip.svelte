@@ -22,6 +22,7 @@
         cutOrdinals = [],
         gcOrdinals = [],
         slots = DEFAULT_STRIP_SLOTS,
+        selectedRange = null,
         onSelect,
         onSelectRange,
     }: {
@@ -32,6 +33,8 @@
         gcOrdinals?: readonly number[];
         /** the ring's capacity. bars fill these slots left to right and never resize. */
         slots?: number;
+        /** a committed drag selection; the overlay stays on it until the caller clears it. */
+        selectedRange?: { from: number; to: number } | null;
         onSelect?: (ordinal: number) => void;
         /** drag across bars: the flame loads this inclusive ordinal range. */
         onSelectRange?: (fromOrdinal: number, toOrdinal: number) => void;
@@ -130,6 +133,17 @@
     let dragTo = $state(-1);
     let dragJustEnded = false;
     let dragging = $derived(dragFrom >= 0 && dragTo >= 0 && dragFrom !== dragTo);
+    // the live drag wins while it runs; otherwise the committed range mapped onto whatever
+    // bars still hold its ordinals. null once the range has scrolled out of the strip.
+    let rangeIndices = $derived.by<{ lo: number; hi: number } | null>(() => {
+        if (dragging) return { lo: Math.min(dragFrom, dragTo), hi: Math.max(dragFrom, dragTo) };
+        if (!selectedRange) return null;
+        const lo = bars.findIndex((b) => b.ordinal >= selectedRange.from);
+        if (lo < 0 || bars[lo].ordinal > selectedRange.to) return null;
+        let hi = lo;
+        while (hi + 1 < bars.length && bars[hi + 1].ordinal <= selectedRange.to) hi++;
+        return { lo, hi };
+    });
 
     function handlePointerDown(e: PointerEvent): void {
         if (e.button !== 0) return;
@@ -209,7 +223,7 @@
         <span class="dim">{t('strip.title')}</span>
         {#if hovered}
             <span class="read" data-testid="strip-hover">
-                {hovered.ordinal} · {ns(hovered.durationUs * 1000)}
+                {hovered.ordinal} | {ns(hovered.durationUs * 1000)}
             </span>
         {:else}
             <span class="read dim">{t('strip.budget')} ({budgetMs} ms)</span>
@@ -241,14 +255,15 @@
                 aria-valuemax={bars[bars.length - 1]?.ordinal ?? 0}
                 aria-valuenow={current?.ordinal ?? undefined}
                 aria-valuetext={current
-                    ? `${current.ordinal} · ${ns(current.durationUs * 1000)}`
+                    ? `${current.ordinal} | ${ns(current.durationUs * 1000)}`
                     : undefined}
             ></canvas>
-            {#if dragging}
+            {#if rangeIndices}
                 <div
                     class="rangesel"
-                    style="left: {(Math.min(dragFrom, dragTo) * widthPx) /
-                        slots}px; width: {((Math.abs(dragTo - dragFrom) + 1) * widthPx) / slots}px"
+                    style="left: {(rangeIndices.lo * widthPx) /
+                        slots}px; width: {((rangeIndices.hi - rangeIndices.lo + 1) * widthPx) /
+                        slots}px"
                     data-testid="strip-range"
                 ></div>
             {/if}

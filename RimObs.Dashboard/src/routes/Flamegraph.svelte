@@ -45,6 +45,7 @@
     import { SvelteSet } from 'svelte/reactivity';
     import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
+    import { lodFloorUs, refinementFor } from '../lib/lod';
     import { buildFrameExport, exportFileName } from '../lib/frameExport';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
     import {
@@ -62,15 +63,16 @@
         FRAME_BUDGET_US,
         tickBudgetUs,
         speedMultiplier,
+        framePollMs,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
     import {
         laneBands,
-        laneBusyNs,
         laneLabel,
         lanesFromNodes,
         orderLanes,
         ThreadRole,
+        windowLaneStats,
     } from '../lib/threadLanes';
     import { MAX_DEPTH } from '../lib/frameLayout';
     import { ROW_HEIGHT } from '../lib/frameDraw';
@@ -96,9 +98,10 @@
         names: Map<number, { name: string; subsystem: string | null }>;
     }
 
-    // one poll per frame. there is no rate control any more: the collector is on loopback and
-    // a frame the dashboard never asked for is a frame it cannot show.
+    // one poll per frame while frames are small; flood-sized frames back the poll off, or
+    // parsing them eats the frame budget and the whole page lags.
     const FRAME_POLL_MS = 16;
+    let pollMs = $state(FRAME_POLL_MS);
     let framesRes = $state<Resource<FrameResponse> | null>(null);
     let source = $state(LIVE);
     let imports = $state<ImportedBundle[]>([]);
@@ -135,17 +138,30 @@
     let live = $derived(source === LIVE);
     let pinned = $derived(live && pinnedOrdinal !== null);
 
-    // Resource takes its interval at construction, so a rate change means a fresh
-    // instance; the cleanup return stops the old poller's timer.
     $effect(() => {
         if (source !== LIVE) {
             framesRes = null;
             return;
         }
-        const res = new Resource<FrameResponse>(() => api.frames(), FRAME_POLL_MS);
+        const res = new Resource<FrameResponse>(
+            () => api.frames(),
+            untrack(() => pollMs),
+        );
         framesRes = res;
         res.start();
         return () => res.stop();
+    });
+
+    // retuned in place: rebuilding the poller resets its data and flashes the loading state.
+    $effect(() => {
+        const nodeCount = framesRes?.data?.frame?.node_count;
+        if (nodeCount === undefined) return;
+        const next = framePollMs(nodeCount);
+        if (next !== untrack(() => pollMs)) pollMs = next;
+    });
+    $effect(() => {
+        framesRes?.setIntervalMs(pollMs);
+        sessionTreeRes?.setIntervalMs(pollMs);
     });
 
     // rides along on /frames/latest, so the strip costs no second request. pausing freezes it
@@ -182,21 +198,81 @@
         void fetchRange(fromOrdinal, toOrdinal);
     }
 
+    // one range download at a time: a wide drag is megabytes, and the pin refresh used to
+    // stack a second copy on top of a fetch still in flight.
+    let rangeInFlight = false;
+    // the duration floor each pinned frame was fetched at, for zoom-in refinement.
+    const pinnedLod = new Map<number, number>();
+
+    // a wide selection fetches coarse first; zooming in refetches the visible slice finer.
+    function selectionFloorUs(fromOrdinal: number, toOrdinal: number): number {
+        let spanUs = 0;
+        for (const bar of stripBars) {
+            if (bar.ordinal >= fromOrdinal && bar.ordinal <= toOrdinal) spanUs += bar.durationUs;
+        }
+        return lodFloorUs(spanUs);
+    }
+
     async function fetchRange(fromOrdinal: number, toOrdinal: number): Promise<void> {
+        if (rangeInFlight) return;
+        rangeInFlight = true;
         try {
-            const range = await api.frameRange(fromOrdinal, toOrdinal - fromOrdinal + 1);
+            const floorUs = selectionFloorUs(fromOrdinal, toOrdinal);
+            const range = await api.frameRange(fromOrdinal, toOrdinal - fromOrdinal + 1, floorUs);
             if (pinnedRange?.from !== fromOrdinal || pinnedRange?.to !== toOrdinal) return;
             const frames = range.frames.filter(
                 (f) => f.capture_ordinal >= fromOrdinal && f.capture_ordinal <= toOrdinal,
             );
             const at = frames.at(-1);
             if (!at) throw new Error('evicted');
+            pinnedLod.clear();
+            const servedFloor = range.lod_min_dur_us ?? 0;
+            for (const f of frames) pinnedLod.set(f.capture_ordinal, servedFloor);
             pinnedOrdinal = at.capture_ordinal;
             pinnedWindow = frames;
             pinnedRes = { ...range, frame: at };
+            // the view still points at the pre-drag time region; refit so the fit lands on
+            // the range that just arrived.
+            timeline?.refit();
         } catch {
             // the ring evicted the whole range between the drag and the fetch.
             if (pinnedRange?.from === fromOrdinal && pinnedRange?.to === toOrdinal) resume();
+        } finally {
+            rangeInFlight = false;
+        }
+    }
+
+    // zoom refinement: pull the visible ordinals back at the finer floor the view now needs.
+    async function refineView(view: { startUs: number; endUs: number }): Promise<void> {
+        if (!live || !pinnedRange || rangeInFlight) return;
+        const spans = pinnedWindow.map((f) => ({
+            ordinal: f.capture_ordinal,
+            startUs: f.start_us,
+            endUs: f.end_us,
+        }));
+        const wanted = refinementFor(view, spans, pinnedLod);
+        if (!wanted) return;
+        rangeInFlight = true;
+        try {
+            const range = await api.frameRange(
+                wanted.from,
+                wanted.to - wanted.from + 1,
+                wanted.floorUs,
+            );
+            if (!pinnedRange) return;
+            const finer = new Map(range.frames.map((f) => [f.capture_ordinal, f]));
+            const servedFloor = range.lod_min_dur_us ?? 0;
+            pinnedWindow = pinnedWindow.map((f) => {
+                const next = finer.get(f.capture_ordinal);
+                if (!next) return f;
+                pinnedLod.set(f.capture_ordinal, servedFloor);
+                treeCache.delete(f.capture_ordinal);
+                return next;
+            });
+        } catch {
+            // refinement is best effort; the coarse frames are already on screen.
+        } finally {
+            rangeInFlight = false;
         }
     }
 
@@ -422,7 +498,10 @@
     // /frames/latest.
     let sessionTreeRes = $state<Resource<CallTreeResponse> | null>(null);
     $effect(() => {
-        const res = new Resource<CallTreeResponse>(() => api.callTree(12, 24), FRAME_POLL_MS);
+        const res = new Resource<CallTreeResponse>(
+            () => api.callTree(12, 24),
+            untrack(() => pollMs),
+        );
         sessionTreeRes = res;
         res.start();
         return () => res.stop();
@@ -591,13 +670,18 @@
         liveWindow = pushFrame(liveWindow, framesRes?.data?.frame ?? null);
     });
 
-    // lanes drain up to a window behind, so a pin parked on a recent frame may have fetched
-    // it mid-flight. refresh it on each poll until it is old enough that no lane can add to it.
-    const PIN_REFRESH_WINDOW = 32;
+    // a pinned recent frame may still be taking lane fills, so it refreshes until sealed.
+    // cadence-capped: refetching a whole range on every 16ms poll re-downloaded it 60x/s.
+    const PIN_REFRESH_WINDOW = 64;
+    const PIN_REFRESH_MS = 250;
+    let lastPinRefresh = 0;
     $effect(() => {
         const newest = framesRes?.data?.stats?.newest_ordinal ?? 0;
         const ordinal = pinnedOrdinal;
         if (!live || ordinal === null || newest - ordinal > PIN_REFRESH_WINDOW) return;
+        const now = performance.now();
+        if (now - lastPinRefresh < PIN_REFRESH_MS) return;
+        lastPinRefresh = now;
         const range = pinnedRange;
         if (range) {
             void fetchRange(range.from, range.to);
@@ -637,27 +721,18 @@
             selectedLanes.add(lane.id);
         }
     });
-    let laneCallCounts = $derived.by(() => {
-        const counts = new Map<number, number>();
-        for (const id of frame?.nodes.thread_ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
-        return counts;
-    });
-    function laneStats(lane: ThreadLane): { calls: number; busyNs: number } {
-        if (!frame) return { calls: 0, busyNs: 0 };
-        if (!frame.nodes.thread_ids?.length) {
-            // a v8 frame carries no lane data, and everything it holds rides the main band.
-            return lane.role === ThreadRole.Main
-                ? { calls: frame.node_count, busyNs: frame.duration_us * 1000 }
-                : { calls: 0, busyNs: 0 };
-        }
-        return {
-            calls: laneCallCounts.get(lane.id) ?? 0,
-            busyNs: laneBusyNs(frame.nodes, lane.id),
-        };
-    }
     // a lane draws while it has nodes in the newest few drawn frames: workers sample
     // sporadically, so one-frame strictness blanked them, and window-wide lingered too long.
     const RECENT_FRAMES = 10;
+    let mainLaneId = $derived(allLanes.find((l) => l.role === ThreadRole.Main)?.id ?? 0);
+    // the gutter counts the same recent window that decides visibility, so a drawn lane
+    // never reads 0 | 0 just because it skipped the frame under the c‍ursor.
+    let laneWindowStats = $derived(
+        windowLaneStats(series.entries, series.nodes, RECENT_FRAMES, mainLaneId),
+    );
+    function laneStats(lane: ThreadLane): { calls: number; busyNs: number } {
+        return laneWindowStats.get(lane.id) ?? { calls: 0, busyNs: 0 };
+    }
     let recentLaneIds = $derived.by(() => {
         const ids = new Set<number>();
         const entries = series.entries;
@@ -704,18 +779,18 @@
     // drops that stopped an hour ago are not news, so the badge watches the last half second of
     // polls and goes quiet again once the counters hold still.
     const DROP_WINDOW_POLLS = 32;
-    // the ring counter rides the session-meta heartbeat, one step every 5s, so a ring that
-    // overflows nonstop would blink for half a second in five on the window above.
-    const RING_HOLD_POLLS = 6000 / FRAME_POLL_MS;
+    // in milliseconds, not polls: the poll interval moves with frame size now, and the ring
+    // counter only steps on the 5s session-meta heartbeat.
+    const RING_HOLD_MS = 6000;
     let dropWindow = $state<number[]>([]);
     let lastRing = $state(-1);
-    let ringQuietPolls = $state(RING_HOLD_POLLS);
+    let ringQuietMs = $state(RING_HOLD_MS);
     $effect(() => {
         if (!live) {
             untrack(() => {
                 dropWindow = [];
                 lastRing = -1;
-                ringQuietPolls = RING_HOLD_POLLS;
+                ringQuietMs = RING_HOLD_MS;
             });
             return;
         }
@@ -724,7 +799,7 @@
         const ring = dropped.library_ring_samples;
         untrack(() => {
             dropWindow = [...dropWindow, fast].slice(-DROP_WINDOW_POLLS);
-            ringQuietPolls = lastRing >= 0 && ring > lastRing ? 0 : ringQuietPolls + 1;
+            ringQuietMs = lastRing >= 0 && ring > lastRing ? 0 : ringQuietMs + pollMs;
             lastRing = ring;
         });
     });
@@ -732,7 +807,7 @@
     let lossy = $derived(
         live
             ? (dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0]) ||
-                  ringQuietPolls < RING_HOLD_POLLS
+                  ringQuietMs < RING_HOLD_MS
             : dropTotal > 0,
     );
     let stopwatchFrequency = $derived(
@@ -864,14 +939,14 @@
                 <b class="g{gradeFromShare(v / FRAME_BUDGET_US)}" data-testid="stat-{p.key}"
                     >{ns(v * 1000)}</b
                 >
-                &middot;
+                |
             {/each}
             <Tooltip text={t('tip.flamegraph.budget')}>
                 <span class="mono" data-testid="frame-budget"
                     >{t('flamegraph.budget')} <b>{ns(FRAME_BUDGET_US * 1000)}</b></span
                 >
             </Tooltip>
-            &middot;
+            |
             <Tooltip
                 text={t('tip.flamegraph.tickBudget').replace('{n}', String(speedMultiplier(tps)))}
             >
@@ -880,7 +955,7 @@
                 >
             </Tooltip>
             {#if peakAllocRate > 0}
-                &middot;
+                |
                 <span class="mono" data-testid="alloc-rate"
                     >{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
                 >
@@ -920,7 +995,10 @@
                 <button
                     type="button"
                     class="clearring"
-                    onclick={() => timeline?.resetView()}
+                    onclick={() => {
+                        resume();
+                        timeline?.resetView();
+                    }}
                     data-testid="reset-view">{t('flamegraph.resetView')}</button
                 >
                 <Tooltip text={t('tip.flamegraph.newSession')}>
@@ -961,6 +1039,7 @@
             {gcOrdinals}
             slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
             selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
+            selectedRange={pinnedRange}
             onSelect={(o) => pauseAt(o)}
             onSelectRange={pauseRange}
         />
@@ -1130,7 +1209,7 @@
                         data-testid="lane-{lane.id}"
                     >
                         {laneLabel(lane)}
-                        <small class="mono">{count(stats.calls)} &middot; {ns(stats.busyNs)}</small>
+                        <small class="mono">{count(stats.calls)} | {ns(stats.busyNs)}</small>
                     </div>
                 {/each}
             </div>
@@ -1141,6 +1220,8 @@
                     {bands}
                     {names}
                     selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
+                    selectedRange={pinnedRange}
+                    onViewChange={(v) => void refineView(v)}
                     bind:selectedNode
                 />
             </div>
@@ -1622,7 +1703,7 @@
         font-weight: 500;
     }
     .cell + .cell::before {
-        content: ' · ';
+        content: ' | ';
         color: var(--text-ghost);
     }
 

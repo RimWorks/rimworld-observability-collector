@@ -8,6 +8,7 @@ import {
     lanesFromNodes,
     orderLanes,
     ThreadRole,
+    windowLaneStats,
 } from './threadLanes';
 import type { ThreadLane } from './api';
 import type { FrameNodes, TreeNode } from './frameTree';
@@ -257,5 +258,62 @@ describe('lanesFromNodes', () => {
 describe('laneRow', () => {
     it('falls back to the node depth with no bands at all', () => {
         expect(laneRow(undefined, n(3, 9))).toBe(3);
+    });
+});
+
+// a lane draws because it was active in the recent frames, so its gutter numbers must count
+// the same window. per-frame stats read 0 | 0 on every lane that skipped the current frame.
+describe('windowLaneStats', () => {
+    const node = (
+        laneId: number | undefined,
+        parentIndex: number,
+        startUs: number,
+        endUs: number,
+    ): TreeNode => ({
+        depth: 0,
+        laneId,
+        sectionId: 1,
+        nodeId: 1,
+        parentIndex,
+        startUs,
+        durUs: endUs - startUs,
+        endUs,
+    });
+    const entry = (ordinal: number, nodeStart: number, nodeEnd: number) => ({
+        ordinal,
+        startUs: 0,
+        endUs: 0,
+        durationUs: 0,
+        nodeStart,
+        nodeEnd,
+        orphanCount: 0,
+    });
+
+    it('counts calls and root busy time per lane across the window', () => {
+        const tree = [node(1, -1, 0, 10), node(1, 0, 2, 5), node(7, -1, 0, 3), node(7, -1, 20, 24)];
+        const entries = [entry(1, 0, 3), entry(2, 3, 4)];
+
+        const stats = windowLaneStats(entries, tree, 10, 1);
+
+        expect(stats.get(1)).toEqual({ calls: 2, busyNs: 10_000 });
+        expect(stats.get(7)).toEqual({ calls: 2, busyNs: 7_000 });
+    });
+
+    it('only counts the newest frames of the window', () => {
+        const tree = [node(7, -1, 0, 3), node(7, -1, 20, 24)];
+        const entries = [entry(1, 0, 1), entry(2, 1, 2)];
+
+        const stats = windowLaneStats(entries, tree, 1, 1);
+
+        expect(stats.get(7)).toEqual({ calls: 1, busyNs: 4_000 });
+    });
+
+    it('bills nodes without a lane id to the main lane', () => {
+        const tree = [node(undefined, -1, 0, 5)];
+        const entries = [entry(1, 0, 1)];
+
+        const stats = windowLaneStats(entries, tree, 10, 1);
+
+        expect(stats.get(1)).toEqual({ calls: 1, busyNs: 5_000 });
     });
 });

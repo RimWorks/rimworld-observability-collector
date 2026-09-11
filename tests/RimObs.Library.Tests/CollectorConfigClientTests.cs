@@ -46,6 +46,18 @@ public sealed class CollectorConfigClientTests {
     }
 
     [Fact]
+    public void ApplyToRegistry_leaves_auto_muted_sections_muted() {
+        SectionHandle leaf = SectionRegistry.Register("core.leaf");
+        SectionRegistry.MuteAuto(leaf.Id);
+
+        CollectorConfigClient.ApplyToRegistry(
+            CollectorConfigDocument.TryParse("""{ "sections": { "disabled": [] } }""")!
+        );
+
+        leaf.IsActive().Should().BeFalse();
+    }
+
+    [Fact]
     public void ApplyToRegistry_with_no_sections_block_enables_all() {
         SectionHandle tick = SectionRegistry.Register("core.tick");
         SectionRegistry.SetActive(tick.Id, false);

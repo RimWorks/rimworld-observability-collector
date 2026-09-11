@@ -30,7 +30,10 @@ export interface FrameSeries {
 }
 
 export interface SeriesCacheEntry {
+    /** already shifted to absolute time; parentIndex is rewritten in place per rebuild. */
     nodes: TreeNode[];
+    /** frame-local parent index per node, the source the in-place rewrite reads from. */
+    parentLocal: Int32Array;
     orphanCount: number;
     /** revalidation key: a backfilled frame returns the same ordinal with more nodes. */
     nodeCount: number;
@@ -46,17 +49,12 @@ export const EMPTY_SERIES: FrameSeries = {
 };
 
 // coordinates are absolute session microseconds, not series-relative, so a cached frame
-// stays valid when the window slides past it.
-function shift(nodes: TreeNode[], offsetUs: number, base: number): TreeNode[] {
+// stays valid when the window slides past it. built once per frame, ever.
+function shifted(nodes: TreeNode[], offsetUs: number): SeriesCacheEntry['nodes'] {
     const out = new Array<TreeNode>(nodes.length);
     for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-        out[i] = {
-            ...n,
-            parentIndex: n.parentIndex < 0 ? n.parentIndex : n.parentIndex + base,
-            startUs: n.startUs + offsetUs,
-            endUs: n.endUs + offsetUs,
-        };
+        out[i] = { ...n, startUs: n.startUs + offsetUs, endUs: n.endUs + offsetUs };
     }
     return out;
 }
@@ -65,8 +63,11 @@ function treeFor(frame: FrameData, cache?: Map<number, SeriesCacheEntry>): Serie
     const hit = cache?.get(frame.capture_ordinal);
     if (hit && hit.nodeCount === frame.node_count) return hit;
     const built = buildFrameTree(frame);
+    const parentLocal = new Int32Array(built.nodes.length);
+    for (let i = 0; i < built.nodes.length; i++) parentLocal[i] = built.nodes[i].parentIndex;
     const entry = {
-        nodes: built.nodes,
+        nodes: shifted(built.nodes, frame.start_us),
+        parentLocal,
         orphanCount: built.orphanCount,
         nodeCount: frame.node_count,
     };
@@ -90,8 +91,13 @@ export function buildSeries(
     for (const frame of ordered) {
         const built = treeFor(frame, cache);
         const nodeStart = nodes.length;
-        // buildFrameTree is frame-relative, so the shift is the frame's own start.
-        for (const n of shift(built.nodes, frame.start_us, nodeStart)) nodes.push(n);
+        // no per-node allocation on the hot rebuild: the cached objects are pushed as-is and
+        // only their parentIndex is rewritten against this window's base.
+        for (let i = 0; i < built.nodes.length; i++) {
+            const local = built.parentLocal[i];
+            built.nodes[i].parentIndex = local < 0 ? local : local + nodeStart;
+            nodes.push(built.nodes[i]);
+        }
         orphanCount += built.orphanCount;
 
         const previous = entries.at(-1);

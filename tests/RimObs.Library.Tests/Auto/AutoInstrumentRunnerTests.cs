@@ -241,6 +241,60 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
         AutoInstrumentRequest.HasPending.Should().BeTrue();
     }
 
+    // muting only skips the sample; the patch glue still runs on every call. unpatching a
+    // muted section makes even that disappear.
+    [Fact]
+    public void Pump_unpatches_a_section_the_judge_muted() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+        int sectionId = PatchRegistry.Snapshot().First().SectionId;
+
+        MuteThroughTheJudge(sectionId);
+        Drain();
+
+        PatchRegistry.Snapshot().Should().HaveCount(2);
+        SectionRegistry.IsActive(sectionId).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_muted_out_method_stays_out_across_a_re_apply() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        int sectionId = PatchRegistry.Snapshot().First().SectionId;
+        MuteThroughTheJudge(sectionId);
+        Drain();
+        PatchRegistry.Snapshot().Should().HaveCount(2);
+
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+
+        PatchRegistry.Snapshot().Should().HaveCount(2);
+        SectionRegistry.IsActive(sectionId).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_re_enabled_section_is_patched_again_on_the_next_apply() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        int sectionId = PatchRegistry.Snapshot().First().SectionId;
+        MuteThroughTheJudge(sectionId);
+        Drain();
+        PatchRegistry.Snapshot().Should().HaveCount(2);
+
+        SectionRegistry.SetActive(sectionId, true);
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+    }
+
+    private static void MuteThroughTheJudge(int sectionId) {
+        for (int i = 0; i < AutoMute.SampleCount; i++)
+            AutoMute.Observe(sectionId, 0);
+        SectionRegistry.IsActive(sectionId).Should().BeFalse("the one-shot judge should have muted it");
+    }
+
     private static AutoInstrumentPlan Apply(string filters) =>
         AutoInstrumentRunner.ApplyFilters(filters, ignore: null, autoMute: true, "test.owner", s_Here);
 

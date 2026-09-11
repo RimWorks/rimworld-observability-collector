@@ -774,4 +774,47 @@ public sealed class FrameRingTests {
 
         ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(7, 8, 9);
     }
+
+    // the configured window is ordinals, but drains are wall clock. at uncapped fps the same
+    // 16 ordinals shrink under one drain cycle and every worker sample seals out as late.
+    [Fact]
+    public void A_high_fps_report_keeps_frames_open_for_a_quarter_second_of_them() {
+        FrameRing ring = RingWithWindow(256, 4);
+        ring.NoteFps(200.0);
+
+        ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
+        for (int ordinal = 2; ordinal <= 40; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+
+        // 200 fps / 4 = 50 open ordinals, so a worker sample for frame 1 still lands.
+        ring.Add(1, 20, -1, 999, -1, 1100L, 200L, 0L, 7);
+
+        ring.LateSamples.Should().Be(0);
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void A_low_fps_report_leaves_the_configured_window_alone() {
+        FrameRing ring = RingWithWindow(64, 4);
+        ring.NoteFps(60.0);
+
+        ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
+        for (int ordinal = 2; ordinal <= 20; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+
+        ring.Add(1, 20, -1, 999, -1, 1100L, 200L, 0L, 7);
+
+        // 60 fps / 4 = 15 stays above the configured 4, so frame 1 sealed at ordinal 20.
+        ring.LateSamples.Should().Be(1);
+    }
+
+    [Fact]
+    public void The_fps_floor_never_exceeds_a_sane_cap() {
+        FrameRing ring = RingWithWindow(64, 4);
+
+        ring.NoteFps(100_000.0);
+
+        ring.OpenFrameWindow.Should().Be(4);
+        ring.EffectiveOpenFrameWindow.Should().Be(256);
+    }
 }

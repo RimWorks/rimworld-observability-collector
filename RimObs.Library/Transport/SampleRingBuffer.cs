@@ -20,15 +20,22 @@ internal sealed class SampleRingBuffer {
 
     private readonly Slot[] _slots;
     private readonly int _mask;
+    private readonly int _ownerThreadId;
     private long _claim;
     private long _read;
     private long _dropped;
 
-    public SampleRingBuffer(int capacity) {
+    public SampleRingBuffer(int capacity)
+        : this(capacity, Environment.CurrentManagedThreadId) {
+    }
+
+    /// <summary>One producer per ring, so the owner id is a constant, not a per-write lookup.</summary>
+    public SampleRingBuffer(int capacity, int ownerThreadId) {
         if (capacity <= 0 || (capacity & (capacity - 1)) != 0)
             throw new ArgumentException("Capacity must be a positive power of two.", nameof(capacity));
         _slots = new Slot[capacity];
         _mask = capacity - 1;
+        _ownerThreadId = ownerThreadId;
     }
 
     public int Capacity => _slots.Length;
@@ -54,8 +61,7 @@ internal sealed class SampleRingBuffer {
         _slots[idx].NodeId = nodeId;
         _slots[idx].ParentNodeId = parentNodeId;
         _slots[idx].AllocBytes = allocBytes;
-        // TryWrite always runs on the producing thread, so the lane is whoever is calling.
-        _slots[idx].ThreadId = Environment.CurrentManagedThreadId;
+        _slots[idx].ThreadId = _ownerThreadId;
         Volatile.Write(ref _slots[idx].Sequence, seq);
         return true;
     }
@@ -128,6 +134,13 @@ internal sealed class SampleRingSet {
     }
 
     private readonly ThreadLocal<Lane> _lane;
+
+    // mono's ThreadLocal.Value costs ~5.6 ns more than a [ThreadStatic] read; cache the lane.
+    [ThreadStatic]
+    private static Lane? t_Lane;
+    [ThreadStatic]
+    private static SampleRingSet? t_LaneOwner;
+
     private Lane[] _lanes = Array.Empty<Lane>();
     private int _laneCapacity;
     private int _cursor;
@@ -182,7 +195,17 @@ internal sealed class SampleRingSet {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
-        return _lane.Value!.Ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
+        Lane? lane = t_Lane;
+        if (lane is null || !ReferenceEquals(t_LaneOwner, this)) {
+            lane = _lane.Value!;
+            CacheLane(this, lane);
+        }
+        return lane.Ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
+    }
+
+    private static void CacheLane(SampleRingSet owner, Lane lane) {
+        t_Lane = lane;
+        t_LaneOwner = owner;
     }
 
     /// <summary>
@@ -221,7 +244,7 @@ internal sealed class SampleRingSet {
         if (old.Capacity == want)
             return;
 
-        lane.Swap(new SampleRingBuffer(want));
+        lane.Swap(new SampleRingBuffer(want, lane.Owner.ManagedThreadId));
         // a sample the owner published into the old ring during the swap is gone, so count it
         Interlocked.Add(ref _reapedDropped, old.Dropped + old.DiscardAll());
     }

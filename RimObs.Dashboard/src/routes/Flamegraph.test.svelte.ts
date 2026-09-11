@@ -330,10 +330,10 @@ describe('Flamegraph page', () => {
     it('reads every headline number off the frame it drew', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
-        expect(cardValue('Duration')).toContain('16.20 ms');
+        expect(cardValue('Duration')).toContain('16.200 ms');
         expect(cardValue('Nodes')).toContain('2');
-        expect(cardValue('Median')).toContain('5.00 ms');
-        expect(cardValue('p99')).toContain('99.00 ms');
+        expect(cardValue('Median')).toContain('5.000 ms');
+        expect(cardValue('p99')).toContain('99.000 ms');
     });
 
     it('renders the timeline widget', async () => {
@@ -1401,6 +1401,22 @@ describe('Flamegraph page', () => {
     });
 });
 
+// the adaptive poll once recreated the poller on its own null reset, forever, and the page
+// never left the loading state under a flood-sized frame.
+describe('Flamegraph adaptive poll', () => {
+    it('settles on the slow poll for a flood-sized frame instead of churning', async () => {
+        mockFetch({ ...FRAMES_BODY, frame: { ...FRAMES_BODY.frame, node_count: 9000 } });
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        const settled = frameCalls();
+        await new Promise((r) => setTimeout(r, 250));
+
+        // 250ms at the 150ms flood cadence is at most two polls; churn was a poll per 16ms.
+        expect(frameCalls() - settled).toBeLessThanOrEqual(3);
+    });
+});
+
 describe('Flamegraph clear history', () => {
     it('offers the clear button beside the mode segment', async () => {
         mockFetch();
@@ -1632,6 +1648,67 @@ describe('Flamegraph frame history selection', () => {
             expect(calls.at(-1)?.[2].selectedOrdinal).toBe(4319);
         });
     });
+
+    // the ring capacity is 5000 slots, so a wide rect gives each slot a real pixel width:
+    // 500000 / 5000 = 100px per slot, bars 0..2 sit at x 0..299.
+    async function dragRange(): Promise<HTMLCanvasElement> {
+        const canvas = screen
+            .getByTestId('frame-strip')
+            .querySelector('canvas') as HTMLCanvasElement;
+        canvas.getBoundingClientRect = () =>
+            ({
+                left: 0,
+                top: 0,
+                right: 500000,
+                bottom: 100,
+                width: 500000,
+                height: 100,
+            }) as DOMRect;
+        canvas.setPointerCapture = () => {};
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 0, clientX: 50, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointermove', { clientX: 250, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointerup', { clientX: 250, clientY: 10, bubbles: true }),
+        );
+        await fireEvent.click(canvas, { clientX: 250, clientY: 10 });
+        return canvas;
+    }
+
+    it('a drag keeps the range highlighted after the pointer lifts', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await dragRange();
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('strip-range')).toBeInTheDocument());
+    });
+
+    it('a drag spans the flame across every frame of the selection', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await dragRange();
+
+        await waitFor(() => expect(screen.getByTestId('frame-span').textContent).toContain('3'));
+    });
+
+    it('reset view clears the range selection and resumes', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await dragRange();
+        await waitFor(() => expect(screen.getByTestId('strip-range')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('reset-view'));
+
+        await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
+        await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
+    });
 });
 
 // the ring is the only copy of what you just captured, and this button sits next to
@@ -1754,16 +1831,17 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 
-    it('shows per-frame calls and busy time, never the session total', async () => {
+    it('shows window-scoped calls and busy time, never the session total', async () => {
         userPrefs.setMainThreadOnly(false);
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
 
         await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
-        expect(screen.getByTestId('lane-2').textContent).toMatch(/1\s*·\s*400\.0 us/);
-        expect(screen.getByTestId('lane-1').textContent).toMatch(/1\s*·\s*16\.20 ms/);
-        // 4.00 ms is lane 2's session-cumulative busy_ns; the gutter must never show it.
-        expect(screen.getByTestId('lane-2').textContent).not.toContain('4.00 ms');
+        // the 3-frame backfilled window: one node per frame on each lane.
+        expect(screen.getByTestId('lane-2').textContent).toMatch(/3\s*\|\s*1\.200 ms/);
+        expect(screen.getByTestId('lane-1').textContent).toMatch(/3\s*\|\s*48\.600 ms/);
+        // 4.000 ms is lane 2's session-cumulative busy_ns; the gutter must never show it.
+        expect(screen.getByTestId('lane-2').textContent).not.toContain('4.000 ms');
     });
 
     it('drops a lane from the gutter when the thread filter deselects it', async () => {
@@ -1864,7 +1942,7 @@ describe('Flamegraph thread lanes', () => {
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
 
         expect(screen.getByTestId('lane-0').textContent).toContain('MainThread');
-        expect(screen.getByTestId('lane-0').textContent).toContain('16.20 ms');
+        expect(screen.getByTestId('lane-0').textContent).toContain('48.600 ms');
     });
 
     it('still draws a main lane for an imported bundle', async () => {
@@ -1874,7 +1952,7 @@ describe('Flamegraph thread lanes', () => {
 
         await screen.findByTestId('frame-scrub');
         expect(screen.getByTestId('lane-0').textContent).toContain('MainThread');
-        expect(screen.getByTestId('lane-0').textContent).toContain('16.20 ms');
+        expect(screen.getByTestId('lane-0').textContent).toContain('32.400 ms');
     });
 });
 

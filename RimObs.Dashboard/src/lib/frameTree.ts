@@ -57,6 +57,8 @@ export interface FrameResponse {
 
 export interface FrameRangeResponse {
     schema_version: number;
+    /** the duration floor the frames were filtered at; 0 or absent means full detail. */
+    lod_min_dur_us?: number;
     stopwatch_frequency: number;
     frames: FrameData[];
     strip?: FrameStripData;

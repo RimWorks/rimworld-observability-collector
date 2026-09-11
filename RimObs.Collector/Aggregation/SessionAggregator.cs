@@ -161,6 +161,7 @@ public sealed class SessionAggregator {
         Interlocked.Exchange(ref _latestFpsBits, BitConverter.DoubleToInt64Bits(batch.Fps));
         Interlocked.Exchange(ref _latestTpsFpsTick, batch.Tick);
         Interlocked.Exchange(ref _hasTpsFps, 1);
+        Frames.NoteFps(batch.Fps);
     }
 
     public void OnMetricRegistrations(MetricRegistrationsBatch batch) {

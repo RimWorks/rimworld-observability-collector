@@ -11,12 +11,7 @@
     import { userPrefs } from '../userPrefs.svelte';
     import { MIN_RING, MAX_RING, clampRing } from '../ringCapacity';
     import { liveConfig } from '../liveConfig.svelte';
-    import {
-        initialFilters,
-        initialIgnore,
-        rememberFilters,
-        rememberIgnore,
-    } from '../autoInstrumentDefaults';
+    import { initialFilters, rememberFilters } from '../autoInstrumentDefaults';
     import { MIN_DEPTH, MAX_DEPTH, clampDepth } from '../captureDepth';
     import {
         MIN_SAMPLE_RING,
@@ -32,6 +27,7 @@
     import { sessionsStore } from '../sessions.svelte';
     import BundleExportForm from './BundleExportForm.svelte';
     import Icon from './Icon.svelte';
+    import AutoPatternBox from './AutoPatternBox.svelte';
     import Tooltip from './Tooltip.svelte';
 
     let { status }: { status: StatusResponse | null } = $props();
@@ -96,8 +92,10 @@
             }
         }
         function onPointer(e: PointerEvent): void {
-            const target = e.target as Node;
-            if (btnEl?.contains(target) || panelEl?.contains(target)) return;
+            // composedPath, not contains: an autocomplete click removes its own button from
+            // the panel before this runs, and a detached target read as an outside click.
+            const path = e.composedPath();
+            if ((btnEl && path.includes(btnEl)) || (panelEl && path.includes(panelEl))) return;
             open = false;
         }
         globalThis.addEventListener('keydown', onKey);
@@ -121,9 +119,9 @@
 
     let auto = $derived(config?.auto_instrument);
     // the example patterns are real starting values, not just placeholder text, and what you
-    // type is remembered locally so an empty collector never wipes it.
-    let filtersValue = $derived(initialFilters(auto?.filters ?? ''));
-    let ignoreValue = $derived(initialIgnore(auto?.ignore ?? ''));
+    // type is remembered locally so an empty collector never wipes it. a legacy ignore list
+    // folds in as ! lines, so the one box carries both.
+    let filtersValue = $derived(initialFilters(auto?.filters ?? '', auto?.ignore ?? ''));
 
     async function loadConfig(): Promise<void> {
         try {
@@ -139,23 +137,19 @@
     // the filters used to reach the live game on blur, so a wide pattern stalled loading before
     // you could see how wide it was. now blur only counts; Apply is what patches.
     let draftFilters = $state<string | null>(null);
-    let draftIgnore = $state<string | null>(null);
     let preview = $state<AutoPreviewCounts | null>(null);
     let previewing = $state(false);
     let previewFailed = $state(false);
 
     let editedFilters = $derived(draftFilters ?? filtersValue);
-    let editedIgnore = $derived(draftIgnore ?? ignoreValue);
-    let dirty = $derived(
-        isDirty(editedFilters, editedIgnore, auto?.filters ?? '', auto?.ignore ?? ''),
-    );
+    let dirty = $derived(isDirty(editedFilters, '', filtersValue, ''));
     let band = $derived<PreviewBand>(previewBand(preview?.eligible ?? 0));
 
     async function runPreview(): Promise<void> {
         previewing = true;
         previewFailed = false;
         try {
-            preview = await api.instrumentationAutoPreview(editedFilters, editedIgnore);
+            preview = await api.instrumentationAutoPreview(editedFilters, '');
         } catch {
             preview = null;
             previewFailed = true;
@@ -166,16 +160,32 @@
 
     async function applyFilters(): Promise<void> {
         const f = editedFilters;
-        const g = editedIgnore;
         rememberFilters(f);
-        rememberIgnore(g);
         await save((c) => {
             c.auto_instrument.filters = f;
-            c.auto_instrument.ignore = g;
+            // the ! lines in the one box carry the exclusions now.
+            c.auto_instrument.ignore = '';
         });
         draftFilters = null;
-        draftIgnore = null;
         preview = null;
+        void watchApply();
+    }
+
+    // the patch pump drains a big change over minutes; old sections keep sampling until it
+    // does, so the pane says how much is still queued instead of looking ignored.
+    let applyPending = $state<number | null>(null);
+    async function watchApply(): Promise<void> {
+        for (let i = 0; i < 600; i++) {
+            try {
+                const res = (await api.instrumentationAuto()).auto;
+                applyPending = res.pending;
+                if (res.pending === 0) break;
+            } catch {
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        applyPending = null;
     }
 
     let autoStatus = $state<AutoInstrumentCounters | null>(null);
@@ -356,34 +366,16 @@
                 <Tooltip text={t('tip.settings.autoInstrument.filters')} align="stretch">
                     <span class="label">{t('settings.autoInstrument.filters')}</span>
                 </Tooltip>
-                <textarea
-                    class="text mono"
-                    rows="3"
-                    spellcheck="false"
+                <AutoPatternBox
+                    rows={5}
                     placeholder={t('settings.autoInstrument.filters.placeholder')}
                     disabled={config === null || saving || !auto?.enabled}
                     value={editedFilters}
-                    oninput={(e) => (draftFilters = e.currentTarget.value)}
+                    oninput={(v) => (draftFilters = v)}
                     onblur={() => void runPreview()}
-                    aria-label={t('settings.autoInstrument.filters')}
-                    data-testid="auto-filters"></textarea>
-            </div>
-
-            <div class="field">
-                <Tooltip text={t('tip.settings.autoInstrument.ignore')} align="stretch">
-                    <span class="label">{t('settings.autoInstrument.ignore')}</span>
-                </Tooltip>
-                <textarea
-                    class="text mono"
-                    rows="2"
-                    spellcheck="false"
-                    placeholder={t('settings.autoInstrument.ignore.placeholder')}
-                    disabled={config === null || saving || !auto?.enabled}
-                    value={editedIgnore}
-                    oninput={(e) => (draftIgnore = e.currentTarget.value)}
-                    onblur={() => void runPreview()}
-                    aria-label={t('settings.autoInstrument.ignore')}
-                    data-testid="auto-ignore"></textarea>
+                    label={t('settings.autoInstrument.filters')}
+                    testid="auto-filters"
+                />
             </div>
 
             <div class="field preview">
@@ -405,6 +397,11 @@
                         {/if}
                     {/if}
                 </p>
+                {#if applyPending !== null && applyPending > 0}
+                    <span class="count" data-testid="auto-applying">
+                        {t('settings.autoInstrument.applying').replace('{n}', count(applyPending))}
+                    </span>
+                {/if}
                 <Tooltip text={t('tip.settings.autoInstrument.apply')} align="stretch">
                     <button
                         type="button"
@@ -633,7 +630,7 @@
                             {#if health.total_errors > 0}
                                 <dt>{t('settings.exporter.errors')}</dt>
                                 <dd class="mono bad">
-                                    {health.total_errors} · {health.last_error ?? ''}
+                                    {health.total_errors} | {health.last_error ?? ''}
                                 </dd>
                             {/if}
                         {/if}
@@ -851,10 +848,6 @@
     .text::placeholder {
         color: var(--text-faint);
         opacity: 0.75;
-    }
-    textarea.text {
-        resize: vertical;
-        line-height: 1.5;
     }
     .num {
         width: 6.5rem;

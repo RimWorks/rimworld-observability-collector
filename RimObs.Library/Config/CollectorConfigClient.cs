@@ -68,6 +68,7 @@ internal sealed class CollectorConfigClient {
 
         CollectorAutoInstrumentConfig? auto = document.AutoInstrument;
         AutoInstrumentRunner.MaxTargets = auto?.MaxTargets ?? AutoInstrumentScanner.DefaultMaxTargets;
+        AutoMute.BudgetUsPerFrame = auto?.OverheadBudgetUs ?? 1000L;
         AutoInstrumentRequest.Set(
             auto?.Enabled ?? false, auto?.Filters, auto?.Ignore, auto?.MuteTrivial ?? true);
     }

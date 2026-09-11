@@ -34,6 +34,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private int _announcedMainThreadId;
 
     private readonly SampleBatch _batch = new SampleBatch(BatchSize);
+    private SectionBatch? _sectionBatchView;
     private readonly int[] _registrationIds = new int[64];
     private readonly string[] _registrationNames = new string[64];
     private readonly string?[] _registrationSubsystems = new string?[64];
@@ -102,6 +103,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     public long AllocationsDropped => _allocQueue.Dropped;
 
     public void Start() {
+        SpinClock.Start();
         _sender.Start();
     }
 
@@ -142,6 +144,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 FlushGcEvents();
                 FlushAllocations();
                 FlushTpsFps();
+                AutoMute.JudgeIfDue(FrameTickCounters.FrameOrdinal);
+                SpinClock.Verify();
             }
             catch (Exception ex) when (ex is SocketException or ObjectDisposedException or InvalidOperationException) {
                 // Expected when the collector is absent or the socket has been torn down.
@@ -300,6 +304,19 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     }
 
     private void FlushSamples() {
+        // the wrapper points at the staging arrays once; the count-aware serialize reads
+        // only the drained prefix, so the flood path slices nothing.
+        SectionBatch batch = _sectionBatchView ??= new SectionBatch {
+            SectionIds = _batch.SectionIds,
+            ParentIds = _batch.ParentIds,
+            StartTimestamps = _batch.StartTimestamps,
+            ElapsedTicks = _batch.ElapsedTicks,
+            FrameOrdinals = _batch.FrameOrdinals,
+            NodeIds = _batch.NodeIds,
+            ParentNodeIds = _batch.ParentNodeIds,
+            AllocBytes = _batch.AllocBytes,
+            ThreadIds = _batch.ThreadIds,
+        };
         while (true) {
             int n = _ring.Drain(_batch, BatchSize);
             if (n == 0)
@@ -308,18 +325,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             StageThreadRegistrations(_batch.ThreadIds, n);
             FlushThreadRegistrations();
 
-            SectionBatch batch = new() {
-                SectionIds = Slice(_batch.SectionIds, n),
-                ParentIds = Slice(_batch.ParentIds, n),
-                StartTimestamps = Slice(_batch.StartTimestamps, n),
-                ElapsedTicks = Slice(_batch.ElapsedTicks, n),
-                FrameOrdinals = Slice(_batch.FrameOrdinals, n),
-                NodeIds = Slice(_batch.NodeIds, n),
-                ParentNodeIds = Slice(_batch.ParentNodeIds, n),
-                AllocBytes = Slice(_batch.AllocBytes, n),
-                ThreadIds = Slice(_batch.ThreadIds, n),
-            };
-            SendBatch(BatchType.Sections, batch);
+            SendBatch(BatchType.Sections, WireCodec.Serialize(batch, n));
             Interlocked.Add(ref _sent, n);
         }
     }
@@ -467,6 +473,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     }
 
     public void Dispose() {
+        SpinClock.Stop();
         _stop.Set();
         try {
             _sender.Join(1000);

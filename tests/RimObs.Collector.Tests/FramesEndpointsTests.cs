@@ -71,6 +71,43 @@ public sealed class FramesEndpointsTests {
     }
 
     [Fact]
+    public async Task Range_drops_nodes_under_the_requested_duration_floor() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-lod-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-lod",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20],
+            ParentIds = [-1, 10],
+            StartTimestamps = [100L, 150L],
+            ElapsedTicks = [500L, 20L],
+            FrameOrdinals = [1, 1],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            // 20 ticks at 10MHz is 2us; a 10us floor drops the child and keeps the root.
+            string body = await client.GetStringAsync(
+                $"http://127.0.0.1:{port}/api/v1/frames?from=1&count=8&min_dur_us=10");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("lod_min_dur_us").GetDouble().Should().Be(10.0);
+            JsonElement frame = doc.RootElement.GetProperty("frames")[0];
+            frame.GetProperty("nodes").GetProperty("section_ids").GetArrayLength().Should().Be(1);
+            frame.GetProperty("nodes").GetProperty("section_ids")[0].GetInt32().Should().Be(10);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task Latest_subtracts_the_session_anchor_from_starts_but_not_durations() {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-anchor-token");

@@ -92,6 +92,18 @@ public sealed class ControlServerTests : IDisposable {
     }
 
     [Fact]
+    public async Task Assemblies_lists_the_loaded_assembly_names() {
+        HttpRequestMessage req = new(HttpMethod.Get, "/assemblies");
+        req.Headers.Add("X-RimObs-Control", "topsecret");
+        HttpResponseMessage res = await _client.SendAsync(req, _drainCts.Token);
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        byte[] body = await res.Content.ReadAsByteArrayAsync(_drainCts.Token);
+        ControlAssembliesResponse decoded = WireCodec.Deserialize<ControlAssembliesResponse>(body);
+        decoded.Assemblies.Should().Contain(typeof(ResolverTargets).Assembly.GetName().Name);
+    }
+
+    [Fact]
     public async Task Search_returns_results_for_substring_match() {
         ControlSearchRequest req = new() { Query = "ResolverTargets", Limit = 5 };
         HttpResponseMessage res = await PostMsg("/search", WireCodec.Serialize(req));

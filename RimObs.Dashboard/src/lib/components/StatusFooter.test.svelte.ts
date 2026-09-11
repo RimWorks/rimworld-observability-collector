@@ -14,6 +14,26 @@ const BASE = {
 };
 
 describe('StatusFooter', () => {
+    // the game reports its fps; this is the dashboard's OWN render rate, measured off rAF.
+    it('measures the dashboards own render rate from animation frames', async () => {
+        const original = globalThis.requestAnimationFrame;
+        const queue: FrameRequestCallback[] = [];
+        globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+            queue.push(cb);
+            return queue.length;
+        };
+        try {
+            render(StatusFooter, BASE);
+            // 30 frames over 500ms reads as 60 fps
+            for (let i = 0; i <= 30; i++) queue.shift()!((i * 500) / 30);
+            await expect
+                .poll(() => screen.getByTestId('footer-dash-fps').textContent)
+                .toContain('60');
+        } finally {
+            globalThis.requestAnimationFrame = original;
+        }
+    });
+
     it('shows how many frames the ring holds against its capacity', () => {
         render(StatusFooter, BASE);
         expect(screen.getByTestId('footer-ring')).toHaveTextContent('2,000/5,000');

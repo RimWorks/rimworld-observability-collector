@@ -25,6 +25,9 @@ public sealed class ControlClient {
     public async Task<ControlAutoInstrumentResponse> AutoInstrumentAsync() =>
         await Roundtrip<ControlAutoInstrumentResponse>(HttpMethod.Get, "/auto", null);
 
+    public async Task<ControlAssembliesResponse> AssembliesAsync() =>
+        await Roundtrip<ControlAssembliesResponse>(HttpMethod.Get, "/assemblies", null);
+
     /// <summary>Counts what a filter list would instrument. Patches nothing.</summary>
     public async Task<ControlAutoPreviewResponse> AutoPreviewAsync(ControlAutoPreviewRequest req) =>
         await Roundtrip<ControlAutoPreviewResponse>(HttpMethod.Post, "/auto/preview", WireCodec.Serialize(req));

@@ -1,7 +1,33 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
     import Tooltip from './Tooltip.svelte';
     import { count } from '../format';
     import { t } from '../i18n';
+
+    // the dashboard's own render rate, off rAF. half-second buckets keep the digits still.
+    let dashFps = $state<number | null>(null);
+    onMount(() => {
+        let raf = 0;
+        let anchor = -1;
+        let frames = 0;
+        const tick = (now: number) => {
+            if (anchor < 0) {
+                anchor = now;
+                raf = requestAnimationFrame(tick);
+                return;
+            }
+            frames++;
+            const elapsed = now - anchor;
+            if (elapsed >= 500) {
+                dashFps = Math.round((frames * 1000) / elapsed);
+                anchor = now;
+                frames = 0;
+            }
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    });
 
     let {
         ringHeld,
@@ -29,26 +55,32 @@
             <b>{count(ringHeld)}{ringCapacity !== null ? `/${count(ringCapacity)}` : ''}</b>
         </span>
     </Tooltip>
-    &middot;
+    |
     <Tooltip text={t('tip.footer.memory')}>
         <span data-testid="footer-memory">
             {t('footer.memory')} <b>{t('footer.memory.unavailable')}</b>
         </span>
     </Tooltip>
+    |
+    <Tooltip text={t('tip.footer.dashFps')}>
+        <span data-testid="footer-dash-fps">
+            {t('footer.dashFps')} <b>{dashFps === null ? '-' : dashFps}</b>
+        </span>
+    </Tooltip>
     {#if overheadText}
-        &middot;
+        |
         <Tooltip text={t('flamegraph.overhead.hint')}>
             <span data-testid="footer-overhead">{overheadText}</span>
         </Tooltip>
     {/if}
     {#if timerResLine}
-        &middot;
+        |
         <Tooltip text={t('tip.footer.timerres')}>
             <span data-testid="footer-timerres">{timerResLine}</span>
         </Tooltip>
     {/if}
     {#if deltaUs !== null}
-        &middot;
+        |
         <Tooltip text={t('tip.footer.delta')}>
             <span
                 class="delta"

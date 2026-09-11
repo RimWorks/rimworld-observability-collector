@@ -2,9 +2,9 @@ export function ns(value: number): string {
     if (!Number.isFinite(value)) return '-';
     if (value <= 0) return '0';
     if (value < 1_000) return `${value} ns`;
-    if (value < 1_000_000) return `${(value / 1_000).toFixed(1)} us`;
-    if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(2)} ms`;
-    return `${(value / 1_000_000_000).toFixed(2)} s`;
+    if (value < 1_000_000) return `${(value / 1_000).toFixed(3)} us`;
+    if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(3)} ms`;
+    return `${(value / 1_000_000_000).toFixed(3)} s`;
 }
 
 export function bytes(value: number): string {

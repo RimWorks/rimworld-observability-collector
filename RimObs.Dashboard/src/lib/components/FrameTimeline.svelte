@@ -45,14 +45,20 @@
         names,
         selectedNode = $bindable(-1),
         selectedOrdinal = null,
+        selectedRange = null,
         bands,
+        onViewChange,
     }: {
         series?: FrameSeries;
         selectedOrdinal?: number | null;
+        /** a pinned ordinal range: the default fit spans it instead of one frame. */
+        selectedRange?: { from: number; to: number } | null;
         names: Map<number, { name: string; subsystem: string | null }>;
         selectedNode?: number;
         /** one flame band per thread lane. absent draws every node in one band. */
         bands?: LaneBands;
+        /** debounced view-span reports, so a pinned range can refine detail on zoom. */
+        onViewChange?: (view: ViewRange) => void;
     } = $props();
 
     const ANIM_MS = 180;
@@ -79,6 +85,13 @@
     // the window holds many frames so a user can zoom out to them, but landing on the whole
     // window would bury the frame they picked. default to that frame alone.
     let selectedBounds = $derived.by<ViewRange>(() => {
+        if (selectedRange) {
+            const inRange = series.entries.filter(
+                (e) => e.ordinal >= selectedRange.from && e.ordinal <= selectedRange.to,
+            );
+            if (inRange.length > 0)
+                return { startUs: inRange[0].startUs, endUs: inRange.at(-1)!.endUs };
+        }
         const entry =
             series.entries.find((e) => e.ordinal === selectedOrdinal) ?? series.entries.at(-1);
         // falling back to the whole window here showed seconds instead of one frame whenever the
@@ -96,6 +109,14 @@
     // clamped on read, not just on write: the window grows under us on every poll, and a
     // view from a longer series culls every node in a shorter one.
     let effectiveView = $derived(view ? clampView(view, bounds) : fitView(selectedBounds));
+
+    let viewChangeTimer = 0;
+    $effect(() => {
+        const v = effectiveView;
+        if (!onViewChange || empty) return;
+        clearTimeout(viewChangeTimer);
+        viewChangeTimer = window.setTimeout(() => onViewChange(v), 250);
+    });
 
     // holds the in-flight interpolated range while a zoom animation runs, so the layout
     // (quads) tracks what is actually painted instead of jumping to the target at t=0.
@@ -151,6 +172,8 @@
         }),
     );
     let gaps = $derived(visibleGaps(series.gaps, layoutView.startUs, layoutView.endUs));
+    // every frame start except the first: the cut between one frame and the next.
+    let frameEdgesUs = $derived(series.entries.slice(1).map((e) => e.startUs));
     let shown = $derived(
         visibleEntries(series.entries, effectiveView.startUs, effectiveView.endUs),
     );
@@ -521,6 +544,7 @@
             matchSectionIds: matchIds,
             matchRange,
             laneBands: bands?.bands,
+            frameEdgesUs,
         });
     }
 
@@ -717,7 +741,7 @@
         color: var(--text-dim);
     }
     .meta span + span::before {
-        content: ' · ';
+        content: ' | ';
         color: var(--text-ghost);
     }
     .tip {

@@ -9,6 +9,17 @@ namespace RimWorks.RimObs.Wire;
 // Encodes the same array-of-fields layout MessagePack's generated formatters produce, so it
 // stays interoperable with any standard reader on the collector side.
 public static class WireCodec {
+    // one writer per thread for the two flood-rate paths; every serialize on it starts with
+    // Reset, and nothing here calls another rented serialize while writing.
+    [ThreadStatic]
+    private static WireBufferWriter? t_Writer;
+
+    private static WireBufferWriter Rented() {
+        WireBufferWriter writer = t_Writer ??= new WireBufferWriter(64 * 1024);
+        writer.Reset();
+        return writer;
+    }
+
     public static byte[] Serialize<T>(T value) where T : class {
         switch (value) {
             case TelemetryBatch v:
@@ -53,13 +64,15 @@ public static class WireCodec {
                 return Serialize(v);
             case ControlAutoInstrumentResponse v:
                 return Serialize(v);
+            case ControlAssembliesResponse v:
+                return Serialize(v);
             default:
                 throw new NotSupportedException($"WireCodec cannot serialize {typeof(T)}.");
         }
     }
 
     public static byte[] Serialize(TelemetryBatch value) {
-        WireBufferWriter writer = new WireBufferWriter();
+        WireBufferWriter writer = Rented();
         writer.WriteArrayHeader(5);
         writer.WriteInt32(value.SchemaVersion);
         writer.WriteUInt64(value.Sequence);
@@ -123,6 +136,25 @@ public static class WireCodec {
         WriteInt32Array(writer, value.ParentNodeIds);
         WriteInt64Array(writer, value.AllocBytes);
         WriteInt32Array(writer, value.ThreadIds);
+        return writer.ToArray();
+    }
+
+    /// <summary>
+    /// Serializes the first <paramref name="count"/> samples straight off the backing arrays.
+    /// Byte-identical to slicing first, without the nine per-batch array copies.
+    /// </summary>
+    public static byte[] Serialize(SectionBatch value, int count) {
+        WireBufferWriter writer = Rented();
+        writer.WriteArrayHeader(9);
+        WriteInt32Array(writer, value.SectionIds, count);
+        WriteInt64Array(writer, value.ElapsedTicks, count);
+        WriteInt64Array(writer, value.StartTimestamps, count);
+        WriteInt32Array(writer, value.ParentIds, count);
+        WriteInt32Array(writer, value.FrameOrdinals, count);
+        WriteInt32Array(writer, value.NodeIds, count);
+        WriteInt32Array(writer, value.ParentNodeIds, count);
+        WriteInt64Array(writer, value.AllocBytes, count);
+        WriteInt32Array(writer, value.ThreadIds, count);
         return writer.ToArray();
     }
 
@@ -219,6 +251,13 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    public static byte[] Serialize(ControlAssembliesResponse value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(1);
+        WriteStringArray(writer, value.Assemblies);
+        return writer.ToArray();
+    }
+
     public static byte[] Serialize(ControlPatchRequest value) {
         WireBufferWriter writer = new WireBufferWriter();
         writer.WriteArrayHeader(3);
@@ -310,6 +349,7 @@ public static class WireCodec {
         [typeof(TpsFpsBatch)] = data => ReadTpsFpsBatch(data),
         [typeof(ControlSearchRequest)] = data => ReadControlSearchRequest(data),
         [typeof(ControlSearchResponse)] = data => ReadControlSearchResponse(data),
+        [typeof(ControlAssembliesResponse)] = data => ReadControlAssembliesResponse(data),
         [typeof(ControlPatchRequest)] = data => ReadControlPatchRequest(data),
         [typeof(ControlPatchResponse)] = data => ReadControlPatchResponse(data),
         [typeof(ControlPatchListResponse)] = data => ReadControlPatchListResponse(data),
@@ -527,6 +567,12 @@ public static class WireCodec {
         return new ControlSearchResponse { Results = results };
     }
 
+    private static ControlAssembliesResponse ReadControlAssembliesResponse(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlAssembliesResponse { Assemblies = ReadStringArray(reader) };
+    }
+
     private static ControlPatchRequest ReadControlPatchRequest(byte[] data) {
         WireBufferReader reader = new WireBufferReader(data);
         reader.ReadArrayHeader();
@@ -633,15 +679,21 @@ public static class WireCodec {
         writer.WriteString(d.AssemblyName);
     }
 
-    private static void WriteInt32Array(WireBufferWriter writer, int[] values) {
-        writer.WriteArrayHeader(values.Length);
-        for (int i = 0; i < values.Length; i++)
+    private static void WriteInt32Array(WireBufferWriter writer, int[] values) =>
+        WriteInt32Array(writer, values, values.Length);
+
+    private static void WriteInt32Array(WireBufferWriter writer, int[] values, int count) {
+        writer.WriteArrayHeader(count);
+        for (int i = 0; i < count; i++)
             writer.WriteInt32(values[i]);
     }
 
-    private static void WriteInt64Array(WireBufferWriter writer, long[] values) {
-        writer.WriteArrayHeader(values.Length);
-        for (int i = 0; i < values.Length; i++)
+    private static void WriteInt64Array(WireBufferWriter writer, long[] values) =>
+        WriteInt64Array(writer, values, values.Length);
+
+    private static void WriteInt64Array(WireBufferWriter writer, long[] values, int count) {
+        writer.WriteArrayHeader(count);
+        for (int i = 0; i < count; i++)
             writer.WriteInt64(values[i]);
     }
 

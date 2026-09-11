@@ -21,13 +21,14 @@ describe('ns', () => {
         expect(ns(999)).toBe('999 ns');
     });
 
-    it('scales to us, ms, and s at the boundaries', () => {
-        expect(ns(1_000)).toBe('1.0 us');
-        expect(ns(1_500)).toBe('1.5 us');
-        expect(ns(1_000_000)).toBe('1.00 ms');
-        expect(ns(2_500_000)).toBe('2.50 ms');
-        expect(ns(1_000_000_000)).toBe('1.00 s');
-        expect(ns(90_000_000_000)).toBe('90.00 s');
+    // durations read against each other, so every scaled unit keeps three decimals.
+    it('scales to us, ms, and s with three decimals', () => {
+        expect(ns(1_000)).toBe('1.000 us');
+        expect(ns(1_500)).toBe('1.500 us');
+        expect(ns(1_000_000)).toBe('1.000 ms');
+        expect(ns(2_512_345)).toBe('2.512 ms');
+        expect(ns(1_000_000_000)).toBe('1.000 s');
+        expect(ns(90_000_000_000)).toBe('90.000 s');
     });
 });
 

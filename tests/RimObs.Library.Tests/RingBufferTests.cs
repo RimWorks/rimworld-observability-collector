@@ -145,25 +145,51 @@ public sealed class RingBufferTests {
         ring.Drain(batch, 16).Should().Be(3);
     }
 
+    // one producer per ring: samples are stamped with the owner set at construction, not a
+    // per-write thread lookup. cross-thread stamping lives at the SampleRingSet level.
     [Fact]
-    public void Drain_reports_the_thread_that_wrote_each_sample() {
-        SampleRingBuffer ring = new(16);
+    public void Drain_reports_the_ring_owner_for_every_sample() {
+        SampleRingBuffer ring = new(16, ownerThreadId: 4242);
         ring.TryWrite(1, -1, 1, -1, 0L, 0L, 1).Should().BeTrue();
+        ring.TryWrite(2, -1, 2, -1, 0L, 0L, 1).Should().BeTrue();
+
+        SampleBatch batch = new SampleBatch(16);
+        ring.Drain(batch, 16).Should().Be(2);
+
+        batch.ThreadIds[0].Should().Be(4242);
+        batch.ThreadIds[1].Should().Be(4242);
+    }
+
+    [Fact]
+    public void Set_lanes_stamp_each_thread_with_its_own_id() {
+        SampleRingSet set = new(16);
+        set.TryWrite(1, -1, 1, -1, 0L, 0L, 1).Should().BeTrue();
 
         int otherThreadId = 0;
         Thread other = new(() => {
             otherThreadId = Environment.CurrentManagedThreadId;
-            ring.TryWrite(2, -1, 2, -1, 0L, 0L, 1).Should().BeTrue();
+            set.TryWrite(2, -1, 2, -1, 0L, 0L, 1).Should().BeTrue();
         });
         other.Start();
         other.Join();
 
         SampleBatch batch = new SampleBatch(16);
-        ring.Drain(batch, 16).Should().Be(2);
+        int seenMine = 0;
+        int seenOther = 0;
+        for (int guard = 0; guard < 8; guard++) {
+            int n = set.Drain(batch, 16);
+            if (n == 0)
+                break;
+            for (int i = 0; i < n; i++) {
+                if (batch.ThreadIds[i] == Environment.CurrentManagedThreadId)
+                    seenMine++;
+                else if (batch.ThreadIds[i] == otherThreadId)
+                    seenOther++;
+            }
+        }
 
-        batch.ThreadIds[0].Should().Be(Environment.CurrentManagedThreadId);
-        batch.ThreadIds[1].Should().Be(otherThreadId);
-        batch.ThreadIds[1].Should().NotBe(batch.ThreadIds[0]);
+        seenMine.Should().Be(1);
+        seenOther.Should().Be(1);
     }
 
     [Fact]

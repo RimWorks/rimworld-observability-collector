@@ -112,6 +112,41 @@ describe('Resource start/stop', () => {
 
 // a scanner or a screenshot tool waits for the network to go quiet, and a 3s poll never lets
 // it. freeze keeps the first load, which is what makes the capture worth looking at.
+// the flamegraph retunes its poll to frame size; rebuilding the Resource for that reset
+// data to null and flashed the whole page through the loading state on every band change.
+describe('Resource.setIntervalMs', () => {
+    it('changes cadence in place without dropping data or state', async () => {
+        vi.useFakeTimers();
+        let calls = 0;
+        const res = new Resource(async () => ++calls, 1000);
+        res.start();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(res.data).toBe(1);
+
+        res.setIntervalMs(100);
+
+        expect(res.data).toBe(1);
+        expect(res.state).toBe('ok');
+        await vi.advanceTimersByTimeAsync(350);
+        expect(calls).toBe(4);
+        res.stop();
+    });
+
+    it('does nothing when the cadence is unchanged', async () => {
+        vi.useFakeTimers();
+        let calls = 0;
+        const res = new Resource(async () => ++calls, 1000);
+        res.start();
+        await vi.advanceTimersByTimeAsync(0);
+
+        res.setIntervalMs(1000);
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(calls).toBe(2);
+        res.stop();
+    });
+});
+
 describe('isFrozen', () => {
     it('is off with no query string', () => {
         expect(isFrozen('')).toBe(false);

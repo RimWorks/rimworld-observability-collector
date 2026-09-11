@@ -53,10 +53,30 @@ public class MethodPatternTests {
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("# a comment")]
+    public void Rejects_blank_and_comment_lines(string line) {
+        MethodPattern.Parse(line).Should().BeNull();
+    }
+
+    // the settings box treats * as "instrument everything", so the parser has to as well.
+    // it used to reject these as probable accidents, which made a * filter silently no-op.
+    [Theory]
     [InlineData("*")]
     [InlineData("*!*::*")]
-    public void Rejects_blank_comment_and_match_everything_lines(string line) {
-        MethodPattern.Parse(line).Should().BeNull();
+    public void A_match_everything_line_is_valid(string line) {
+        MethodPattern p = MethodPattern.Parse(line)!;
+
+        p.Should().NotBeNull();
+        p.MatchesAssembly("Assembly-CSharp").Should().BeTrue();
+        p.MatchesType("Verse.Anything").Should().BeTrue();
+        p.MatchesMethod("Anything").Should().BeTrue();
+        p.Negated.Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_match_everything_ignore_line_still_negates() {
+        MethodPattern[] parsed = MethodPattern.ParseAll("*", negate: true);
+
+        parsed.Should().ContainSingle().Which.Negated.Should().BeTrue();
     }
 
     [Fact]

@@ -17,6 +17,7 @@ import {
     timerResText,
     budgetSeverity,
     deltaSeverity,
+    framePollMs,
 } from './frameCost';
 
 describe('FRAME_BUDGET_US', () => {
@@ -268,5 +269,24 @@ describe('budgetSeverity', () => {
 
     it('flags a frame over it', () => {
         expect(budgetSeverity(46000)).toBe(1);
+    });
+});
+
+// under an instrument-everything flood a frame is 15k nodes and megabytes of json; parsing
+// that 60x a second is what lags the whole dashboard. the poll slows down as frames grow.
+describe('framePollMs', () => {
+    it('polls per frame while frames are small', () => {
+        expect(framePollMs(0)).toBe(16);
+        expect(framePollMs(1999)).toBe(16);
+    });
+
+    it('backs off for medium frames', () => {
+        expect(framePollMs(2000)).toBe(50);
+        expect(framePollMs(7999)).toBe(50);
+    });
+
+    it('backs off hard for flood-sized frames', () => {
+        expect(framePollMs(8000)).toBe(150);
+        expect(framePollMs(50000)).toBe(150);
     });
 });

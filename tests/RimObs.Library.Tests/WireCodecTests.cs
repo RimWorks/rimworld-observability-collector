@@ -664,7 +664,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(21);
+        AllWireTypes().Count.Should().Be(22);
     }
 
     // the preview is only trustworthy if every counter survives the wire, so this asserts the
@@ -764,6 +764,60 @@ public sealed class WireCodecTests {
 
         back.SectionIds.Should().Equal(10);
         back.ThreadIds.Should().BeEmpty();
+    }
+
+    // the sender used to slice nine fresh arrays per 256-sample batch; at flood rates that
+    // garbage drove Boehm stop-the-world pauses in the game. count-aware serialize kills it.
+    [Fact]
+    public void Count_aware_section_serialize_matches_sliced_arrays_byte_for_byte() {
+        SectionBatch backing = new() {
+            SectionIds = [10, 11, 12, 99],
+            ElapsedTicks = [5L, 6L, 7L, 99L],
+            StartTimestamps = [1L, 2L, 3L, 99L],
+            ParentIds = [-1, 10, 10, 99],
+            FrameOrdinals = [4321, 4321, 4322, 99],
+            NodeIds = [1, 2, 3, 99],
+            ParentNodeIds = [-1, 1, 1, 99],
+            AllocBytes = [0L, 8L, 16L, 99L],
+            ThreadIds = [1, 1, 7, 99],
+        };
+        SectionBatch sliced = new() {
+            SectionIds = [10, 11, 12],
+            ElapsedTicks = [5L, 6L, 7L],
+            StartTimestamps = [1L, 2L, 3L],
+            ParentIds = [-1, 10, 10],
+            FrameOrdinals = [4321, 4321, 4322],
+            NodeIds = [1, 2, 3],
+            ParentNodeIds = [-1, 1, 1],
+            AllocBytes = [0L, 8L, 16L],
+            ThreadIds = [1, 1, 7],
+        };
+
+        WireCodec.Serialize(backing, 3).Should().Equal(WireCodec.Serialize(sliced));
+    }
+
+    [Fact]
+    public void Consecutive_serializes_do_not_corrupt_each_other_through_writer_reuse() {
+        TelemetryBatch first = new() {
+            SchemaVersion = 9,
+            Sequence = 1,
+            OwnerId = "a",
+            BatchType = BatchType.Sections,
+            Payload = [1, 2, 3],
+        };
+        TelemetryBatch second = new() {
+            SchemaVersion = 9,
+            Sequence = 2,
+            OwnerId = "bb",
+            BatchType = BatchType.Sections,
+            Payload = [9, 8],
+        };
+
+        byte[] firstBytes = WireCodec.Serialize(first);
+        byte[] secondBytes = WireCodec.Serialize(second);
+
+        WireCodec.Deserialize<TelemetryBatch>(firstBytes).Payload.Should().Equal(1, 2, 3);
+        WireCodec.Deserialize<TelemetryBatch>(secondBytes).Payload.Should().Equal(9, 8);
     }
 
     [Fact]
