@@ -184,6 +184,26 @@ public sealed class RingBufferTests {
         set.Dropped.Should().Be(60);
     }
 
+    // regression: the drop path used to consume a sequence number, leaving a gap the drain
+    // stopped at forever - one overflow burst killed the lane for the rest of the session.
+    [Fact]
+    public void A_lane_keeps_draining_after_an_overflow() {
+        SampleRingBuffer ring = new(4);
+        for (int i = 0; i < 6; i++)
+            ring.TryWrite(i, -1, 0, -1, 0, 0, 1);
+
+        SampleBatch batch = new(16);
+        int drainedBefore = ring.Drain(batch, 16);
+
+        ring.TryWrite(99, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+        int drainedAfter = ring.Drain(batch, 16);
+
+        drainedBefore.Should().Be(4);
+        drainedAfter.Should().Be(1);
+        batch.SectionIds[0].Should().Be(99);
+        (drainedBefore + drainedAfter + ring.Dropped).Should().Be(7);
+    }
+
     [Fact]
     public void Lanes_of_exited_threads_are_reaped_once_drained() {
         SampleRingSet set = new(4);

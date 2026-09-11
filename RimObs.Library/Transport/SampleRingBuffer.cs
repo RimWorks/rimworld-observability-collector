@@ -36,12 +36,15 @@ internal sealed class SampleRingBuffer {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
-        long seq = Interlocked.Increment(ref _claim);
+        // one producer per ring, so the claim is plain - and it must not advance on the drop
+        // path, or the drain stops at the unpublished gap forever.
+        long seq = _claim + 1;
         long read = Volatile.Read(ref _read);
         if (seq - read > _slots.Length) {
             Interlocked.Increment(ref _dropped);
             return false;
         }
+        _claim = seq;
         int idx = (int)((seq - 1) & _mask);
         _slots[idx].SectionId = sectionId;
         _slots[idx].ParentId = parentId;
