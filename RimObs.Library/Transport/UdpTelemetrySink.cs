@@ -16,7 +16,7 @@ namespace RimWorks.RimObs.Transport;
 
 internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationSink, ITpsFpsSink, IDisposable {
     public const int DefaultPort = 17654;
-    private const int RingCapacity = 16384;
+    public const int DefaultRingCapacity = 16384;
     private const int BatchSize = 256;
     private const int DrainIntervalMs = 100;
     private const int MetaInitialBurstTicks = 10;
@@ -24,7 +24,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     private readonly UdpClient _client;
     private readonly IPEndPoint _endpoint;
-    private readonly SampleRingSet _ring = new(RingCapacity);
+    private readonly SampleRingSet _ring = new(DefaultRingCapacity);
     private readonly Thread _sender;
     private readonly ManualResetEventSlim _stop = new(false);
     private readonly string _ownerId;
@@ -82,6 +82,11 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             IsBackground = true,
         };
     }
+
+    public int RingCapacity => _ring.LaneCapacity;
+
+    /// <summary>Resizes the per-lane sample rings and returns the capacity actually taken.</summary>
+    public int SetRingCapacity(int capacity) => _ring.SetLaneCapacity(capacity);
 
     public long SamplesSent => Interlocked.Read(ref _sent);
     public long BytesSent => Interlocked.Read(ref _bytesSent);

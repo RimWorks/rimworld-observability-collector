@@ -19,7 +19,13 @@ internal sealed class AutoInstrumentPlan {
     /// <summary>Matched, eligible, but past <c>maxTargets</c>. These are never patched.</summary>
     public int SkippedOverCap { get; set; }
 
+    /// <summary>The cap this scan ran under.</summary>
+    public int MaxTargets { get; set; }
+
     public List<MethodInfo> Targets { get; } = new List<MethodInfo>();
 
     public int Eligible => Targets.Count;
+
+    /// <summary>The cap bit: eligible methods matched but were left out of the plan.</summary>
+    public bool Truncated => SkippedOverCap > 0;
 }

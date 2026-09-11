@@ -108,6 +108,26 @@ public sealed class CollectorConfigClientTests {
         filters.Should().BeEmpty();
     }
 
+    [Fact]
+    public void ApplyToRegistry_reads_the_target_cap_the_collector_sent() {
+        CollectorConfigClient.ApplyToRegistry(
+            CollectorConfigDocument.TryParse(
+                """{ "auto_instrument": { "enabled": true, "max_targets": 40000 } }""")!
+        );
+
+        AutoInstrumentRunner.MaxTargets.Should().Be(40000);
+    }
+
+    [Fact]
+    public void ApplyToRegistry_falls_back_to_the_default_cap_when_none_was_sent() {
+        AutoInstrumentRunner.MaxTargets = 40000;
+
+        CollectorConfigClient.ApplyToRegistry(
+            CollectorConfigDocument.TryParse("""{ "auto_instrument": { "enabled": true } }""")!);
+
+        AutoInstrumentRunner.MaxTargets.Should().Be(AutoInstrumentScanner.DefaultMaxTargets);
+    }
+
     // enabled used to collapse into the filter string, so with no filters configured the off
     // poll looked identical to the on poll and was deduped away. the toggle did nothing.
     [Fact]

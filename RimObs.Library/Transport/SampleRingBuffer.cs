@@ -107,25 +107,35 @@ internal sealed class SampleRingBuffer {
 /// its own lane instead of eating the capacity the main thread needs.
 /// </summary>
 internal sealed class SampleRingSet {
+    /// <summary>Smallest per-lane ring the collector may ask for.</summary>
+    public const int MinLaneCapacity = 256;
+
+    /// <summary>1M slots is ~56 MB of <see cref="SampleRingBuffer.Slot"/> per lane.</summary>
+    public const int MaxLaneCapacity = 1 << 20;
+
     private sealed class Lane {
+        private SampleRingBuffer _ring;
+
         public Lane(SampleRingBuffer ring, Thread owner) {
-            Ring = ring;
+            _ring = ring;
             Owner = owner;
         }
 
-        public SampleRingBuffer Ring { get; }
+        public SampleRingBuffer Ring => Volatile.Read(ref _ring);
         public Thread Owner { get; }
+
+        public void Swap(SampleRingBuffer ring) => Volatile.Write(ref _ring, ring);
     }
 
-    private readonly int _laneCapacity;
-    private readonly ThreadLocal<SampleRingBuffer> _lane;
+    private readonly ThreadLocal<Lane> _lane;
     private Lane[] _lanes = Array.Empty<Lane>();
+    private int _laneCapacity;
     private int _cursor;
     private long _reapedDropped;
 
     public SampleRingSet(int laneCapacity) {
         _laneCapacity = laneCapacity;
-        _lane = new ThreadLocal<SampleRingBuffer>(AddLane);
+        _lane = new ThreadLocal<Lane>(AddLane);
     }
 
     /// <summary>
@@ -134,8 +144,31 @@ internal sealed class SampleRingSet {
     /// </summary>
     public Action<int>? LaneReaped { get; set; }
 
-    public int LaneCapacity => _laneCapacity;
+    public int LaneCapacity => Volatile.Read(ref _laneCapacity);
     public int LaneCount => Volatile.Read(ref _lanes).Length;
+
+    /// <summary>Rounds a requested capacity up to a power of two inside the supported rails.</summary>
+    public static int NormalizeCapacity(int capacity) {
+        if (capacity <= MinLaneCapacity)
+            return MinLaneCapacity;
+        if (capacity >= MaxLaneCapacity)
+            return MaxLaneCapacity;
+
+        int rounded = MinLaneCapacity;
+        while (rounded < capacity)
+            rounded <<= 1;
+        return rounded;
+    }
+
+    /// <summary>
+    /// Sets the per-lane ring size and returns what it rounded to. New lanes take it at once;
+    /// existing ones are rebuilt by the drainer at the next empty drain.
+    /// </summary>
+    public int SetLaneCapacity(int capacity) {
+        int normalized = NormalizeCapacity(capacity);
+        Volatile.Write(ref _laneCapacity, normalized);
+        return normalized;
+    }
 
     public long Dropped {
         get {
@@ -149,7 +182,7 @@ internal sealed class SampleRingSet {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
-        return _lane.Value!.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
+        return _lane.Value!.Ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, frameOrdinal, allocBytes);
     }
 
     /// <summary>
@@ -172,9 +205,25 @@ internal sealed class SampleRingSet {
                     _cursor = (idx + 1) % lanes.Length;
                     return last;
                 }
+                continue;
             }
+            Retune(lane);
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Rebuilds an empty lane at the capacity set since it was created. Drainer thread only.
+    /// </summary>
+    private void Retune(Lane lane) {
+        SampleRingBuffer old = lane.Ring;
+        int want = Volatile.Read(ref _laneCapacity);
+        if (old.Capacity == want)
+            return;
+
+        lane.Swap(new SampleRingBuffer(want));
+        // a sample the owner published into the old ring during the swap is gone, so count it
+        Interlocked.Add(ref _reapedDropped, old.Dropped + old.DiscardAll());
     }
 
     /// <summary>
@@ -189,9 +238,8 @@ internal sealed class SampleRingSet {
         return string.Empty;
     }
 
-    private SampleRingBuffer AddLane() {
-        SampleRingBuffer ring = new(_laneCapacity);
-        Lane lane = new(ring, Thread.CurrentThread);
+    private Lane AddLane() {
+        Lane lane = new(new SampleRingBuffer(Volatile.Read(ref _laneCapacity)), Thread.CurrentThread);
         Lane[] old;
         Lane[] grown;
         do {
@@ -201,7 +249,7 @@ internal sealed class SampleRingSet {
             grown[old.Length] = lane;
         }
         while (Interlocked.CompareExchange(ref _lanes, grown, old) != old);
-        return ring;
+        return lane;
     }
 
     /// <summary>

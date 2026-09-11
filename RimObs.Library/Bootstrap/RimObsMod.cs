@@ -230,6 +230,7 @@ public sealed class RimObsMod : Mod {
         AllocationSamplerHost.SetSink(sink);
         TpsFpsObserverHost.SetSink(sink);
         SessionRestarter.SetSink(sink);
+        ControlServices.SetSink(sink);
         s_Sink = sink;
     }
 

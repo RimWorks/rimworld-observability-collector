@@ -74,6 +74,7 @@ internal sealed class ControlServer {
         if (method == "GET" && path == "/patches") { HandlePatchList(ctx); return; }
         if (method == "GET" && path == "/auto") { HandleAutoInstrument(ctx); return; }
         if (method == "POST" && path == "/auto/preview") { HandleAutoPreview(ctx); return; }
+        if (method == "POST" && path == "/ring-capacity") { HandleRingCapacity(ctx); return; }
         if (method == "POST" && path == "/session/new") { HandleNewSession(ctx); return; }
         if (method == "POST" && path == "/session/restart-game") { HandleRestartGame(ctx); return; }
         if (method == "DELETE" && path.StartsWith("/patch/", StringComparison.Ordinal)) {
@@ -148,6 +149,24 @@ internal sealed class ControlServer {
         WriteResponse(ctx, WireCodec.Serialize(new ControlPatchListResponse { Patches = entries.ToArray() }));
     }
 
+    /// <summary>
+    /// Resizes the sender's per-thread sample rings. Existing lanes take it at their next
+    /// empty drain, so a frame in flight can still drop.
+    /// </summary>
+    private static void HandleRingCapacity(HttpListenerContext ctx) {
+        Transport.UdpTelemetrySink? sink = ControlServices.Sink;
+        if (sink is null) {
+            ctx.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
+            return;
+        }
+
+        byte[] body = ReadBody(ctx);
+        ControlRingCapacityRequest req = WireCodec.Deserialize<ControlRingCapacityRequest>(body);
+        WriteResponse(ctx, WireCodec.Serialize(new ControlRingCapacityResponse {
+            Capacity = sink.SetRingCapacity(req.Capacity),
+        }));
+    }
+
     private static void HandleAutoInstrument(HttpListenerContext ctx) {
         WriteResponse(ctx, WireCodec.Serialize(new ControlAutoInstrumentResponse {
             Matched = AutoInstrumentRunner.Matched,
@@ -157,6 +176,8 @@ internal sealed class ControlServer {
             SkippedOther = AutoInstrumentRunner.SkippedOther,
             Refused = AutoInstrumentRunner.Refused,
             Pending = AutoInstrumentRunner.Pending,
+            SkippedOverCap = AutoInstrumentRunner.SkippedOverCap,
+            MaxTargets = AutoInstrumentRunner.MaxTargets,
         }));
     }
 
@@ -164,14 +185,14 @@ internal sealed class ControlServer {
     /// Counts a filter list against the loaded assemblies and patches nothing. Runs on the game
     /// thread because the scan reads the section catalog the patcher writes.
     /// </summary>
-    private static void HandleAutoPreview(HttpListenerContext ctx) {
+    private void HandleAutoPreview(HttpListenerContext ctx) {
         byte[] body = ReadBody(ctx);
         ControlAutoPreviewRequest req = WireCodec.Deserialize<ControlAutoPreviewRequest>(body);
 
         AutoInstrumentPlan? plan = null;
         ControlOp op = new ControlOp(
             ControlOpKind.Patch,
-            () => plan = AutoInstrumentRunner.Preview(req.Filters, req.Ignore));
+            () => plan = AutoInstrumentRunner.Preview(req.Filters, req.Ignore, _assemblies(), req.MaxTargets));
         ControlServices.Queue.Enqueue(op);
         if (!op.Wait(TimeSpan.FromSeconds(10)) || plan is null) {
             ctx.Response.StatusCode = (int)HttpStatusCode.GatewayTimeout;
@@ -186,6 +207,7 @@ internal sealed class ControlServer {
             SkippedBlocklisted = plan.SkippedBlocklisted,
             SkippedAlreadyInstrumented = plan.SkippedAlreadyInstrumented,
             SkippedOverCap = plan.SkippedOverCap,
+            MaxTargets = plan.MaxTargets,
         }));
     }
 

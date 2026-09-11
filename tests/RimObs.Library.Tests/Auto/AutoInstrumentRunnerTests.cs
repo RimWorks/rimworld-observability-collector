@@ -183,6 +183,47 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
         plan.Eligible.Should().Be(0);
     }
 
+    [Fact]
+    public void Preview_honours_a_cap_the_caller_passed() {
+        AutoInstrumentPlan plan = AutoInstrumentRunner.Preview(
+            "RimObsTest.AutoFixtures.AutoTargets", ignore: null, s_Here, maxTargets: 1);
+
+        plan.Eligible.Should().Be(1);
+        plan.Truncated.Should().BeTrue();
+        plan.SkippedOverCap.Should().Be(2);
+    }
+
+    [Fact]
+    public void ApplyFilters_honours_the_configured_cap_and_reports_the_truncation() {
+        AutoInstrumentRunner.MaxTargets = 1;
+
+        AutoInstrumentPlan plan = Apply("RimObsTest.AutoFixtures.AutoTargets");
+
+        plan.Eligible.Should().Be(1);
+        AutoInstrumentRunner.Truncated.Should().BeTrue();
+        AutoInstrumentRunner.SkippedOverCap.Should().Be(2);
+    }
+
+    [Fact]
+    public void The_cap_falls_back_to_the_default_when_it_is_set_to_nothing() {
+        AutoInstrumentRunner.MaxTargets = 0;
+
+        AutoInstrumentRunner.MaxTargets.Should().Be(AutoInstrumentScanner.DefaultMaxTargets);
+    }
+
+    // a cap change on its own has to force a rescan, or the dashboard raises the cap and
+    // nothing happens until the filters also change.
+    [Fact]
+    public void Changing_the_cap_re_arms_a_settings_snapshot_already_taken() {
+        AutoInstrumentRequest.Set(enabled: true, filters: "Verse.*", ignore: null, muteTrivial: true);
+        AutoInstrumentRequest.TryTake(out bool _, out string _, out string _, out bool _).Should().BeTrue();
+        AutoInstrumentRequest.HasPending.Should().BeFalse();
+
+        AutoInstrumentRunner.MaxTargets = 64;
+
+        AutoInstrumentRequest.HasPending.Should().BeTrue();
+    }
+
     private static AutoInstrumentPlan Apply(string filters) =>
         AutoInstrumentRunner.ApplyFilters(filters, ignore: null, autoMute: true, "test.owner", s_Here);
 

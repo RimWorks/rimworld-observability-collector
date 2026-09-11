@@ -15,4 +15,7 @@ internal sealed class CollectorAutoInstrumentConfig {
 
     [DataMember(Name = "mute_trivial")]
     public bool? MuteTrivial { get; set; }
+
+    [DataMember(Name = "max_targets")]
+    public int? MaxTargets { get; set; }
 }

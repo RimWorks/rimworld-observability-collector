@@ -8,4 +8,9 @@ public sealed class ControlAutoInstrumentResponse {
     public int SkippedOther { get; set; }
     public int Refused { get; set; }
     public int Pending { get; set; }
+    public int SkippedOverCap { get; set; }
+    public int MaxTargets { get; set; }
+
+    /// <summary>The cap bit: eligible methods were dropped from the plan.</summary>
+    public bool Truncated => SkippedOverCap > 0;
 }

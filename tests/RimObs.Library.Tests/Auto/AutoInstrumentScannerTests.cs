@@ -100,6 +100,24 @@ public class AutoInstrumentScannerTests {
     }
 
     [Fact]
+    public void A_cap_that_bites_is_reported_as_truncated() {
+        AutoInstrumentPlan plan = Scan("RimObsTest.AutoFixtures.AutoTargets", maxTargets: 1);
+
+        plan.Truncated.Should().BeTrue();
+        plan.MaxTargets.Should().Be(1);
+        plan.SkippedOverCap.Should().Be(2);
+    }
+
+    [Fact]
+    public void A_cap_that_does_not_bite_reports_no_truncation() {
+        AutoInstrumentPlan plan = Scan("RimObsTest.AutoFixtures.AutoTargets");
+
+        plan.Truncated.Should().BeFalse();
+        plan.SkippedOverCap.Should().Be(0);
+        plan.MaxTargets.Should().Be(AutoInstrumentScanner.DefaultMaxTargets);
+    }
+
+    [Fact]
     public void An_ignore_line_beats_an_include_that_also_matches() {
         AutoInstrumentPlan plan = Scan(
             "RimObsTest.AutoFixtures.AutoTargets\n!RimObsTest.AutoFixtures.*::Also*");

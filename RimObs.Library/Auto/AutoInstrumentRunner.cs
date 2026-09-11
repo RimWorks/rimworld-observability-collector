@@ -19,6 +19,7 @@ internal static class AutoInstrumentRunner {
     private static MethodInfo[]? s_Pending;
     private static int s_Next;
     private static string s_OwnerId = string.Empty;
+    private static int s_MaxTargets = AutoInstrumentScanner.DefaultMaxTargets;
 
     // what this runner patched, so a later filter change can undo its own work and nobody
     // else's. a patch a user applied by hand through the control endpoint never lands here.
@@ -33,7 +34,27 @@ internal static class AutoInstrumentRunner {
     // queue them straight back.
     private static readonly HashSet<MethodInfo> s_Reverted = new HashSet<MethodInfo>();
 
+    /// <summary>
+    /// Most methods one scan may queue. Changing it re-arms the parked settings, so the next
+    /// frame rescans instead of waiting for the filters to change too.
+    /// </summary>
+    public static int MaxTargets {
+        get => s_MaxTargets;
+        set {
+            int capped = value <= 0 ? AutoInstrumentScanner.DefaultMaxTargets : value;
+            if (capped == s_MaxTargets)
+                return;
+            s_MaxTargets = capped;
+            AutoInstrumentRequest.Rearm();
+        }
+    }
+
     public static int Matched { get; private set; }
+
+    /// <summary>Eligible methods the cap left out of the last plan.</summary>
+    public static int SkippedOverCap { get; private set; }
+
+    public static bool Truncated => SkippedOverCap > 0;
 
     public static int SkippedTrivial { get; private set; }
 
@@ -56,7 +77,8 @@ internal static class AutoInstrumentRunner {
         MethodPattern.Split(patterns, out MethodPattern[] includes, out MethodPattern[] excludes);
 
         QueueStaleRemovals(includes, excludes);
-        AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(assemblies ?? AssemblyIndex.Enumerate(), patterns);
+        AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(
+            assemblies ?? AssemblyIndex.Enumerate(), patterns, s_MaxTargets);
         RestoreReverted(plan, includes, excludes);
         Submit(plan, ownerId, autoMute);
         return plan;
@@ -68,10 +90,11 @@ internal static class AutoInstrumentRunner {
     /// applied.
     /// </summary>
     public static AutoInstrumentPlan Preview(
-        string? filters, string? ignore, IEnumerable<Assembly>? assemblies = null
+        string? filters, string? ignore, IEnumerable<Assembly>? assemblies = null, int maxTargets = 0
     ) {
         MethodPattern[] patterns = Combine(filters, ignore);
-        return AutoInstrumentScanner.Scan(assemblies ?? AssemblyIndex.Enumerate(), patterns);
+        return AutoInstrumentScanner.Scan(
+            assemblies ?? AssemblyIndex.Enumerate(), patterns, maxTargets > 0 ? maxTargets : s_MaxTargets);
     }
 
     /// <summary>Include lines and ignore lines as one list. Ignore lines are forced negative.</summary>
@@ -139,6 +162,7 @@ internal static class AutoInstrumentRunner {
         SkippedTrivial = plan.SkippedTrivial;
         SkippedOther = plan.SkippedAlreadyInstrumented + plan.SkippedBlocklisted
             + plan.SkippedOverCap + plan.SkippedIgnored;
+        SkippedOverCap = plan.SkippedOverCap;
         Instrumented = 0;
         Refused = 0;
 
@@ -221,6 +245,8 @@ internal static class AutoInstrumentRunner {
         s_RemoveNext = 0;
         s_Reverted.Clear();
         Matched = 0;
+        SkippedOverCap = 0;
+        s_MaxTargets = AutoInstrumentScanner.DefaultMaxTargets;
         SkippedTrivial = 0;
         SkippedOther = 0;
         Instrumented = 0;

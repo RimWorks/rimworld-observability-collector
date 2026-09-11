@@ -43,6 +43,14 @@ internal static class AutoInstrumentRequest {
         }
     }
 
+    /// <summary>Re-arms the last snapshot, so a setting outside it can still force a rescan.</summary>
+    public static void Rearm() {
+        lock (s_Gate) {
+            if (s_Seen)
+                s_Pending = true;
+        }
+    }
+
     public static bool TryTake(out bool enabled, out string filters, out string ignore, out bool muteTrivial) {
         if (!s_Pending) {
             enabled = false;

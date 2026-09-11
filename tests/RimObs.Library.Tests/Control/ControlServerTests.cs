@@ -8,6 +8,7 @@ using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
 using RimWorks.RimObs.Tests;
+using RimWorks.RimObs.Transport;
 using RimWorks.RimObs.Wire;
 using RimWorks.RimObs.Wire.Control;
 using FluentAssertions;
@@ -149,6 +150,61 @@ public sealed class ControlServerTests : IDisposable {
         decoded.SkippedOther.Should().Be(1);
         decoded.Instrumented.Should().Be(0);
         decoded.Pending.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Auto_reports_the_cap_and_whether_it_truncated_the_plan() {
+        AutoInstrumentRunner.MaxTargets = 5;
+        AutoInstrumentRunner.Submit(
+            new AutoInstrumentPlan { Matched = 9, SkippedOverCap = 4 }, "test.pkg", autoMute: false);
+
+        HttpResponseMessage res = await GetMsg("/auto");
+
+        ControlAutoInstrumentResponse decoded = WireCodec.Deserialize<ControlAutoInstrumentResponse>(
+            await res.Content.ReadAsByteArrayAsync(_drainCts.Token));
+        decoded.SkippedOverCap.Should().Be(4);
+        decoded.Truncated.Should().BeTrue();
+        decoded.MaxTargets.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task Auto_preview_honours_the_cap_the_request_carried() {
+        ControlAutoPreviewRequest req = new() {
+            Filters = "RimObsTest.AutoFixtures.AutoTargets",
+            MaxTargets = 1,
+        };
+
+        HttpResponseMessage res = await PostMsg("/auto/preview", WireCodec.Serialize(req));
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        ControlAutoPreviewResponse decoded = WireCodec.Deserialize<ControlAutoPreviewResponse>(
+            await res.Content.ReadAsByteArrayAsync(_drainCts.Token));
+        decoded.Eligible.Should().Be(1);
+        decoded.Truncated.Should().BeTrue();
+        decoded.MaxTargets.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Ring_capacity_op_rounds_up_and_retunes_the_sink() {
+        using UdpTelemetrySink sink = new(ownerId: "test.pkg", port: 45999);
+        ControlServices.SetSink(sink);
+
+        HttpResponseMessage res = await PostMsg("/ring-capacity",
+            WireCodec.Serialize(new ControlRingCapacityRequest { Capacity = 1000 }));
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        ControlRingCapacityResponse decoded = WireCodec.Deserialize<ControlRingCapacityResponse>(
+            await res.Content.ReadAsByteArrayAsync(_drainCts.Token));
+        decoded.Capacity.Should().Be(1024);
+        sink.RingCapacity.Should().Be(1024);
+    }
+
+    [Fact]
+    public async Task Ring_capacity_op_reports_unavailable_before_the_sink_is_wired() {
+        HttpResponseMessage res = await PostMsg("/ring-capacity",
+            WireCodec.Serialize(new ControlRingCapacityRequest { Capacity = 1024 }));
+
+        res.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 
     private async Task<HttpResponseMessage> PostMsg(string path, byte[] body) {

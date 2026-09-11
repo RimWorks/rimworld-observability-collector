@@ -18,4 +18,9 @@ public sealed class ControlAutoPreviewResponse {
     public int SkippedAlreadyInstrumented { get; set; }
 
     public int SkippedOverCap { get; set; }
+
+    public int MaxTargets { get; set; }
+
+    /// <summary>The cap bit: eligible methods were dropped from the plan.</summary>
+    public bool Truncated => SkippedOverCap > 0;
 }

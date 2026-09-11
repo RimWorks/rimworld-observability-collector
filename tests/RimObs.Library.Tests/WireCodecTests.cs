@@ -634,7 +634,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(21);
+        AllWireTypes().Count.Should().Be(23);
     }
 
     // the preview is only trustworthy if every counter survives the wire, so this asserts the
@@ -649,6 +649,7 @@ public sealed class WireCodecTests {
             SkippedBlocklisted = 400,
             SkippedAlreadyInstrumented = 200,
             SkippedOverCap = 107,
+            MaxTargets = 12110,
         };
 
         ControlAutoPreviewResponse back =
@@ -662,12 +663,41 @@ public sealed class WireCodecTests {
         ControlAutoPreviewRequest sent = new() {
             Filters = "Assembly-CSharp!Verse.Map::*",
             Ignore = "Assembly-CSharp!Verse.Log::*",
+            MaxTargets = 65536,
         };
 
         ControlAutoPreviewRequest back =
             WireCodec.Deserialize<ControlAutoPreviewRequest>(WireCodec.Serialize(sent));
 
         back.Should().BeEquivalentTo(sent);
+    }
+
+    [Fact]
+    public void Ring_capacity_round_trips_in_both_directions() {
+        ControlRingCapacityRequest req = new() { Capacity = 65536 };
+        ControlRingCapacityResponse res = new() { Capacity = 32768 };
+
+        WireCodec.Deserialize<ControlRingCapacityRequest>(WireCodec.Serialize(req))
+            .Capacity.Should().Be(65536);
+        WireCodec.Deserialize<ControlRingCapacityResponse>(WireCodec.Serialize(res))
+            .Capacity.Should().Be(32768);
+    }
+
+    [Fact]
+    public void Auto_instrument_response_round_trips_the_cap_and_its_truncation() {
+        ControlAutoInstrumentResponse sent = new() {
+            Matched = 70123,
+            Instrumented = 8192,
+            SkippedOverCap = 4001,
+            MaxTargets = 8192,
+        };
+
+        ControlAutoInstrumentResponse back =
+            WireCodec.Deserialize<ControlAutoInstrumentResponse>(WireCodec.Serialize(sent));
+
+        back.SkippedOverCap.Should().Be(4001);
+        back.MaxTargets.Should().Be(8192);
+        back.Truncated.Should().BeTrue();
     }
 
     [Fact]

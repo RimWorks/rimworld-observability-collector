@@ -53,6 +53,10 @@ public static class WireCodec {
                 return Serialize(v);
             case ControlAutoInstrumentResponse v:
                 return Serialize(v);
+            case ControlRingCapacityRequest v:
+                return Serialize(v);
+            case ControlRingCapacityResponse v:
+                return Serialize(v);
             default:
                 throw new NotSupportedException($"WireCodec cannot serialize {typeof(T)}.");
         }
@@ -255,15 +259,30 @@ public static class WireCodec {
 
     public static byte[] Serialize(ControlAutoPreviewRequest value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(2);
+        writer.WriteArrayHeader(3);
         writer.WriteString(value.Filters);
         writer.WriteString(value.Ignore);
+        writer.WriteInt32(value.MaxTargets);
+        return writer.ToArray();
+    }
+
+    public static byte[] Serialize(ControlRingCapacityRequest value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(1);
+        writer.WriteInt32(value.Capacity);
+        return writer.ToArray();
+    }
+
+    public static byte[] Serialize(ControlRingCapacityResponse value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(1);
+        writer.WriteInt32(value.Capacity);
         return writer.ToArray();
     }
 
     public static byte[] Serialize(ControlAutoPreviewResponse value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(7);
+        writer.WriteArrayHeader(8);
         writer.WriteInt32(value.Matched);
         writer.WriteInt32(value.Eligible);
         writer.WriteInt32(value.SkippedTrivial);
@@ -271,12 +290,13 @@ public static class WireCodec {
         writer.WriteInt32(value.SkippedBlocklisted);
         writer.WriteInt32(value.SkippedAlreadyInstrumented);
         writer.WriteInt32(value.SkippedOverCap);
+        writer.WriteInt32(value.MaxTargets);
         return writer.ToArray();
     }
 
     public static byte[] Serialize(ControlAutoInstrumentResponse value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(7);
+        writer.WriteArrayHeader(9);
         writer.WriteInt32(value.Matched);
         writer.WriteInt32(value.Instrumented);
         writer.WriteInt32(value.Muted);
@@ -284,6 +304,8 @@ public static class WireCodec {
         writer.WriteInt32(value.SkippedOther);
         writer.WriteInt32(value.Refused);
         writer.WriteInt32(value.Pending);
+        writer.WriteInt32(value.SkippedOverCap);
+        writer.WriteInt32(value.MaxTargets);
         return writer.ToArray();
     }
 
@@ -311,6 +333,8 @@ public static class WireCodec {
         [typeof(ControlAutoInstrumentResponse)] = data => ReadControlAutoInstrumentResponse(data),
         [typeof(ControlAutoPreviewRequest)] = data => ReadControlAutoPreviewRequest(data),
         [typeof(ControlAutoPreviewResponse)] = data => ReadControlAutoPreviewResponse(data),
+        [typeof(ControlRingCapacityRequest)] = data => ReadControlRingCapacityRequest(data),
+        [typeof(ControlRingCapacityResponse)] = data => ReadControlRingCapacityResponse(data),
     };
 
     public static T Deserialize<T>(byte[] data) where T : class {
@@ -570,7 +594,20 @@ public static class WireCodec {
         return new ControlAutoPreviewRequest {
             Filters = reader.ReadString() ?? string.Empty,
             Ignore = reader.ReadString() ?? string.Empty,
+            MaxTargets = reader.ReadInt32(),
         };
+    }
+
+    private static ControlRingCapacityRequest ReadControlRingCapacityRequest(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlRingCapacityRequest { Capacity = reader.ReadInt32() };
+    }
+
+    private static ControlRingCapacityResponse ReadControlRingCapacityResponse(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new ControlRingCapacityResponse { Capacity = reader.ReadInt32() };
     }
 
     private static ControlAutoPreviewResponse ReadControlAutoPreviewResponse(byte[] data) {
@@ -584,6 +621,7 @@ public static class WireCodec {
             SkippedBlocklisted = reader.ReadInt32(),
             SkippedAlreadyInstrumented = reader.ReadInt32(),
             SkippedOverCap = reader.ReadInt32(),
+            MaxTargets = reader.ReadInt32(),
         };
     }
 
@@ -598,6 +636,8 @@ public static class WireCodec {
             SkippedOther = reader.ReadInt32(),
             Refused = reader.ReadInt32(),
             Pending = reader.ReadInt32(),
+            SkippedOverCap = reader.ReadInt32(),
+            MaxTargets = reader.ReadInt32(),
         };
     }
 

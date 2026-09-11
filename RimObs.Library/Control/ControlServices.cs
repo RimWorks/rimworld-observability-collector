@@ -3,9 +3,15 @@ namespace RimWorks.RimObs.Library.Control;
 internal static class ControlServices {
     private static ControlOpQueue? s_Queue;
     private static ControlServer? s_Server;
+    private static Transport.UdpTelemetrySink? s_Sink;
 
     public static ControlOpQueue Queue => s_Queue ??= new ControlOpQueue();
     public static ControlServer? Server => s_Server;
+
+    /// <summary>The live sink, so a control op can retune transport it does not own.</summary>
+    public static Transport.UdpTelemetrySink? Sink => s_Sink;
+
+    public static void SetSink(Transport.UdpTelemetrySink? sink) => s_Sink = sink;
 
     public static void StartServer(string frameworkPackageId) {
         if (s_Server is not null) return;
@@ -29,5 +35,6 @@ internal static class ControlServices {
         s_Server?.Stop();
         s_Server = null;
         s_Queue = null;
+        s_Sink = null;
     }
 }

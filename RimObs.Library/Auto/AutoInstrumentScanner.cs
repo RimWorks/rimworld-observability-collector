@@ -23,7 +23,7 @@ internal static class AutoInstrumentScanner {
         MethodPattern[] patterns,
         int maxTargets = DefaultMaxTargets
     ) {
-        AutoInstrumentPlan plan = new AutoInstrumentPlan();
+        AutoInstrumentPlan plan = new AutoInstrumentPlan { MaxTargets = maxTargets };
         MethodPattern.Split(patterns, out MethodPattern[] includes, out MethodPattern[] excludes);
         if (includes.Length == 0)
             return plan;

@@ -298,6 +298,77 @@ public sealed class RingBufferTests {
         reaped.Should().Equal(workerId);
     }
 
+    [Fact]
+    public void A_new_lane_is_built_at_the_capacity_set_last() {
+        SampleRingSet set = new(4);
+        set.SetLaneCapacity(512).Should().Be(512);
+
+        bool[] accepted = new bool[512];
+        Thread later = new(() => {
+            for (int i = 0; i < accepted.Length; i++)
+                accepted[i] = set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+        });
+        later.Start();
+        later.Join();
+
+        accepted.Should().AllBeEquivalentTo(true);
+        set.Dropped.Should().Be(0);
+    }
+
+    [Fact]
+    public void An_existing_lane_takes_the_new_capacity_at_an_empty_drain() {
+        SampleRingSet set = new(4);
+        SampleBatch batch = new SampleBatch(64);
+        set.TryWrite(1, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+        set.Drain(batch, 64).Should().Be(1);
+
+        set.SetLaneCapacity(512);
+        // the swap happens on the drain that finds the lane empty, not on the setter
+        set.Drain(batch, 64).Should().Be(0);
+
+        for (int i = 0; i < 300; i++)
+            set.TryWrite(i, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+
+        int drained = 0;
+        int n;
+        while ((n = set.Drain(batch, 64)) > 0)
+            drained += n;
+
+        drained.Should().Be(300);
+        set.Dropped.Should().Be(0);
+    }
+
+    [Fact]
+    public void A_shrink_keeps_the_drops_the_old_ring_already_counted() {
+        SampleRingSet set = new(4);
+        SampleBatch batch = new SampleBatch(64);
+        for (int i = 0; i < 6; i++)
+            set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+        while (set.Drain(batch, 64) > 0) { }
+
+        set.SetLaneCapacity(512);
+        set.Drain(batch, 64).Should().Be(0);
+
+        set.Dropped.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(1000, 1024)]
+    [InlineData(1024, 1024)]
+    [InlineData(1025, 2048)]
+    public void A_capacity_that_is_not_a_power_of_two_rounds_up(int asked, int expected) {
+        SampleRingSet set = new(4);
+        set.SetLaneCapacity(asked).Should().Be(expected);
+        set.LaneCapacity.Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_capacity_outside_the_rails_is_clamped() {
+        SampleRingSet set = new(4);
+        set.SetLaneCapacity(3).Should().Be(SampleRingSet.MinLaneCapacity);
+        set.SetLaneCapacity(int.MaxValue).Should().Be(SampleRingSet.MaxLaneCapacity);
+    }
+
     private static int Reap(SampleRingSet set, SampleBatch batch, int maxCount) {
         Type type = typeof(SampleRingSet);
         object lanes = type.GetField("_lanes", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(set)!;

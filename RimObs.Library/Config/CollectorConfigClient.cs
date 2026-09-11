@@ -63,6 +63,7 @@ internal sealed class CollectorConfigClient {
         Profiler.MaxDepth = document.Sampling?.MaxCaptureDepth ?? Profiler.DefaultMaxDepth;
 
         CollectorAutoInstrumentConfig? auto = document.AutoInstrument;
+        AutoInstrumentRunner.MaxTargets = auto?.MaxTargets ?? AutoInstrumentScanner.DefaultMaxTargets;
         AutoInstrumentRequest.Set(
             auto?.Enabled ?? false, auto?.Filters, auto?.Ignore, auto?.MuteTrivial ?? true);
     }
