@@ -93,7 +93,7 @@ public static class WireCodec {
 
     public static byte[] Serialize(SessionMeta value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(8);
+        writer.WriteArrayHeader(9);
         writer.WriteString(value.SessionId);
         writer.WriteInt64(value.StartedUtcTicks);
         writer.WriteInt64(value.StopwatchFrequency);
@@ -102,6 +102,7 @@ public static class WireCodec {
         writer.WriteString(value.GameVersion);
         writer.WriteInt32(value.ControlPort);
         writer.WriteString(value.ControlSecret);
+        writer.WriteInt64(value.SamplesDropped);
         return writer.ToArray();
     }
 
@@ -396,6 +397,9 @@ public static class WireCodec {
             meta.ControlPort = reader.ReadInt32();
             meta.ControlSecret = reader.ReadString() ?? string.Empty;
         }
+
+        if (count >= 9)
+            meta.SamplesDropped = reader.ReadInt64();
 
         return meta;
     }

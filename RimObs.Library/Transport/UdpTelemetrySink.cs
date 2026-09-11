@@ -166,6 +166,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             GameVersion = string.Empty,
             ControlPort = server?.Port ?? 0,
             ControlSecret = server?.Secret ?? string.Empty,
+            SamplesDropped = _ring.Dropped,
         };
         SendBatch(BatchType.SessionMeta, meta);
     }

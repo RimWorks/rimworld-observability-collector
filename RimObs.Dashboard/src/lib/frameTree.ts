@@ -52,7 +52,7 @@ export interface FrameResponse {
     stats: FrameStats;
     vitals?: FrameVitals | null;
     threads?: ThreadLane[];
-    dropped: { pre_frame_samples: number; late_samples: number };
+    dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
 }
 
 export interface FrameRangeResponse {
@@ -61,7 +61,7 @@ export interface FrameRangeResponse {
     frames: FrameData[];
     strip?: FrameStripData;
     stats: FrameStats;
-    dropped: { pre_frame_samples: number; late_samples: number };
+    dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
 }
 
 export interface BundleFramesResponse {
@@ -70,7 +70,7 @@ export interface BundleFramesResponse {
     stopwatch_frequency: number;
     frames: FrameData[];
     stats: FrameStats;
-    dropped: { pre_frame_samples: number; late_samples: number };
+    dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
 }
 
 export interface TreeNode {

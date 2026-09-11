@@ -39,11 +39,15 @@ describe('buildFrameExport', () => {
             [],
             new Map(),
             10_000_000,
-            { pre_frame_samples: 12, late_samples: 7 },
+            { pre_frame_samples: 12, late_samples: 7, library_ring_samples: 5 },
             { enabled: true, filters: '*', ignore: 'System.*' },
         );
 
-        expect(out.dropped).toEqual({ pre_frame_samples: 12, late_samples: 7 });
+        expect(out.dropped).toEqual({
+            pre_frame_samples: 12,
+            late_samples: 7,
+            library_ring_samples: 5,
+        });
         expect(out.auto_instrument).toEqual({ enabled: true, filters: '*', ignore: 'System.*' });
     });
 
@@ -51,7 +55,11 @@ describe('buildFrameExport', () => {
     it('defaults to zero drops and no filter when neither is known', () => {
         const out = buildFrameExport('frame', [FRAME], [], new Map(), 10_000_000);
 
-        expect(out.dropped).toEqual({ pre_frame_samples: 0, late_samples: 0 });
+        expect(out.dropped).toEqual({
+            pre_frame_samples: 0,
+            late_samples: 0,
+            library_ring_samples: 0,
+        });
         expect(out.auto_instrument).toBeNull();
     });
 });

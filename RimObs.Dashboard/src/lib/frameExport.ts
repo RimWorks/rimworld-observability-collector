@@ -6,6 +6,8 @@ type SectionNames = Map<number, { name: string; subsystem: string | null }>;
 export interface DroppedCounts {
     pre_frame_samples: number;
     late_samples: number;
+    /** Samples the library's ring threw away before they ever left the game. */
+    library_ring_samples: number;
 }
 
 /** What was instrumented when the frames were captured. A wide filter is the usual reason for drops. */
@@ -15,7 +17,7 @@ export interface AutoInstrumentProvenance {
     ignore: string;
 }
 
-const NO_DROPS: DroppedCounts = { pre_frame_samples: 0, late_samples: 0 };
+const NO_DROPS: DroppedCounts = { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 };
 
 /**
  * A shareable snapshot: frames with every referenced section name resolved inline, so the
@@ -52,7 +54,7 @@ export function buildFrameExport(
         }
     }
     return {
-        schema_version: 9,
+        schema_version: 10,
         kind,
         exported_utc: now.toISOString(),
         stopwatch_frequency: stopwatchFrequency,

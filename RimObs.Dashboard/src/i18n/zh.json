@@ -139,6 +139,7 @@
     "flamegraph.keys": "Arrow keys move between bars, Enter zooms in, Escape fits the whole frame.",
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
+    "flamegraph.dropped.ring": "Ring drops (game)",
     "flamegraph.dropped.orphans": "Orphan nodes",
     "flamegraph.lossy": "帧样本丢失",
     "flamegraph.lossy.hint": "采集这些帧时样本环形缓冲区已溢出，因此火焰图中缺少部分调用。",

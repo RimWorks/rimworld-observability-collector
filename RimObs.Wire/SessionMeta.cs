@@ -9,4 +9,7 @@ public sealed class SessionMeta {
     public string GameVersion { get; set; } = string.Empty;
     public int ControlPort { get; set; }
     public string ControlSecret { get; set; } = string.Empty;
+
+    /// <summary>Samples the library's per-thread rings threw away, for the session so far.</summary>
+    public long SamplesDropped { get; set; }
 }

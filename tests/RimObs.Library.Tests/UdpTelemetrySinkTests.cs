@@ -358,6 +358,41 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         sink.SamplesDropped.Should().Be(0);
     }
 
+    // regression: ring drops died inside the game. nothing on the wire carried them, so the
+    // dashboard's lossy badge stayed quiet while a wide filter overflowed the ring.
+    [Fact]
+    public void SessionMeta_carries_the_ring_drop_count() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 2000;
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        int capacity = sink.SetRingCapacity(1);
+        for (int i = 0; i < capacity * 2; i++)
+            sink.RecordSection(sectionId: 0, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: i, elapsedTicks: 1L, allocBytes: 0L);
+        sink.SamplesDropped.Should().BeGreaterThan(0, "the ring must overflow for this test to mean anything");
+        sink.Start();
+
+        SessionMeta? meta = null;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+        IPEndPoint any = new(IPAddress.Any, 0);
+        while (DateTime.UtcNow < deadline && meta == null) {
+            try {
+                TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(receiver.Receive(ref any));
+                if (envelope.BatchType == BatchType.SessionMeta)
+                    meta = WireCodec.Deserialize<SessionMeta>(envelope.Payload);
+            }
+            catch (SocketException) {
+                break;
+            }
+        }
+
+        meta.Should().NotBeNull();
+        meta!.SamplesDropped.Should().BeGreaterThan(0);
+    }
+
 
     [Fact]
     public void SessionMeta_is_resent_so_a_dropped_first_datagram_does_not_blank_the_session() {

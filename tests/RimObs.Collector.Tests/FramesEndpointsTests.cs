@@ -449,4 +449,31 @@ public sealed class FramesEndpointsTests {
             await app.StopAsync();
         }
     }
+
+    // regression: the library's own ring drops never reached the dashboard, so a filter wide
+    // enough to overflow the ring lost samples with every drop counter reading zero.
+    [Fact]
+    public async Task Latest_reports_the_ring_drops_the_library_announced() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-test-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "ring-drops",
+            StopwatchFrequency = 10_000_000L,
+            SamplesDropped = 987L,
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("dropped").GetProperty("library_ring_samples").GetInt64().Should().Be(987L);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
 }

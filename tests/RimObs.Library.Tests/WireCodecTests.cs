@@ -479,6 +479,36 @@ public sealed class WireCodecTests {
     }
 
     [Fact]
+    public void SessionMeta_round_trips_ring_samples_dropped() {
+        SessionMeta original = new SessionMeta { SessionId = "abc", SamplesDropped = 4321 };
+
+        SessionMeta decoded = WireCodec.Deserialize<SessionMeta>(WireCodec.Serialize(original));
+
+        decoded.SamplesDropped.Should().Be(4321);
+    }
+
+    [Fact]
+    public void SessionMeta_decodes_legacy_8_field_payload_with_zero_samples_dropped() {
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        MessagePackWriter writer = new MessagePackWriter(buffer);
+        writer.WriteArrayHeader(8);
+        writer.Write("legacy");
+        writer.Write(1L);
+        writer.Write(2L);
+        writer.Write(3L);
+        writer.Write("lib");
+        writer.Write("game");
+        writer.Write(50321);
+        writer.Write("secret");
+        writer.Flush();
+
+        SessionMeta decoded = WireCodec.Deserialize<SessionMeta>(buffer.WrittenSpan.ToArray());
+
+        decoded.ControlPort.Should().Be(50321);
+        decoded.SamplesDropped.Should().Be(0);
+    }
+
+    [Fact]
     public void ControlSearchRequest_round_trips() {
         ControlSearchRequest req = new() { Query = "Path", Limit = 25 };
         byte[] bytes = WireCodec.Serialize(req);

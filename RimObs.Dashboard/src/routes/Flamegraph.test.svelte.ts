@@ -61,7 +61,7 @@ const FRAMES_BODY = {
         { id: 1, name: 'Main', role: 0, busy_ns: 16_000_000 },
         { id: 2, name: 'PathfindingWorker', role: 1, busy_ns: 4_000_000 },
     ],
-    dropped: { pre_frame_samples: 12, late_samples: 0 },
+    dropped: { pre_frame_samples: 12, late_samples: 0, library_ring_samples: 0 },
     strip: { ordinals: [4319, 4320, 4321], durations_us: [5000, 40000, 16200] },
 };
 
@@ -166,7 +166,7 @@ const BUNDLE_FRAMES_BODY = {
         { ...FRAMES_BODY.frame, capture_ordinal: 901 },
     ],
     stats: FRAMES_BODY.stats,
-    dropped: { pre_frame_samples: 0, late_samples: 3 },
+    dropped: { pre_frame_samples: 0, late_samples: 3, library_ring_samples: 0 },
 };
 
 const BUNDLE_HOTSPOTS_BODY = {
@@ -389,7 +389,7 @@ describe('Flamegraph page', () => {
     it('marks late samples as a warning', async () => {
         mockFetch({
             ...FRAMES_BODY,
-            dropped: { pre_frame_samples: 12, late_samples: 7 },
+            dropped: { pre_frame_samples: 12, late_samples: 7, library_ring_samples: 0 },
         });
         render(Flamegraph);
         const late = await screen.findByTestId('drop-late');
@@ -429,7 +429,7 @@ describe('Flamegraph page', () => {
             if (!requestUrl(input).includes('/frames/latest')) return base(input, init);
             return jsonResponse({
                 ...FRAMES_BODY,
-                dropped: { pre_frame_samples: 12, late_samples: late },
+                dropped: { pre_frame_samples: 12, late_samples: late, library_ring_samples: 0 },
             });
         }) as unknown as typeof fetch;
 
@@ -446,6 +446,32 @@ describe('Flamegraph page', () => {
         // counters hold still: within the watched window the badge stands down again.
         await vi.advanceTimersByTimeAsync(1000);
         expect(screen.queryByTestId('lossy-badge')).toBeNull();
+    });
+
+    // regression: ring drops happen inside the game, so they never showed up in the collector's
+    // pre-frame or late counters. the badge stayed quiet while a wide filter lost samples.
+    it('raises the lossy badge on the library ring drops alone', async () => {
+        let ring = 0;
+        mockFetch();
+        const base = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            if (!requestUrl(input).includes('/frames/latest')) return base(input, init);
+            return jsonResponse({
+                ...FRAMES_BODY,
+                dropped: { pre_frame_samples: 0, late_samples: 0, library_ring_samples: ring },
+            });
+        }) as unknown as typeof fetch;
+
+        vi.useFakeTimers();
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(600);
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
+
+        ring = 400;
+        await vi.advanceTimersByTimeAsync(64);
+        expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
+        expect(screen.getByTestId('lossy-count')).toHaveTextContent('400');
+        expect(screen.getByTestId('drop-ring')).toHaveTextContent('400');
     });
 
     it('stays quiet when the drop counters never move', async () => {
@@ -660,13 +686,13 @@ describe('Flamegraph page', () => {
             if (url.includes('/file/frames.json')) {
                 return jsonResponse({
                     ...BUNDLE_FRAMES_BODY,
-                    dropped: { pre_frame_samples: 0, late_samples: 0 },
+                    dropped: { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 },
                 });
             }
             if (!url.includes('/frames/latest')) return base(input, init);
             return jsonResponse({
                 ...FRAMES_BODY,
-                dropped: { pre_frame_samples: 12, late_samples: late },
+                dropped: { pre_frame_samples: 12, late_samples: late, library_ring_samples: 0 },
             });
         }) as unknown as typeof fetch;
 
@@ -1772,7 +1798,11 @@ describe('Flamegraph thread lanes', () => {
         });
         const payload = JSON.parse(json);
 
-        expect(payload.dropped).toEqual({ pre_frame_samples: 12, late_samples: 0 });
+        expect(payload.dropped).toEqual({
+            pre_frame_samples: 12,
+            late_samples: 0,
+            library_ring_samples: 0,
+        });
         expect(payload.auto_instrument).toEqual({
             enabled: true,
             filters: '*',

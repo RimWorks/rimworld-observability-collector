@@ -336,6 +336,7 @@ public sealed class BundleExportService {
             dropped = new {
                 pre_frame_samples = _aggregator.Frames.PreFrameSamples,
                 late_samples = _aggregator.Frames.LateSamples,
+                library_ring_samples = meta.SamplesDropped,
             },
         };
     }

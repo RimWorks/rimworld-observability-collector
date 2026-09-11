@@ -85,7 +85,7 @@
     ] as const;
 
     const LIVE = 'live';
-    const NO_DROPS = { pre_frame_samples: 0, late_samples: 0 };
+    const NO_DROPS = { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 };
 
     // one import serves both jobs: a bundle with frames.json becomes a scrubbable source, and
     // every bundle becomes a comparison source. the collector expires the tokens after 30 min.
@@ -643,6 +643,10 @@
     let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
     let dropped = $derived((live ? liveRes?.dropped : importedFrames?.dropped) ?? NO_DROPS);
 
+    let dropTotal = $derived(
+        dropped.pre_frame_samples + dropped.late_samples + dropped.library_ring_samples,
+    );
+
     // drops that stopped an hour ago are not news, so the badge watches the last half second of
     // polls and goes quiet again once the counters hold still.
     const DROP_WINDOW_POLLS = 32;
@@ -655,7 +659,7 @@
             return;
         }
         if (!liveRes) return;
-        const total = dropped.pre_frame_samples + dropped.late_samples;
+        const total = dropTotal;
         untrack(() => {
             dropWindow = [...dropWindow, total].slice(-DROP_WINDOW_POLLS);
         });
@@ -664,7 +668,7 @@
     let lossy = $derived(
         live
             ? dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0]
-            : dropped.pre_frame_samples + dropped.late_samples > 0,
+            : dropTotal > 0,
     );
     let stopwatchFrequency = $derived(
         (live ? liveRes?.stopwatch_frequency : importedFrames?.stopwatch_frequency) ?? 0,
@@ -942,6 +946,11 @@
                     >{t('flamegraph.dropped.preframe')}
                     <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
                 ><span class="cell"
+                    >{t('flamegraph.dropped.ring')}
+                    <b class:warn={dropped.library_ring_samples > 0} data-testid="drop-ring"
+                        >{count(dropped.library_ring_samples)}</b
+                    ></span
+                ><span class="cell"
                     >{t('flamegraph.dropped.orphans')}
                     <b class:warn={orphanCount > 0} data-testid="drop-orphans"
                         >{count(orphanCount)}</b
@@ -951,9 +960,7 @@
                         data-testid="lossy-badge"
                         title={t('flamegraph.lossy.hint')}
                         >{t('flamegraph.lossy')}
-                        <b data-testid="lossy-count"
-                            >{count(dropped.late_samples + dropped.pre_frame_samples)}</b
-                        ></span
+                        <b data-testid="lossy-count">{count(dropTotal)}</b></span
                     >{/if}</span
             >
             <span class="find" data-testid="section-search">

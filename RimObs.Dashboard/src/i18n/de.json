@@ -139,6 +139,7 @@
     "flamegraph.keys": "Arrow keys move between bars, Enter zooms in, Escape fits the whole frame.",
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
+    "flamegraph.dropped.ring": "Ring drops (game)",
     "flamegraph.dropped.orphans": "Orphan nodes",
     "flamegraph.lossy": "Unvollständige Frames",
     "flamegraph.lossy.hint": "Der Puffer für Samples lief während dieser Frames über, daher fehlen Aufrufe im Flamegraph.",

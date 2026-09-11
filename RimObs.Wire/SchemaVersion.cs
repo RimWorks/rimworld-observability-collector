@@ -19,7 +19,9 @@ public static class SchemaVersion {
     //     Readers built for v7 get an empty array.
     // v9: SectionBatch gains ThreadIds and ThreadRegistrationsBatch names the lanes. readers
     //     built for v8 see 8 fields and get an empty ThreadIds, which reads as main-thread only.
-    public const int Current = 9;
+    // v10: SessionMeta gains SamplesDropped, the library ring's own loss count. readers built
+    //      for v9 see 8 fields and read it as zero.
+    public const int Current = 10;
 
     // oldest version the collector still decodes. the per-batch field-count guards above
     // fill in whatever a shorter payload left out.

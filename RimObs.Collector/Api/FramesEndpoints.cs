@@ -25,6 +25,7 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
         });
@@ -49,6 +50,7 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
         });
@@ -70,6 +72,7 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
         });
