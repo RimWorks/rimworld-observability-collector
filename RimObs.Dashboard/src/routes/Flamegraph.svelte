@@ -928,13 +928,9 @@
                         data-testid="lane-{lane.id}"
                     >
                         {laneLabel(lane)}
-                        <small class="mono"
-                            >{ns(
-                                lane.role === ThreadRole.Main
-                                    ? (frame?.duration_us ?? 0) * 1000
-                                    : lane.busy_ns,
-                            )}</small
-                        >
+                        {#if lane.role === ThreadRole.Main}
+                            <small class="mono">{ns((frame?.duration_us ?? 0) * 1000)}</small>
+                        {/if}
                     </div>
                 {/each}
             </div>

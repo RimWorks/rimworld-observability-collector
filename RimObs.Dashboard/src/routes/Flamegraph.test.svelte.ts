@@ -1584,6 +1584,16 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 
+    it('keeps the session-cumulative busy total off non-main lanes', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
+        expect(screen.getByTestId('lane-2').querySelector('small')).toBeNull();
+        expect(screen.getByTestId('lane-1').textContent).toContain('16.20 ms');
+    });
+
     it('still draws a main lane when the response carries no threads', async () => {
         mockFetch({ ...FRAMES_BODY, threads: undefined });
         render(Flamegraph);
