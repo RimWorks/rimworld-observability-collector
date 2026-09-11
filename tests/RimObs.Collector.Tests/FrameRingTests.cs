@@ -57,6 +57,25 @@ public sealed class FrameRingTests {
         ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
     }
 
+    // the whole game stalls inside the hitch frame, so nothing at all arrives while the
+    // dashboard polls. the read must not commit the frame out from under the expensive node.
+    [Fact]
+    public void A_frame_read_during_a_stall_still_takes_the_node_that_caused_it() {
+        FrameRing ring = new(8);
+        ring.Add(1, 10, -1, 100, -1, 100L, 500L);
+
+        ring.GoQuiet();
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(1);
+
+        ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
+        ring.GoQuiet();
+
+        ring.LateSamples.Should().Be(0);
+        ring.Count.Should().Be(1);
+        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+        ring.FindByOrdinal(1)!.DurationTicks.Should().Be(5_000_000L);
+    }
+
     // the game stops sending; the dashboard keeps polling and must see the whole tail, not
     // whatever was sealed a window ago.
     [Fact]

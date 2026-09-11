@@ -348,11 +348,15 @@ public sealed class FrameRing {
         }
     }
 
-    // reads seal what the stream stopped reporting, so a paused game still serves its last frames.
+    /// <summary>
+    /// Previews open frames on a read, so a paused game serves its tail. Nothing is committed:
+    /// a frame stalled mid-hitch stays open and can still land the node that caused it.
+    /// </summary>
     private void SealStale() {
         if (_lastAddUtc > NowUtc().AddMilliseconds(-QuietMillis))
             return;
-        SealThrough(int.MaxValue);
+        foreach (KeyValuePair<int, OpenFrame> entry in _open)
+            Seal(entry.Key, entry.Value);
     }
 
     // seals open frames up to `watermark`, oldest first so the ring stays ascending.
@@ -369,8 +373,11 @@ public sealed class FrameRing {
     }
 
     private void Seal(int ordinal, OpenFrame open) {
-        if (open.SectionIds.Count == 0)
+        if (open.SectionIds.Count == 0 || open.SealedCount == open.SectionIds.Count)
             return;
+
+        bool replace = open.SealedCount >= 0;
+        open.SealedCount = open.SectionIds.Count;
 
         long start = long.MaxValue;
         long end = long.MinValue;
@@ -383,7 +390,7 @@ public sealed class FrameRing {
                 end = nodeEnd;
         }
 
-        _buffer[_next] = new FrameSnapshot(
+        FrameSnapshot snapshot = new(
             ordinal,
             start,
             end,
@@ -396,9 +403,27 @@ public sealed class FrameRing {
             [.. open.AllocBytes],
             // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
             open.HasThreadIds ? [.. open.ThreadIds] : []);
+
+        if (replace) {
+            ReplaceInRing(ordinal, snapshot);
+            return;
+        }
+
+        _buffer[_next] = snapshot;
         _next = (_next + 1) % _buffer.Length;
         if (_count < _buffer.Length)
             _count++;
+    }
+
+    // located by ordinal rather than a cached index, so eviction and Resize need no bookkeeping.
+    private void ReplaceInRing(int ordinal, FrameSnapshot snapshot) {
+        int start = _count < _buffer.Length ? 0 : _next;
+        int at = LowerBound(start, ordinal);
+        if (at >= _count)
+            return;
+        int slot = (start + at) % _buffer.Length;
+        if (_buffer[slot].CaptureOrdinal == ordinal)
+            _buffer[slot] = snapshot;
     }
 
     private sealed class OpenFrame {
@@ -411,5 +436,8 @@ public sealed class FrameRing {
         public readonly List<long> AllocBytes = [];
         public readonly List<int> ThreadIds = [];
         public bool HasThreadIds;
+
+        // -1 until a preview puts this frame in the ring; then the node count it was written at.
+        public int SealedCount = -1;
     }
 }
