@@ -1,3 +1,5 @@
+import type { ThreadLane } from './api';
+
 export interface FrameNodes {
     section_ids: number[];
     parent_ids: number[];
@@ -47,6 +49,7 @@ export interface FrameResponse {
     strip?: FrameStripData;
     stats: FrameStats;
     vitals?: FrameVitals | null;
+    threads?: ThreadLane[];
     dropped: { pre_frame_samples: number; late_samples: number };
 }
 

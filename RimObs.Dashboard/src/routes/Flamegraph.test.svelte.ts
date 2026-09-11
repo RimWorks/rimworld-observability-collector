@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import Flamegraph from './Flamegraph.svelte';
 import { sectionSearch } from '../lib/sectionSearchState.svelte';
+import { userPrefs } from '../lib/userPrefs.svelte';
 
 // under fake timers the rAF draw loop actually fires, and jsdom has no 2d context to give it.
 vi.mock('../lib/stripDraw', () => ({ drawStrip: vi.fn() }));
@@ -56,6 +57,10 @@ const FRAMES_BODY = {
         min_us: 8000,
         max_us: 40000,
     },
+    threads: [
+        { id: 1, name: 'Main', role: 0, busy_ns: 16_000_000 },
+        { id: 2, name: 'PathfindingWorker', role: 1, busy_ns: 4_000_000 },
+    ],
     dropped: { pre_frame_samples: 12, late_samples: 0 },
     strip: { ordinals: [4319, 4320, 4321], durations_us: [5000, 40000, 16200] },
 };
@@ -1550,5 +1555,32 @@ describe('Flamegraph stage and drawer share the viewport', () => {
         await waitFor(() =>
             expect(document.querySelector('.stage')?.classList.contains('split')).toBe(false),
         );
+    });
+});
+
+// the dashboard shipped main-thread-only for its whole life, so the extra lanes stay off until
+// someone asks for them. a profiler that changes shape on upgrade is a bad surprise.
+describe('Flamegraph thread lanes', () => {
+    afterEach(() => {
+        userPrefs.reset();
+    });
+
+    it('shows only the main lane by default', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        expect(screen.getByTestId('lane-1')).toBeInTheDocument();
+        expect(screen.getByTestId('lane-1').textContent).toContain('Main');
+        expect(screen.queryByTestId('lane-2')).toBeNull();
+    });
+
+    it('shows every lane once main-thread-only is off', async () => {
+        userPrefs.setMainThreadOnly(false);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
+        expect(screen.getByTestId('lane-2').textContent).toContain('PathfindingWorker');
+        expect(screen.getByTestId('lane-1')).toBeInTheDocument();
     });
 });

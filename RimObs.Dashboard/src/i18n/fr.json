@@ -227,6 +227,8 @@
     "settings.promptForName": "Me demander de nommer les nouvelles sessions",
     "tip.settings.promptForName": "Affiche l'invite de nom au démarrage d'une nouvelle session. Les sessions nommées sont celles que vous retrouverez en comparant des exécutions ; les autres ne sont qu'un identifiant et un horodatage.",
     "tip.settings.closeOnDisconnect": "Ferme cet onglet quand le collector ne répond plus, en général parce que RimWorld a quitté. Les navigateurs bloquent cela pour les onglets qu'un script n'a pas ouverts, donc cela peut ne rien faire.",
+    "threads.mainOnly": "Thread principal uniquement",
+    "tip.threads.mainOnly": "N'affiche que la piste du thread principal et masque les autres. Désactive l'option pour voir à côté les threads de jobs Unity et les threads de mods, ce qui révèle le travail exécuté en parallèle de la boucle de ticks.",
     "tip.settings.language": "Langue du tableau de bord uniquement. Cela ne change ni la langue de RimWorld ni les noms de section rapportés par le jeu.",
     "tip.settings.sessionName": "Un nom pour cette exécution. Il apparaît dans la liste des sessions et dans les comparaisons, alors choisissez quelque chose que vous reconnaîtrez la semaine prochaine.",
     "settings.readonly": "Lecture seule"

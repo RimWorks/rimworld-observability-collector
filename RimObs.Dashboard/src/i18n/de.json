@@ -227,6 +227,8 @@
     "settings.promptForName": "Bei neuen Sitzungen nach einem Namen fragen",
     "tip.settings.promptForName": "Zeigt die Namensabfrage, wenn eine neue Sitzung startet. Benannte Sitzungen findest du später beim Vergleichen wieder; unbenannte sind nur eine ID und ein Zeitstempel.",
     "tip.settings.closeOnDisconnect": "Schließt diesen Tab, wenn der Collector nicht mehr antwortet, meist weil RimWorld beendet wurde. Browser blockieren das bei Tabs, die kein Skript geöffnet hat, es kann also stillschweigend nichts tun.",
+    "threads.mainOnly": "Nur Haupt-Thread",
+    "tip.threads.mainOnly": "Zeichnet nur die Spur des Haupt-Threads und blendet die anderen aus. Schalte es aus, um Unity-Job-Threads und Mod-Threads daneben zu sehen. So erkennst du Arbeit, die neben der Tick-Schleife läuft.",
     "tip.settings.language": "Sprache nur für das Dashboard. Sie ändert weder RimWorlds eigene Sprache noch die Bereichsnamen, die das Spiel meldet.",
     "tip.settings.sessionName": "Ein Name für diesen Durchlauf. Er erscheint in der Sitzungsliste und in Vergleichen, wähle also etwas, das du nächste Woche wiedererkennst.",
     "settings.readonly": "Nur lesbar"

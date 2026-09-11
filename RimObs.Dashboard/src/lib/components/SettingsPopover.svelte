@@ -629,6 +629,19 @@
                     <span class="label">{t('settings.close_on_disconnect')}</span>
                 </Tooltip>
             </label>
+
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    checked={userPrefs.mainThreadOnly}
+                    onchange={(e) =>
+                        userPrefs.setMainThreadOnly((e.currentTarget as HTMLInputElement).checked)}
+                    data-testid="main-thread-only"
+                />
+                <Tooltip text={t('tip.threads.mainOnly')} align="stretch">
+                    <span class="label">{t('threads.mainOnly')}</span>
+                </Tooltip>
+            </label>
         </section>
     </div>
 {/if}

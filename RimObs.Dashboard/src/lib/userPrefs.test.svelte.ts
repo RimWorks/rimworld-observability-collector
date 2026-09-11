@@ -25,7 +25,11 @@ describe('UserPrefs', () => {
         expect(prefs.closeOnDisconnect).toBe(false);
         const raw = localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw!)).toEqual({ closeOnDisconnect: false, lang: '' });
+        expect(JSON.parse(raw!)).toEqual({
+            closeOnDisconnect: false,
+            lang: '',
+            mainThreadOnly: true,
+        });
     });
 
     it('defaults lang to empty when no prior storage exists', () => {
@@ -41,7 +45,15 @@ describe('UserPrefs', () => {
         expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual({
             closeOnDisconnect: true,
             lang: 'de',
+            mainThreadOnly: true,
         });
+    });
+
+    it('defaults mainThreadOnly to true, and persists it off', () => {
+        const prefs = new UserPrefs();
+        expect(prefs.mainThreadOnly).toBe(true);
+        prefs.setMainThreadOnly(false);
+        expect(new UserPrefs().mainThreadOnly).toBe(false);
     });
 
     it('falls back to defaults when stored JSON is corrupt', () => {

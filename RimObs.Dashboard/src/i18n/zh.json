@@ -227,6 +227,8 @@
     "settings.promptForName": "新会话开始时提示我命名",
     "tip.settings.promptForName": "新会话启动时显示命名提示。命名过的会话在比较运行结果时才找得回来，没命名的就只剩一个 id 和时间戳。",
     "tip.settings.closeOnDisconnect": "当收集器不再响应时关闭此标签页，通常是因为 RimWorld 已退出。浏览器会阻止关闭并非脚本打开的标签页，所以它可能悄无声息地什么都不做。",
+    "threads.mainOnly": "仅主线程",
+    "tip.threads.mainOnly": "只绘制主线程的泳道，隐藏其余线程。关闭后会并排显示 Unity 作业线程和 mod 线程，便于发现与 tick 循环并行的工作。",
     "tip.settings.language": "只影响仪表板的语言。不会改变 RimWorld 自身的语言，也不会改变游戏上报的区段名称。",
     "tip.settings.sessionName": "这次运行的名字。它会出现在会话列表和对比里，取一个下周还认得出来的名字。",
     "settings.readonly": "只读"

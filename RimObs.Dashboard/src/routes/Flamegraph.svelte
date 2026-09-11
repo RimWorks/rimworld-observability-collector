@@ -61,6 +61,8 @@
         speedMultiplier,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
+    import { laneLabel, orderLanes, ThreadRole } from '../lib/threadLanes';
+    import { userPrefs } from '../lib/userPrefs.svelte';
 
     // the whole spread against the frame budget, coloured by how much of it each one eats
     const PERCENTILES = [
@@ -510,6 +512,11 @@
         live ? (liveRes?.frame ?? null) : (importedFrames?.frames[frameIndex] ?? null),
     );
 
+    let allLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
+    let visibleLanes = $derived(
+        userPrefs.mainThreadOnly ? allLanes.filter((l) => l.role === ThreadRole.Main) : allLanes,
+    );
+
     // the live poll still carries one frame; the window is accumulated here so the timeline
     // spans many without a second request per tick.
     let liveWindow = $state<FrameData[]>([]);
@@ -903,10 +910,22 @@
         <div class="stage" class:split={treeOpen}>
             <div class="gutter">
                 <div class="lane">GC &mdash;</div>
-                <div class="lane main">
-                    MainThread
-                    <small class="mono">{ns((frame?.duration_us ?? 0) * 1000)}</small>
-                </div>
+                {#each visibleLanes as lane (lane.id)}
+                    <div
+                        class="lane"
+                        class:main={lane.role === ThreadRole.Main}
+                        data-testid="lane-{lane.id}"
+                    >
+                        {laneLabel(lane)}
+                        <small class="mono"
+                            >{ns(
+                                lane.role === ThreadRole.Main
+                                    ? (frame?.duration_us ?? 0) * 1000
+                                    : lane.busy_ns,
+                            )}</small
+                        >
+                    </div>
+                {/each}
             </div>
             <div class="canvas">
                 <FrameTimeline
