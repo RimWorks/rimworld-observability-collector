@@ -108,6 +108,36 @@ function luminance(rgb: string): number {
     return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
+// Neo's ProfilerPalette: 7 baked colors, then 6 generated at HSV(i/6, 0.35, 0.5), and a
+// section lands on one by LCG-hashing its id. keeps a section's color stable per session.
+const HASHED_COLORS = [
+    '#5a78c8',
+    '#60a060',
+    '#9664be',
+    '#54a0b0',
+    '#468c96',
+    '#bea050',
+    '#606068',
+    ...[0, 1, 2, 3, 4, 5].map((i) => hsv(i / 6, 0.35, 0.5)),
+];
+
+function hsv(h: number, s: number, v: number): string {
+    const f = (n: number): number => {
+        const k = (n + h * 6) % 6;
+        return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+    };
+    const hex = (x: number): string =>
+        Math.round(x * 255)
+            .toString(16)
+            .padStart(2, '0');
+    return `#${hex(f(5))}${hex(f(3))}${hex(f(1))}`;
+}
+
+export function hashedSectionColor(sectionId: number): string {
+    const index = ((sectionId * 1103515245 + 12345) >>> 0) % HASHED_COLORS.length;
+    return HASHED_COLORS[index];
+}
+
 // deeper bars sit lighter, so nesting reads without a border on every quad. nest, not the
 // row: a second band starts over at its own depth 0.
 function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
@@ -115,7 +145,7 @@ function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
     const base =
         q.count > 1 && q.sectionId < 0
             ? opts.theme.collapsed
-            : (opts.theme.hue[opts.subsystem(q) ?? ''] ?? opts.theme.hueNone);
+            : (opts.theme.hue[opts.subsystem(q) ?? ''] ?? hashedSectionColor(q.sectionId));
     return lighten(base, lift);
 }
 

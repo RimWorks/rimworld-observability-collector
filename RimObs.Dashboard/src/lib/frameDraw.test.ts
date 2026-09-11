@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { drawTimeline, readTheme, ROW_HEIGHT, type DrawOptions, type DrawTheme } from './frameDraw';
+import {
+    drawTimeline,
+    hashedSectionColor,
+    readTheme,
+    ROW_HEIGHT,
+    type DrawOptions,
+    type DrawTheme,
+} from './frameDraw';
 import type { Quad } from './frameLayout';
 
 interface Call {
@@ -98,6 +105,27 @@ const THEME: DrawTheme = {
     zebra: 'rgba(26, 34, 49, 0.45)',
     laneLine: '#1c2434',
 };
+
+describe('hashedSectionColor', () => {
+    it('is stable per section and spreads across the palette', () => {
+        expect(hashedSectionColor(42)).toBe(hashedSectionColor(42));
+        const distinct = new Set(
+            Array.from({ length: 40 }, (_, sectionId) => hashedSectionColor(sectionId)),
+        );
+        expect(distinct.size).toBeGreaterThan(5);
+    });
+
+    it('feeds quadFill for a section with no subsystem instead of one grey', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(
+            ctx,
+            [quad({ sectionId: 7 }), quad({ sectionId: 8, startUs: 600 })],
+            opts({ subsystem: () => null }),
+        );
+        const fills = calls.filter((c) => c.op === 'fillStyle').map((c) => String(c.args[0]));
+        expect(new Set(fills).size).toBeGreaterThan(1);
+    });
+});
 
 describe('drawLaneBands', () => {
     it('tints alternate bands and rules each boundary', () => {
