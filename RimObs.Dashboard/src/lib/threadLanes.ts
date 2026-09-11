@@ -1,5 +1,5 @@
 import type { ThreadLane } from './api';
-import { NO_PARENT, resolveFrameParents, type FrameNodes } from './frameTree';
+import type { FrameNodes } from './frameTree';
 
 /** Mirrors RimObs.Wire.ThreadRole. */
 export const ThreadRole = {
@@ -25,15 +25,21 @@ export function laneLabel(t: ThreadLane): string {
 export function laneBusyNs(nodes: FrameNodes, laneId: number): number {
     const lanes = nodes.thread_ids ?? [];
     if (lanes.length === 0) return 0;
-    // orphans are re-parented onto a container the flame already draws, so reading the raw
-    // parent id here would bill that span twice and push the lane's share past 100%.
-    const { n, parentWire } = resolveFrameParents(nodes);
-    let us = 0;
-    for (let i = 0; i < Math.min(n, lanes.length); i++) {
+    // busy is the union of the lane's node spans. nesting, overlap and re-parented orphans
+    // all collapse into covered time, so a lane can never bill more than its wall clock.
+    const n = Math.min(lanes.length, nodes.start_us.length, nodes.dur_us.length);
+    const spans: Array<[number, number]> = [];
+    for (let i = 0; i < n; i++) {
         if (lanes[i] !== laneId) continue;
-        const parent = parentWire[i];
-        if (parent !== NO_PARENT && lanes[parent] === laneId) continue;
-        us += nodes.dur_us[i];
+        spans.push([nodes.start_us[i], nodes.start_us[i] + nodes.dur_us[i]]);
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    let us = 0;
+    let coveredTo = Number.NEGATIVE_INFINITY;
+    for (const [start, end] of spans) {
+        if (end <= coveredTo) continue;
+        us += end - Math.max(start, coveredTo);
+        coveredTo = end;
     }
     return us * 1000;
 }

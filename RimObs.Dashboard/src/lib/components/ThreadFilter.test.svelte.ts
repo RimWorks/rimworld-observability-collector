@@ -64,15 +64,34 @@ describe('ThreadFilter', () => {
         expect(selected.has(2)).toBe(true);
     });
 
-    // main-thread-only hides every other lane from the gutter, so a row that still looked
-    // pressed and still took clicks was lying about what got drawn.
-    it('shows only the main lane as drawn and takes no clicks under main-thread-only', async () => {
+    // under main-thread-only the rows mirror the gutter, but the first click leaves that
+    // mode: this panel is the one control for lane visibility, not a dead set of buttons.
+    it('mirrors main-thread-only until a click, then owns the selection', async () => {
         userPrefs.mainThreadOnly = true;
         const selected = mount();
         const other = screen.getByTestId('thread-row-2');
         expect(screen.getByTestId('thread-row-1').getAttribute('aria-pressed')).toBe('true');
         expect(other.getAttribute('aria-pressed')).toBe('false');
+
         await fireEvent.click(other);
+
+        expect(userPrefs.mainThreadOnly).toBe(false);
+        expect(selected.has(1)).toBe(true);
         expect(selected.has(2)).toBe(true);
+    });
+
+    it('caps the percent label at 100 even when spans spill past the frame', () => {
+        const spill: FrameNodes = {
+            ...NODES,
+            start_us: [0, 900, 0],
+            dur_us: [1000, 600, 100],
+        };
+        render(ThreadFilter, {
+            threads: THREADS,
+            nodes: spill,
+            frameNs: 1_000_000,
+            selected: new SvelteSet<number>([1, 2]),
+        });
+        expect(screen.getByTestId('thread-row-1').textContent).toContain('100%');
     });
 });

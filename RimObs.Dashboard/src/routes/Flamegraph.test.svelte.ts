@@ -1620,6 +1620,22 @@ describe('Flamegraph thread lanes', () => {
         expect(screen.getByTestId('lane-2')).toBeInTheDocument();
     });
 
+    // with factory prefs the panel must be a way in, not a dead set of rows: the first click
+    // leaves main-thread-only and draws the clicked lane next to main.
+    it('unlocks main-thread-only when a filter row is clicked with default prefs', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('lane-1')).toBeInTheDocument());
+        expect(screen.queryByTestId('lane-2')).toBeNull();
+
+        await openFooterTab('threads');
+        await fireEvent.click(await screen.findByTestId('thread-row-2'));
+
+        await waitFor(() => expect(screen.getByTestId('lane-2')).toBeInTheDocument());
+        expect(screen.getByTestId('lane-1')).toBeInTheDocument();
+        expect(userPrefs.mainThreadOnly).toBe(false);
+    });
+
     it('still draws a main lane when the response carries no threads', async () => {
         mockFetch({ ...FRAMES_BODY, threads: undefined });
         render(Flamegraph);
