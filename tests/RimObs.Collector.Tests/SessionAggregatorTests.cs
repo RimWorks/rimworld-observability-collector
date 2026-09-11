@@ -268,6 +268,36 @@ public sealed class SessionAggregatorTests {
         aggregator.Frames.Latest()!.CaptureOrdinal.Should().Be(1);
     }
 
+    // pause and step must land on real game frames: once Verse.Root_Play.Update is known,
+    // a frame without it - even one full of main-thread samples - is not navigable.
+    [Fact]
+    public void A_frame_is_only_served_once_the_root_play_section_reached_it() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSectionRegistrations(new SectionRegistrationsBatch {
+            SectionIds = [10, 20],
+            Names = ["Verse.Root_Play.Update", "SomeMod.Tick"],
+            Subsystems = [null, null],
+        });
+
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [20],
+            ParentIds = [-1],
+            StartTimestamps = [100L],
+            ElapsedTicks = [500L],
+            FrameOrdinals = [1],
+        });
+        aggregator.Frames.FindByOrdinal(1).Should().BeNull();
+
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10],
+            ParentIds = [-1],
+            StartTimestamps = [90L],
+            ElapsedTicks = [900L],
+            FrameOrdinals = [1],
+        });
+        aggregator.Frames.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+    }
+
     [Fact]
     public void OnSectionBatch_files_samples_into_the_frame_ring_by_ordinal() {
         SessionAggregator aggregator = new();

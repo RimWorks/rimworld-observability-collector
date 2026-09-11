@@ -14,6 +14,10 @@ public sealed class SessionAggregator {
     private readonly ConcurrentDictionary<long, CallEdgeStats> _callEdges = new();
     private readonly BoundedRecordRing<GcEventRecord> _gcEvents = new(GcEventRingCapacity);
     private readonly FrameRing _frames = new();
+
+    // the frame anchor: navigation may only land on frames this section reached.
+    private const string FrameRootSection = "Verse.Root_Play.Update";
+    private volatile int _frameRootSectionId;
     private readonly ISessionPersister? _persister;
     private SessionMeta? _meta;
     private PatchConflictRecord[] _patchConflicts = [];
@@ -98,6 +102,7 @@ public sealed class SessionAggregator {
         bool changed = previous != null && previous != meta.SessionId;
         if (changed) {
             _frames.Clear();
+            _frameRootSectionId = 0;
             // a name belongs to the session it was given to, never to the next one.
             SessionName = string.Empty;
         }
@@ -117,6 +122,8 @@ public sealed class SessionAggregator {
             SectionStats stats = _sections.GetOrAdd(id, key => new SectionStats { SectionId = key });
             stats.Name = name;
             stats.Subsystem = subsystem;
+            if (name == FrameRootSection)
+                _frameRootSectionId = id;
             SectionRegistrationObserver?.Invoke(id, name);
         }
     }
@@ -264,7 +271,9 @@ public sealed class SessionAggregator {
             // a v8 batch or an unannounced main both count as main, so nothing hides for lack
             // of thread data; only a sample from a KNOWN non-main lane is a worker's.
             bool fromMain = laneId == 0 || mainLane == 0 || laneId == mainLane;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, laneId, fromMain);
+            // once the frame root is known, only Root_Play.Update itself anchors a frame.
+            bool anchor = _frameRootSectionId != 0 ? id == _frameRootSectionId : fromMain;
+            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, laneId, anchor);
         }
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);
