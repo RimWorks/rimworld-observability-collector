@@ -12,4 +12,14 @@ internal static class FrameRingQuiet {
         DateTime parked = ring.NowUtc().AddMinutes(1);
         ring.NowUtc = () => parked;
     }
+
+    /// <summary>
+    /// Freezes the ring's clock, so a test that expects a frame to still be open never trips
+    /// the quiet deadline on real elapsed time under a gc pause or a loaded test host.
+    /// </summary>
+    public static FrameRing StayLive(this FrameRing ring) {
+        DateTime frozen = ring.NowUtc();
+        ring.NowUtc = () => frozen;
+        return ring;
+    }
 }

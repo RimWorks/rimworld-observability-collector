@@ -8,13 +8,13 @@ namespace RimWorks.RimObs.Collector.Tests;
 
 public sealed class FrameRingTests {
     private static FrameRing RingWithWindow(int capacity, int window) =>
-        new(capacity) { OpenFrameWindow = window };
+        new FrameRing(capacity) { OpenFrameWindow = window }.StayLive();
 
     // a read seals whatever the stream has gone quiet on, so the newest frame lands in the ring
     // without the next batch and without anyone calling Flush.
     [Fact]
     public void The_newest_frame_seals_on_a_read_once_the_stream_goes_quiet() {
-        FrameRing ring = new(8);
+        FrameRing ring = new FrameRing(8).StayLive();
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
 
         ring.Latest().Should().BeNull();
@@ -61,7 +61,7 @@ public sealed class FrameRingTests {
     // dashboard polls. the read must not commit the frame out from under the expensive node.
     [Fact]
     public void A_frame_read_during_a_stall_still_takes_the_node_that_caused_it() {
-        FrameRing ring = new(8);
+        FrameRing ring = new FrameRing(8).StayLive();
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
 
         ring.GoQuiet();
@@ -80,7 +80,7 @@ public sealed class FrameRingTests {
     // whatever was sealed a window ago.
     [Fact]
     public void A_paused_stream_serves_every_frame_it_had_open() {
-        FrameRing ring = new(64);
+        FrameRing ring = new FrameRing(64).StayLive();
         for (int ordinal = 1; ordinal <= 5; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 500L);
 
@@ -109,7 +109,7 @@ public sealed class FrameRingTests {
     // already reported. every frame has to keep both lanes' nodes.
     [Fact]
     public void Frames_keep_the_nodes_of_every_lane_that_reports_them() {
-        FrameRing ring = new(8);
+        FrameRing ring = new FrameRing(8).StayLive();
         for (int ordinal = 1; ordinal <= 3; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
         for (int ordinal = 1; ordinal <= 3; ordinal++)
