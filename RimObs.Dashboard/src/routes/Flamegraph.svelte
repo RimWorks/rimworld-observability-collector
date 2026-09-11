@@ -482,6 +482,7 @@
     let timeline = $state<{
         focusNode: (i: number) => void;
         refit: () => void;
+        resetView: () => void;
         stepMatch: (delta: 1 | -1) => number | null;
     } | null>(null);
 
