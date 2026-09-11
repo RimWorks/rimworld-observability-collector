@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using RimWorks.RimObs.Collector.Aggregation;
+using RimWorks.RimObs.Collector.Config;
 using RimWorks.RimObs.Collector.Storage;
 using RimWorks.RimObs.Wire;
 
@@ -45,13 +46,19 @@ public sealed class BundleExportService {
     private readonly SessionAggregator _aggregator;
     private readonly string _collectorVersion;
     private readonly DateTimeOffset _startedUtc;
+    private readonly Func<AutoInstrumentOptions>? _autoInstrument;
 
     internal Func<BundleEstimateInput, BundleSizeEstimate>? EstimateOverride { get; set; }
 
-    public BundleExportService(SessionAggregator aggregator, string collectorVersion, DateTimeOffset? startedUtc = null) {
+    public BundleExportService(
+        SessionAggregator aggregator,
+        string collectorVersion,
+        DateTimeOffset? startedUtc = null,
+        Func<AutoInstrumentOptions>? autoInstrument = null) {
         _aggregator = aggregator;
         _collectorVersion = collectorVersion;
         _startedUtc = startedUtc ?? ProcessStartUtc();
+        _autoInstrument = autoInstrument;
     }
 
     private static DateTimeOffset ProcessStartUtc() {
@@ -327,6 +334,7 @@ public sealed class BundleExportService {
         object[] mapped = new object[frames.Length];
         for (int i = 0; i < frames.Length; i++)
             mapped[i] = FramePayload.Map(frames[i], meta.AnchorTimestamp, usPerTick);
+        AutoInstrumentOptions? auto = _autoInstrument?.Invoke();
         return new {
             schema_version = SchemaVersion.Current,
             session_id = meta.SessionId,
@@ -337,6 +345,13 @@ public sealed class BundleExportService {
                 pre_frame_samples = _aggregator.Frames.PreFrameSamples,
                 late_samples = _aggregator.Frames.LateSamples,
                 library_ring_samples = meta.SamplesDropped,
+            },
+            // provenance: an import carries this forward so a re-export never claims the
+            // reader's own filter set.
+            auto_instrument = auto == null ? null : new {
+                enabled = auto.Enabled,
+                filters = auto.Filters,
+                ignore = auto.Ignore,
             },
         };
     }

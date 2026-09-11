@@ -182,7 +182,8 @@
             names,
             stopwatchFrequency,
             dropped,
-            liveConfig.autoInstrument,
+            // the filter that produced these frames, not whatever this collector runs now.
+            live ? liveConfig.autoInstrument : (importedFrames?.auto_instrument ?? null),
         );
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

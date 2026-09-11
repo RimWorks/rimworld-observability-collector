@@ -132,7 +132,8 @@ public static class Program {
         });
         builder.Services.AddSingleton(sp => new Bundle.BundleExportService(
             sp.GetRequiredService<Aggregation.SessionAggregator>(),
-            BuildInfo.Revision));
+            BuildInfo.Revision,
+            autoInstrument: () => sp.GetRequiredService<Config.ConfigStore>().Current.AutoInstrument));
         string importsDir = Path.Combine(sessionsDir ?? ConfigDirResolver.Resolve(), "imports");
         builder.Services.AddSingleton(new Bundle.BundleImportRegistry(importsDir, TimeSpan.FromMinutes(30)));
         builder.Services.AddSingleton<Bundle.BundleImportService>();

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using RimWorks.RimObs.Collector.Aggregation;
 using RimWorks.RimObs.Collector.Bundle;
+using RimWorks.RimObs.Collector.Config;
 using RimWorks.RimObs.Wire;
 using FluentAssertions;
 using Xunit;
@@ -236,6 +237,38 @@ public class BundleExportServiceTests {
         frames[0].GetProperty("nodes").GetProperty("section_ids")[0].GetInt32().Should().Be(10);
         doc.RootElement.GetProperty("session_id").GetString().Should().Be("sess-test");
         doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(2);
+    }
+
+    // without the filter set in the file, a re-export of an imported bundle can only stamp the
+    // reader's own filter on someone else's frames.
+    [Fact]
+    public async Task Frames_json_carries_the_filter_that_produced_them() {
+        SessionAggregator aggregator = BuildAggregator();
+        aggregator.Frames.Add(1, 10, -1, 100, -1, 1000L, 500L);
+        AutoInstrumentOptions auto = new AutoInstrumentOptions {
+            Enabled = true,
+            Filters = "Assembly-CSharp!Verse.*",
+            Ignore = "System.*",
+        };
+        BundleExportService service =
+            new BundleExportService(aggregator, collectorVersion: "0.1.0", autoInstrument: () => auto);
+
+        BundleExportResult result = await service.ExportAsync(new BundleExportRequest {
+            SessionId = "sess-test",
+            Includes = new HashSet<BundleContentKey> { BundleContentKey.Frames },
+            Force = false,
+        }, CancellationToken.None);
+
+        result.Status.Should().Be(BundleExportStatus.Ok);
+        using MemoryStream ms = new MemoryStream(result.Bytes!);
+        using ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using Stream entry = await zip.GetEntry("frames.json")!.OpenAsync();
+        using JsonDocument doc = await JsonDocument.ParseAsync(entry);
+
+        JsonElement written = doc.RootElement.GetProperty("auto_instrument");
+        written.GetProperty("enabled").GetBoolean().Should().BeTrue();
+        written.GetProperty("filters").GetString().Should().Be("Assembly-CSharp!Verse.*");
+        written.GetProperty("ignore").GetString().Should().Be("System.*");
     }
 
     // pressing the export button is a read. lane 7's drain for the exported frames has not

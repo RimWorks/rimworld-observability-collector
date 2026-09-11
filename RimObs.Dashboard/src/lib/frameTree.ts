@@ -71,6 +71,8 @@ export interface BundleFramesResponse {
     frames: FrameData[];
     stats: FrameStats;
     dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
+    /** The filter that was running when the bundle was captured. Absent in older bundles. */
+    auto_instrument?: { enabled: boolean; filters: string; ignore: string } | null;
 }
 
 export interface TreeNode {
