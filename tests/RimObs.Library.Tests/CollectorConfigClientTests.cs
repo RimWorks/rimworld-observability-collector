@@ -1,5 +1,7 @@
 using RimWorks.RimObs.Auto;
 using RimWorks.RimObs.Config;
+using RimWorks.RimObs.Library.Control;
+using RimWorks.RimObs.Transport;
 using RimWorks.RimObs.Profile;
 using FluentAssertions;
 using Xunit;
@@ -69,6 +71,22 @@ public sealed class CollectorConfigClientTests {
         CollectorConfigClient.ApplyToRegistry(CollectorConfigDocument.TryParse("""{ "schema_version": 1 }""")!);
 
         Profiler.MaxDepth.Should().Be(Profiler.DefaultMaxDepth);
+    }
+
+    // the config poll is the only push for ring_capacity; the collector never calls /ring-capacity.
+    [Fact]
+    public void ApplyToRegistry_retunes_the_sink_ring_the_collector_sent() {
+        using UdpTelemetrySink sink = new(ownerId: "test.pkg", port: 45998);
+        ControlServices.SetSink(sink);
+        try {
+            CollectorConfigClient.ApplyToRegistry(
+                CollectorConfigDocument.TryParse("""{ "sampling": { "ring_capacity": 2048 } }""")!);
+
+            sink.RingCapacity.Should().Be(2048);
+        }
+        finally {
+            ControlServices.SetSink(null);
+        }
     }
 
     [Fact]
