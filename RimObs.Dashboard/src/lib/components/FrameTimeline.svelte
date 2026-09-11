@@ -416,8 +416,18 @@
         startClientX: number;
         startClientY: number;
         startView: ViewRange;
+        scrollEl: HTMLElement | null;
+        startScrollTop: number;
         moved: boolean;
     } | null = null;
+
+    // the stage scrolls the tall lane stack; a drag pans it vertically since it has no bars.
+    function scrollParentOf(el: HTMLElement | null): HTMLElement | null {
+        for (let at = el?.parentElement ?? null; at; at = at.parentElement) {
+            if (at.scrollHeight > at.clientHeight) return at;
+        }
+        return null;
+    }
 
     function handlePointerDown(event: PointerEvent): void {
         if (empty || !canvasEl) return;
@@ -425,11 +435,14 @@
         if (event.button > 0 && event.button !== 2) return;
         canvasEl.focus();
         canvasEl.setPointerCapture(event.pointerId);
+        const scrollEl = scrollParentOf(canvasEl);
         dragState = {
             button: event.button,
             startClientX: event.clientX,
             startClientY: event.clientY,
             startView: effectiveView,
+            scrollEl,
+            startScrollTop: scrollEl?.scrollTop ?? 0,
             moved: false,
         };
     }
@@ -444,6 +457,10 @@
             const span = dragState.startView.endUs - dragState.startView.startUs;
             const pxPerUs = widthPx / span;
             setViewInstant(panBy(dragState.startView, -dx / pxPerUs));
+            if (dragState.scrollEl) {
+                const dy = event.clientY - dragState.startClientY;
+                dragState.scrollEl.scrollTop = dragState.startScrollTop - dy;
+            }
         } else {
             hoverAt = posToView(event.clientX, event.clientY);
             hoverClientX = event.clientX;

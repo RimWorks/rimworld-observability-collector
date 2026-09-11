@@ -144,6 +144,27 @@ describe('FrameTimeline', () => {
         await waitFor(() => expect(range.textContent).toBe(home));
     });
 
+    // the stage has no scrollbars, so a drag must move its scrollTop for vertical panning.
+    it('drags the scroll parent vertically', async () => {
+        const { container } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = document.querySelector('canvas')!;
+        canvas.setPointerCapture = () => {};
+        const host = container as HTMLElement;
+        Object.defineProperty(host, 'scrollHeight', { value: 2000 });
+        Object.defineProperty(host, 'clientHeight', { value: 100 });
+        host.scrollTop = 500;
+
+        // jsdom has no PointerEvent, and the fallback loses coordinates; MouseEvent keeps them.
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 2, clientX: 50, clientY: 300, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointermove', { clientX: 50, clientY: 380, bubbles: true }),
+        );
+
+        expect(host.scrollTop).toBe(420);
+    });
+
     // right-drag pans now, so the canvas suppresses the browser menu and a right release
     // must never fire the click-to-zoom gesture.
     it('right-click opens no menu and zooms nothing', async () => {

@@ -1444,6 +1444,11 @@
         height: 600px;
         overflow: auto;
         resize: vertical;
+        /* drag pans instead; bars just eat width next to the flame. */
+        scrollbar-width: none;
+    }
+    .stage::-webkit-scrollbar {
+        display: none;
     }
     /* the drawer explains the flame, so it must not cover it. the stage keeps its resize
        handle, which is the splitter: drag it back up if you want the flame bigger. */
