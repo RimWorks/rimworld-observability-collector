@@ -77,6 +77,28 @@ describe('buildSeries', () => {
         buildSeries([frame(1, 1000), frame(2, 1500)], cache);
         expect(cache.get(1)).toBe(first);
     });
+
+    // a backfilled frame keeps its ordinal, so the cache must key on node count too or the
+    // fuller frame draws with the stale truncated tree.
+    it('rebuilds a cached frame when it returns with more nodes', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const partial = frame(1, 1000);
+        partial.node_count = 1;
+        partial.nodes = {
+            section_ids: [10],
+            parent_ids: [-1],
+            node_ids: [1],
+            parent_node_ids: [-1],
+            start_us: [1000],
+            dur_us: [100],
+        };
+        buildSeries([partial], cache);
+        expect(cache.get(1)!.nodes).toHaveLength(1);
+
+        const s = buildSeries([frame(1, 1000)], cache);
+        expect(s.nodes).toHaveLength(2);
+        expect(cache.get(1)!.nodes).toHaveLength(2);
+    });
 });
 
 describe('gaps', () => {
@@ -234,6 +256,31 @@ describe('pushFrame', () => {
     it('returns the same array when the poll saw the same frame again', () => {
         const window = [frame(1, 1000)];
         expect(pushFrame(window, frame(1, 1000))).toBe(window);
+    });
+
+    // a hitch frame gets served mid-flight; freezing that first sight truncates the one
+    // frame worth looking at.
+    it('replaces the newest frame when the same ordinal returns with more nodes', () => {
+        const partial = frame(2, 1500);
+        const fuller = frame(2, 1500);
+        fuller.node_count = 3;
+        fuller.nodes = {
+            ...fuller.nodes,
+            section_ids: [10, 20, 30],
+            parent_ids: [-1, 10, 10],
+            node_ids: [1, 2, 3],
+            parent_node_ids: [-1, 1, 1],
+            start_us: [1500, 1510, 1540],
+            dur_us: [100, 20, 40],
+        };
+        const window = pushFrame([frame(1, 1000), partial], fuller);
+        expect(window.map((f) => f.capture_ordinal)).toEqual([1, 2]);
+        expect(window.at(-1)!.node_count).toBe(3);
+    });
+
+    it('keeps the window when the same ordinal returns no fuller', () => {
+        const window = [frame(1, 1000), frame(2, 1500)];
+        expect(pushFrame(window, frame(2, 1500))).toBe(window);
     });
 
     it('returns the same array for an older frame', () => {

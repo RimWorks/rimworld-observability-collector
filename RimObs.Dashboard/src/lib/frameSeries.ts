@@ -32,6 +32,8 @@ export interface FrameSeries {
 export interface SeriesCacheEntry {
     nodes: TreeNode[];
     orphanCount: number;
+    /** revalidation key: a backfilled frame returns the same ordinal with more nodes. */
+    nodeCount: number;
 }
 
 export const EMPTY_SERIES: FrameSeries = {
@@ -61,9 +63,13 @@ function shift(nodes: TreeNode[], offsetUs: number, base: number): TreeNode[] {
 
 function treeFor(frame: FrameData, cache?: Map<number, SeriesCacheEntry>): SeriesCacheEntry {
     const hit = cache?.get(frame.capture_ordinal);
-    if (hit) return hit;
+    if (hit && hit.nodeCount === frame.node_count) return hit;
     const built = buildFrameTree(frame);
-    const entry = { nodes: built.nodes, orphanCount: built.orphanCount };
+    const entry = {
+        nodes: built.nodes,
+        orphanCount: built.orphanCount,
+        nodeCount: frame.node_count,
+    };
     cache?.set(frame.capture_ordinal, entry);
     return entry;
 }
@@ -242,6 +248,15 @@ export function pushFrame(
 ): FrameData[] {
     if (!frame) return window;
     const last = window.at(-1);
+    if (
+        last &&
+        frame.capture_ordinal === last.capture_ordinal &&
+        frame.node_count > last.node_count
+    ) {
+        // a frame served mid-hitch came back fuller; take the fuller version so a stall
+        // never freezes a truncated flame in the window.
+        return [...window.slice(0, -1), frame];
+    }
     if (last && frame.capture_ordinal <= last.capture_ordinal) return window;
 
     const next = [...window, frame];
