@@ -29,6 +29,27 @@ describe('buildFrameTree', () => {
         expect(buildFrameTree(frame([]))).toEqual({ nodes: [], orphanCount: 0 });
     });
 
+    // a forward wire parent plus an orphan fallback onto the enclosing container can point at
+    // each other; the recursive depth walk blew the stack on every rAF tick (auto-instrument).
+    it('a resolved parent cycle neither recurses forever nor drops nodes', () => {
+        const built = buildFrameTree(
+            frame([
+                [10, 2, 0, 100],
+                [20, 999, 10, 20],
+            ]),
+        );
+        expect(built.nodes).toHaveLength(2);
+        for (const n of built.nodes) expect(n.depth).toBeGreaterThanOrEqual(0);
+    });
+
+    it('a fifty-thousand-deep chain does not overflow the stack', () => {
+        const rows: Array<[number, number, number, number]> = [];
+        for (let i = 0; i < 50_000; i++) rows.push([1, i === 0 ? -1 : i, 0, 100]);
+        const built = buildFrameTree(frame(rows));
+        expect(built.nodes).toHaveLength(50_000);
+        expect(Math.max(...built.nodes.map((n) => n.depth))).toBe(49_999);
+    });
+
     // the frame can come out of a user-supplied bundle zip, so nodes may not be there at all.
     it('returns nothing when the frame carries no nodes object', () => {
         const malformed = { capture_ordinal: 1, start_us: 0, end_us: 1, duration_us: 1 };

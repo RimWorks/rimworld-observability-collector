@@ -159,17 +159,36 @@ function resolveParents(
     return { parentWire, orphanCount };
 }
 
-// depth walks the parent chain directly; it must not assume the parent was emitted yet.
+// depth walks the parent chain iteratively; it must not assume the parent was emitted yet,
+// and a forward wire parent whose fallback points back forms a cycle that must sever.
 function computeDepths(parentWire: number[]): number[] {
     const depth = new Array<number>(parentWire.length).fill(-1);
-    const depthOf = (i: number): number => {
-        if (depth[i] === -1) {
-            const p = parentWire[i];
-            depth[i] = p === NO_PARENT ? 0 : depthOf(p) + 1;
+    const onChain = new Array<boolean>(parentWire.length).fill(false);
+    const chain: number[] = [];
+    for (let i = 0; i < parentWire.length; i++) {
+        let at = i;
+        while (at !== NO_PARENT && depth[at] === -1 && !onChain[at]) {
+            onChain[at] = true;
+            chain.push(at);
+            at = parentWire[at];
         }
-        return depth[i];
-    };
-    for (let i = 0; i < parentWire.length; i++) depthOf(i);
+        let d: number;
+        if (at === NO_PARENT) {
+            d = -1;
+        } else if (depth[at] !== -1) {
+            d = depth[at];
+        } else {
+            // the chain re-entered itself; root the node whose parent looped back.
+            parentWire[chain.at(-1)!] = NO_PARENT;
+            d = -1;
+        }
+        while (chain.length > 0) {
+            const n = chain.pop()!;
+            onChain[n] = false;
+            d += 1;
+            depth[n] = d;
+        }
+    }
     return depth;
 }
 
