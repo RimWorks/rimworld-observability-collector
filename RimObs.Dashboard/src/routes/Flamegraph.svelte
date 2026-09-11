@@ -650,24 +650,35 @@
     // drops that stopped an hour ago are not news, so the badge watches the last half second of
     // polls and goes quiet again once the counters hold still.
     const DROP_WINDOW_POLLS = 32;
+    // the ring counter rides the session-meta heartbeat, one step every 5s, so a ring that
+    // overflows nonstop would blink for half a second in five on the window above.
+    const RING_HOLD_POLLS = 6000 / FRAME_POLL_MS;
     let dropWindow = $state<number[]>([]);
+    let lastRing = $state(-1);
+    let ringQuietPolls = $state(RING_HOLD_POLLS);
     $effect(() => {
         if (!live) {
             untrack(() => {
                 dropWindow = [];
+                lastRing = -1;
+                ringQuietPolls = RING_HOLD_POLLS;
             });
             return;
         }
         if (!liveRes) return;
-        const total = dropTotal;
+        const fast = dropped.pre_frame_samples + dropped.late_samples;
+        const ring = dropped.library_ring_samples;
         untrack(() => {
-            dropWindow = [...dropWindow, total].slice(-DROP_WINDOW_POLLS);
+            dropWindow = [...dropWindow, fast].slice(-DROP_WINDOW_POLLS);
+            ringQuietPolls = lastRing >= 0 && ring > lastRing ? 0 : ringQuietPolls + 1;
+            lastRing = ring;
         });
     });
     // an import is a still picture, so there is no climb to watch: any drops in it are the news.
     let lossy = $derived(
         live
-            ? dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0]
+            ? (dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0]) ||
+                  ringQuietPolls < RING_HOLD_POLLS
             : dropTotal > 0,
     );
     let stopwatchFrequency = $derived(

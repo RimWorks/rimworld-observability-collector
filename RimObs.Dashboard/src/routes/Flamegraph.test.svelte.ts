@@ -472,6 +472,15 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
         expect(screen.getByTestId('lossy-count')).toHaveTextContent('400');
         expect(screen.getByTestId('drop-ring')).toHaveTextContent('400');
+
+        // regression: the ring counter only refreshes on the 5s meta heartbeat, so one step has
+        // to hold the badge until the next one can arrive. the half-second window blinked here.
+        await vi.advanceTimersByTimeAsync(4500);
+        expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
+
+        // no second step within the heartbeat gap: the ring stopped overflowing, badge stands down.
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
     });
 
     it('stays quiet when the drop counters never move', async () => {
