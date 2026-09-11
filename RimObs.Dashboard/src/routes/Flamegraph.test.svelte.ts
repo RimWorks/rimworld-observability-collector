@@ -1583,7 +1583,20 @@ describe('Flamegraph stage and drawer share the viewport', () => {
 
 // the dashboard shipped main-thread-only for its whole life, so the extra lanes stay off until
 // someone asks for them. a profiler that changes shape on upgrade is a bad surprise.
+// the gutter hides idle lanes, so this fixture gives the worker a node inside the frame.
+const LANE_FRAMES_BODY = {
+    ...FRAMES_BODY,
+    frame: {
+        ...FRAMES_BODY.frame,
+        nodes: { ...FRAMES_BODY.frame.nodes, thread_ids: [2, 1] },
+    },
+};
+
 describe('Flamegraph thread lanes', () => {
+    beforeEach(() => {
+        mockFetch(LANE_FRAMES_BODY);
+    });
+
     afterEach(() => {
         userPrefs.reset();
     });
@@ -1735,7 +1748,7 @@ describe('Flamegraph flame bands', () => {
             expect(await drawnRows()).toEqual([
                 [10, 0],
                 [30, 1],
-                [40, 4],
+                [40, 3],
             ]),
         );
     });

@@ -62,3 +62,12 @@ export function gradeFromShare(share: number): number {
     }
     return 0;
 }
+
+/** Dynamic patches register under this synthetic owner; readers want the wrapped method. */
+const DYNAMIC_SECTION_PREFIX = 'rimworks.rimobs.dynamic.';
+
+export function sectionLabel(name: string): string {
+    return name.startsWith(DYNAMIC_SECTION_PREFIX)
+        ? name.slice(DYNAMIC_SECTION_PREFIX.length)
+        : name;
+}

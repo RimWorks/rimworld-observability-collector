@@ -118,8 +118,8 @@ export function laneBands(lanes: ThreadLane[], nodes: TreeNode[], maxDepth: numb
     return { bands, offsets, rows };
 }
 
-/** 4 rows x 18px = 72px, the first row multiple past the 65px minimum lane height. */
-export const MIN_LANE_ROWS = 4;
+/** 3 rows x 18px = 54px, the first row multiple past the 45px minimum lane height. */
+export const MIN_LANE_ROWS = 3;
 
 /** canvas row for a node, or -1 when its lane is not drawn. */
 export function laneRow(bands: LaneBands | undefined, node: TreeNode): number {

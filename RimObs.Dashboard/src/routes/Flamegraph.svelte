@@ -45,7 +45,7 @@
     import { SvelteSet } from 'svelte/reactivity';
     import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
-    import { ns, count, bytes, gradeFromShare } from '../lib/format';
+    import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
     import {
         estimateOverheadUs,
         shareOfFrame,
@@ -411,7 +411,7 @@
                     names = new Map(
                         hotspots.hotspots.map((h) => [
                             h.id,
-                            { name: h.name, subsystem: h.subsystem },
+                            { name: sectionLabel(h.name), subsystem: h.subsystem },
                         ]),
                     );
                 }
@@ -555,11 +555,22 @@
             selectedLanes.add(lane.id);
         }
     });
+    // lanes with nodes in the drawn window; an idle worker holds no empty band open, and a
+    // lane joins at its ordered spot the moment its first node lands.
+    let activeLaneIds = $derived.by(() => {
+        const ids = new Set<number>();
+        for (const n of series.nodes) if (n.laneId !== undefined) ids.add(n.laneId);
+        return ids;
+    });
     let visibleLanes = $derived.by(() => {
         if (allLanes.length === 0) return [MAIN_FALLBACK];
         return userPrefs.mainThreadOnly
             ? allLanes.filter((l) => l.role === ThreadRole.Main)
-            : allLanes.filter((l) => selectedLanes.has(l.id));
+            : allLanes.filter(
+                  (l) =>
+                      selectedLanes.has(l.id) &&
+                      (l.role === ThreadRole.Main || activeLaneIds.has(l.id)),
+              );
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
     // label always sits level with the flame it names.
@@ -586,7 +597,7 @@
             ? new Map(
                   (sectionsRes.data?.sections ?? []).map((s) => [
                       s.id,
-                      { name: s.name, subsystem: s.subsystem },
+                      { name: sectionLabel(s.name), subsystem: s.subsystem },
                   ]),
               )
             : importedNames,
