@@ -22,27 +22,38 @@ public sealed class FrameRingTests {
     private static FrameRing RingWithWindow(int capacity, int window) =>
         new(capacity) { OpenFrameWindow = window, Clock = new ManualClock() };
 
-    // lanes drain up to 100ms apart, so the newest frame is still filling. serving it freezes
-    // a truncated frame on a dashboard that never backfills a capture_ordinal it has seen.
+    // a lane can drain a whole window late, so every frame inside the window is still filling.
+    // serving one freezes a truncated frame on a dashboard that never backfills an ordinal.
     [Fact]
     public void Latest_holds_the_newest_frame_back_while_the_stream_is_live() {
-        FrameRing ring = new(64) { Clock = new ManualClock() };
+        FrameRing ring = RingWithWindow(64, 4);
 
-        ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
-        ring.Latest().Should().BeNull();
+        for (int ordinal = 1; ordinal <= 4; ordinal++) {
+            ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
+            ring.Latest().Should().BeNull();
+        }
 
-        ring.Add(2, 10, -1, 200, -1, 2000L, 500L);
+        ring.Add(5, 10, -1, 50, -1, 5000L, 500L, 0L, 1);
         ring.Latest()!.CaptureOrdinal.Should().Be(1);
 
-        ring.Add(3, 10, -1, 300, -1, 3000L, 500L);
-        ring.Latest()!.CaptureOrdinal.Should().Be(2);
+        // lane 7 drains a full window behind lane 1, so frame 4 is still taking nodes.
+        ring.Add(4, 20, -1, 41, -1, 4100L, 200L, 0L, 7);
+
+        ring.LateSamples.Should().Be(0);
+        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+
+        // 4 clears the window, and seals with both lanes rather than lane 1 alone.
+        ring.Add(8, 10, -1, 80, -1, 8000L, 500L, 0L, 1);
+
+        ring.Latest()!.CaptureOrdinal.Should().Be(4);
+        ring.Latest()!.ThreadIds.Should().Equal(1, 7);
 
         // only Latest holds back; every other read still serves the whole ring.
-        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3);
-        ring.Range(-1, 10).Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3);
-        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3);
-        ring.FindByOrdinal(3).Should().NotBeNull();
-        ring.ComputeStats().NewestOrdinal.Should().Be(3);
+        ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3, 4, 5, 8);
+        ring.Range(-1, 10).Select(f => f.CaptureOrdinal).Should().Equal(1, 2, 3, 4, 5, 8);
+        ring.SnapshotStrip(0).Select(f => f.Ordinal).Should().Equal(1, 2, 3, 4, 5, 8);
+        ring.FindByOrdinal(8).Should().NotBeNull();
+        ring.ComputeStats().NewestOrdinal.Should().Be(8);
     }
 
     // a paused game sends nothing more, so its last frame has had its drain cycle and is the
@@ -50,20 +61,20 @@ public sealed class FrameRingTests {
     [Fact]
     public void Latest_serves_the_newest_frame_once_the_stream_goes_quiet() {
         ManualClock clock = new();
-        FrameRing ring = new(64) { Clock = clock };
+        FrameRing ring = new(64) { Clock = clock, OpenFrameWindow = 2 };
         ring.Add(1, 10, -1, 100, -1, 1000L, 500L);
         ring.Add(2, 10, -1, 200, -1, 2000L, 500L);
 
-        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.Latest().Should().BeNull();
 
         clock.Advance(ring.QuietPeriod);
 
         ring.Latest()!.CaptureOrdinal.Should().Be(2);
 
-        // the stream picking back up holds the newest frame again.
+        // the stream picking back up holds the open frames back again.
         ring.Add(3, 10, -1, 300, -1, 3000L, 500L);
 
-        ring.Latest()!.CaptureOrdinal.Should().Be(2);
+        ring.Latest()!.CaptureOrdinal.Should().Be(1);
     }
 
     // holding a frame back is a read-side rule, not a seal: a lane draining late still lands.
@@ -85,7 +96,7 @@ public sealed class FrameRingTests {
     // already served. they must slot in ascending, not append behind higher ordinals.
     [Fact]
     public void A_lane_draining_behind_a_read_keeps_the_frames_ascending() {
-        FrameRing ring = new(8) { Clock = new ManualClock() };
+        FrameRing ring = RingWithWindow(8, 3);
         foreach (int ordinal in new[] { 2, 4, 6 })
             ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
         ring.Latest();
@@ -97,25 +108,27 @@ public sealed class FrameRingTests {
         ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4, 5, 6);
         ring.FindByOrdinal(5).Should().NotBeNull();
         ring.Range(3, 10).Select(f => f.CaptureOrdinal).Should().Equal(3, 4, 5, 6);
-        ring.Latest()!.CaptureOrdinal.Should().Be(5);
+        ring.Latest()!.CaptureOrdinal.Should().Be(3);
     }
 
     // the sender drains every 100ms, so the stream never goes quiet during play. reads serve
-    // the frame behind the newest, which is the newest one that had a full drain cycle.
+    // the newest frame a whole open window behind, which is the newest one no lane can touch.
     [Fact]
-    public void Reads_serve_the_frame_behind_the_newest_while_the_stream_is_live() {
-        FrameRing ring = new(64) { Clock = new ManualClock() };
-        ring.Add(1, 10, -1, 1, -1, 1000L, 500L, 0L, 1);
-        ring.Latest().Should().BeNull();
-        for (int ordinal = 2; ordinal <= 5; ordinal++) {
+    public void Reads_serve_the_frame_a_window_behind_the_newest_while_the_stream_is_live() {
+        FrameRing ring = RingWithWindow(64, 3);
+        for (int ordinal = 1; ordinal <= 3; ordinal++) {
             ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
-            ring.Latest()!.CaptureOrdinal.Should().Be(ordinal - 1);
+            ring.Latest().Should().BeNull();
+        }
+        for (int ordinal = 4; ordinal <= 6; ordinal++) {
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
+            ring.Latest()!.CaptureOrdinal.Should().Be(ordinal - 3);
         }
 
-        ring.Add(1, 20, -1, 99, -1, 1100L, 200L, 0L, 7);
+        ring.Add(4, 20, -1, 99, -1, 4100L, 200L, 0L, 7);
 
         ring.LateSamples.Should().Be(0);
-        ring.FindByOrdinal(1)!.NodeCount.Should().Be(2);
+        ring.FindByOrdinal(4)!.NodeCount.Should().Be(2);
     }
 
     // the first frame of a live stream is still filling, so there is nothing complete to serve
@@ -146,13 +159,13 @@ public sealed class FrameRingTests {
     }
 
     // a 500ms hitch frame reports its cheap sections first and the expensive one last. reads
-    // in between serve the partial frame, and the hitch node still lands when it drains.
+    // in between serve nothing, and the hitch node still lands when it drains.
     [Fact]
     public void A_hitch_frame_stays_open_while_other_frames_keep_arriving() {
-        FrameRing ring = new(8) { Clock = new ManualClock() };
+        FrameRing ring = RingWithWindow(8, 2);
         ring.Add(1, 10, -1, 100, -1, 100L, 500L);
         ring.Add(2, 10, -1, 200, -1, 700L, 400L);
-        ring.Latest()!.CaptureOrdinal.Should().Be(1);
+        ring.Latest().Should().BeNull();
 
         ring.Add(1, 11, -1, 101, -1, 100L, 5_000_000L);
 
@@ -246,7 +259,7 @@ public sealed class FrameRingTests {
 
         for (int ordinal = 2; ordinal <= 40; ordinal++) {
             ring.Add(ordinal, 10, -1, ordinal * 10, -1, ordinal * 1000L, 500L, 0L, 1);
-            ring.Latest()!.CaptureOrdinal.Should().Be(ordinal - 1);
+            ring.Latest().Should().BeNull();
         }
 
         ring.Add(1, 20, -1, 999, -1, 150L, 200L, 0L, 7);

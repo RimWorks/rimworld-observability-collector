@@ -228,6 +228,7 @@ public sealed class FramesEndpointsTests {
         WebApplication app = Program.BuildApp([], port, token);
         SessionAggregator aggregator = app.Services.GetRequiredService<SessionAggregator>();
         aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
+        aggregator.Frames.OpenFrameWindow = 1;
         aggregator.OnSessionMeta(new SessionMeta {
             SessionId = "frames-live",
             StopwatchFrequency = 10_000_000L,

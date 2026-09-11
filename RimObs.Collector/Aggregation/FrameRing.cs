@@ -153,13 +153,15 @@ public sealed class FrameRing {
     }
 
     /// <summary>
-    /// The newest frame that has had a full drain cycle: one ordinal behind the newest while
-    /// samples keep arriving, the true newest once the stream goes quiet.
+    /// The newest frame that has had a full drain cycle: a whole open window behind the newest
+    /// while samples keep arriving, the true newest once the stream goes quiet.
     /// </summary>
     public FrameSnapshot? Latest() {
         lock (_gate) {
             bool live = _lastSampleStamp != 0 && Clock.GetElapsedTime(_lastSampleStamp) < QuietPeriod;
-            int ceiling = live ? _newestOrdinal - 1 : int.MaxValue;
+            // the same watermark SealThrough uses: a frame any lane can still add to is not
+            // servable, because the dashboard never backfills an ordinal it has already drawn.
+            int ceiling = live ? _newestOrdinal - _window : int.MaxValue;
             FrameSnapshot? newest = null;
             foreach (KeyValuePair<int, OpenFrame> entry in _open) {
                 if (entry.Key > ceiling)

@@ -222,6 +222,7 @@ public sealed class SessionAggregatorTests {
         SessionAggregator aggregator = new();
         // long enough that the test reads as a live stream whatever the machine is doing.
         aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
+        aggregator.Frames.OpenFrameWindow = 1;
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
         aggregator.OnSectionBatch(new SectionBatch {
             SectionIds = [10, 10],
@@ -251,6 +252,7 @@ public sealed class SessionAggregatorTests {
         SessionAggregator aggregator = new();
         // long enough that the test reads as a live stream whatever the machine is doing.
         aggregator.Frames.QuietPeriod = TimeSpan.FromMinutes(10);
+        aggregator.Frames.OpenFrameWindow = 1;
         aggregator.OnSessionMeta(new SessionMeta { SessionId = "same" });
         aggregator.OnSectionBatch(new SectionBatch {
             SectionIds = [10, 10],
