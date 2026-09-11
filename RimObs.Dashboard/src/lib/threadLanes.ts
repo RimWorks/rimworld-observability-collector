@@ -1,5 +1,5 @@
 import type { ThreadLane } from './api';
-import { NO_PARENT, type FrameNodes } from './frameTree';
+import { NO_PARENT, resolveFrameParents, type FrameNodes } from './frameTree';
 
 /** Mirrors RimObs.Wire.ThreadRole. */
 export const ThreadRole = {
@@ -24,15 +24,15 @@ export function laneLabel(t: ThreadLane): string {
  */
 export function laneBusyNs(nodes: FrameNodes, laneId: number): number {
     const lanes = nodes.thread_ids ?? [];
-    const own = new Set<number>();
-    for (let i = 0; i < lanes.length; i++) {
-        if (lanes[i] === laneId) own.add(nodes.node_ids[i]);
-    }
+    if (lanes.length === 0) return 0;
+    // orphans are re-parented onto a container the flame already draws, so reading the raw
+    // parent id here would bill that span twice and push the lane's share past 100%.
+    const { n, parentWire } = resolveFrameParents(nodes);
     let us = 0;
-    for (let i = 0; i < lanes.length; i++) {
+    for (let i = 0; i < Math.min(n, lanes.length); i++) {
         if (lanes[i] !== laneId) continue;
-        const parent = nodes.parent_node_ids[i];
-        if (parent !== NO_PARENT && own.has(parent)) continue;
+        const parent = parentWire[i];
+        if (parent !== NO_PARENT && lanes[parent] === laneId) continue;
         us += nodes.dur_us[i];
     }
     return us * 1000;

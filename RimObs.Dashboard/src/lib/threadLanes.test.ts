@@ -115,6 +115,16 @@ describe('laneBusyNs', () => {
         expect(laneBusyNs(f, 2)).toBe(100_000);
     });
 
+    // the flame re-parents an unresolved parent id onto the innermost open container, so
+    // billing this node as a root would count the container's span twice and read over 100%.
+    it('does not double-count an orphan nested inside a counted root', () => {
+        const f = nodes([
+            [10, -1, 1000, 1],
+            [11, 99, 500, 1],
+        ]);
+        expect(laneBusyNs(f, 1)).toBe(1_000_000);
+    });
+
     it('is zero for a lane with no nodes in the frame', () => {
         expect(laneBusyNs(nodes([[10, -1, 800, 1]]), 7)).toBe(0);
     });

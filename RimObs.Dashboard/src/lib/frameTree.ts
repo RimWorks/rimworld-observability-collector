@@ -204,12 +204,21 @@ function emitInDrawOrder(cols: DrawColumns): TreeNode[] {
     return nodes;
 }
 
-// parent_node_ids address nodes exactly; parent_ids hold SECTION ids and cannot, because
-// DoSingleTick emits three TickList.Tick nodes per tick with one parent id between them.
-export function buildFrameTree(frame: FrameData): FrameTree {
-    // an imported bundle is a user-supplied zip, so nodes can be missing entirely.
-    if (!frame.nodes) return { nodes: [], orphanCount: 0 };
-    const { section_ids, node_ids, parent_node_ids, start_us, dur_us, alloc_bytes } = frame.nodes;
+interface ResolvedFrame {
+    n: number;
+    order: number[];
+    relStart: number[];
+    relEnd: number[];
+    parentWire: number[];
+    orphanCount: number;
+}
+
+/**
+ * Wire-index parent for every node, orphans re-parented onto the innermost open container.
+ * Anything reading containment has to go through this or it disagrees with the flame.
+ */
+export function resolveFrameParents(nodes: FrameNodes, origin = 0): ResolvedFrame {
+    const { section_ids, node_ids, parent_node_ids, start_us, dur_us } = nodes;
     const n = Math.min(
         section_ids.length,
         node_ids.length,
@@ -217,9 +226,6 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         start_us.length,
         dur_us.length,
     );
-    if (n === 0) return { nodes: [], orphanCount: 0 };
-
-    const origin = frame.start_us;
     const relStart = new Array<number>(n);
     const relEnd = new Array<number>(n);
     for (let i = 0; i < n; i++) {
@@ -235,6 +241,21 @@ export function buildFrameTree(frame: FrameData): FrameTree {
         relStart,
         relEnd,
     );
+    return { n, order, relStart, relEnd, parentWire, orphanCount };
+}
+
+// parent_node_ids address nodes exactly; parent_ids hold SECTION ids and cannot, because
+// DoSingleTick emits three TickList.Tick nodes per tick with one parent id between them.
+export function buildFrameTree(frame: FrameData): FrameTree {
+    // an imported bundle is a user-supplied zip, so nodes can be missing entirely.
+    if (!frame.nodes) return { nodes: [], orphanCount: 0 };
+    const { section_ids, node_ids, dur_us, alloc_bytes } = frame.nodes;
+    const { n, order, relStart, relEnd, parentWire, orphanCount } = resolveFrameParents(
+        frame.nodes,
+        frame.start_us,
+    );
+    if (n === 0) return { nodes: [], orphanCount: 0 };
+
     const depth = computeDepths(parentWire);
     const nodes = emitInDrawOrder({
         order,
