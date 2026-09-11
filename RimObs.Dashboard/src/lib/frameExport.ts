@@ -3,6 +3,20 @@ import type { FrameData } from './frameTree';
 
 type SectionNames = Map<number, { name: string; subsystem: string | null }>;
 
+export interface DroppedCounts {
+    pre_frame_samples: number;
+    late_samples: number;
+}
+
+/** What was instrumented when the frames were captured. A wide filter is the usual reason for drops. */
+export interface AutoInstrumentProvenance {
+    enabled: boolean;
+    filters: string;
+    ignore: string;
+}
+
+const NO_DROPS: DroppedCounts = { pre_frame_samples: 0, late_samples: 0 };
+
 /**
  * A shareable snapshot: frames with every referenced section name resolved inline, so the
  * file answers questions on its own with no live collector behind it.
@@ -15,6 +29,8 @@ export interface FrameExport {
     threads: ThreadLane[];
     sections: Record<number, { name: string; subsystem: string | null }>;
     frames: FrameData[];
+    dropped: DroppedCounts;
+    auto_instrument: AutoInstrumentProvenance | null;
 }
 
 export function buildFrameExport(
@@ -23,6 +39,8 @@ export function buildFrameExport(
     threads: ThreadLane[],
     names: SectionNames,
     stopwatchFrequency: number,
+    dropped: DroppedCounts = NO_DROPS,
+    autoInstrument: AutoInstrumentProvenance | null = null,
     now = new Date(),
 ): FrameExport {
     const sections: FrameExport['sections'] = {};
@@ -41,6 +59,8 @@ export function buildFrameExport(
         threads,
         sections,
         frames,
+        dropped,
+        auto_instrument: autoInstrument,
     };
 }
 

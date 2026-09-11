@@ -205,6 +205,7 @@
             // the strip sizes its slots from the ring capacity and read it once at mount, so
             // without this a resize left the bars filling a fraction of the panel for good.
             liveConfig.setRingCapacity(config.sampling.frame_ring_capacity);
+            liveConfig.setAutoInstrument(config.auto_instrument);
         } catch (err) {
             saveError = (err as Error).message;
         } finally {

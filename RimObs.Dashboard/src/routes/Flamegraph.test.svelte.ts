@@ -220,6 +220,7 @@ function frameAtBody(url: string) {
 const CONFIG_BODY = {
     schema_version: 6,
     sampling: { frame_ring_capacity: 5000 },
+    auto_instrument: { enabled: true, filters: '*', ignore: 'System.*', max_targets: 8192 },
 };
 
 const IMPORT_BODY = {
@@ -416,6 +417,43 @@ describe('Flamegraph page', () => {
         const orphans = await screen.findByTestId('drop-orphans');
         await waitFor(() => expect(orphans).toHaveTextContent('1'));
         expect(orphans.className).toContain('warn');
+    });
+
+    // the badge is about "right now", so it has to light up while the counters climb and go
+    // quiet again once they hold still. a permanent banner for one old overflow is noise.
+    it('raises the lossy badge only while the drop counters are climbing', async () => {
+        let late = 0;
+        mockFetch();
+        const base = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            if (!requestUrl(input).includes('/frames/latest')) return base(input, init);
+            return jsonResponse({
+                ...FRAMES_BODY,
+                dropped: { pre_frame_samples: 12, late_samples: late },
+            });
+        }) as unknown as typeof fetch;
+
+        vi.useFakeTimers();
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(600);
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
+
+        late = 500;
+        await vi.advanceTimersByTimeAsync(64);
+        expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
+        expect(screen.getByTestId('lossy-count')).toHaveTextContent('512');
+
+        // counters hold still: within the watched window the badge stands down again.
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
+    });
+
+    it('stays quiet when the drop counters never move', async () => {
+        vi.useFakeTimers();
+        render(Flamegraph);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(screen.queryByTestId('lossy-badge')).toBeNull();
     });
 
     it('polls once per frame', async () => {
@@ -1672,6 +1710,35 @@ describe('Flamegraph thread lanes', () => {
 
         expect(urls).toHaveLength(1);
         expect(urls[0]).toBeInstanceOf(Blob);
+    });
+
+    // an export that says nothing about drops or the filter that was running cannot be read
+    // back later: "why is this flame full of holes" is answerable only from the file itself.
+    it('stamps the export with the drop counters and the running filter', async () => {
+        const urls: Blob[] = [];
+        URL.createObjectURL = vi.fn((b: Blob) => {
+            urls.push(b);
+            return 'blob:frame';
+        }) as unknown as typeof URL.createObjectURL;
+        URL.revokeObjectURL = vi.fn();
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('export-frame'));
+        // jsdom's Blob has no text(), so the reader is the only way at the bytes.
+        const json = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.readAsText(urls[0]);
+        });
+        const payload = JSON.parse(json);
+
+        expect(payload.dropped).toEqual({ pre_frame_samples: 12, late_samples: 0 });
+        expect(payload.auto_instrument).toEqual({
+            enabled: true,
+            filters: '*',
+            ignore: 'System.*',
+        });
     });
 
     // with factory prefs the panel must be a way in, not a dead set of rows: the first click

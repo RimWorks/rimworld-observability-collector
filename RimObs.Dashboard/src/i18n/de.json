@@ -140,6 +140,8 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
+    "flamegraph.lossy": "Unvollständige Frames",
+    "flamegraph.lossy.hint": "Der Puffer für Samples lief während dieser Frames über, daher fehlen Aufrufe im Flamegraph.",
     "flamegraph.source": "Quelle",
     "flamegraph.source.live": "Live",
     "flamegraph.source.import": "Bundle öffnen",

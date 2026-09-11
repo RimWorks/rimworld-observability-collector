@@ -31,6 +31,29 @@ describe('buildFrameExport', () => {
         expect(out.stopwatch_frequency).toBe(10_000_000);
         expect(out.kind).toBe('frame');
     });
+
+    it('records the drop counters and the filter that was running', () => {
+        const out = buildFrameExport(
+            'ring',
+            [FRAME],
+            [],
+            new Map(),
+            10_000_000,
+            { pre_frame_samples: 12, late_samples: 7 },
+            { enabled: true, filters: '*', ignore: 'System.*' },
+        );
+
+        expect(out.dropped).toEqual({ pre_frame_samples: 12, late_samples: 7 });
+        expect(out.auto_instrument).toEqual({ enabled: true, filters: '*', ignore: 'System.*' });
+    });
+
+    // an imported bundle has no live config behind it, so the fields still have to be there.
+    it('defaults to zero drops and no filter when neither is known', () => {
+        const out = buildFrameExport('frame', [FRAME], [], new Map(), 10_000_000);
+
+        expect(out.dropped).toEqual({ pre_frame_samples: 0, late_samples: 0 });
+        expect(out.auto_instrument).toBeNull();
+    });
 });
 
 describe('exportFileName', () => {

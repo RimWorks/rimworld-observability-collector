@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, untrack } from 'svelte';
     import {
         api,
         ApiError,
@@ -181,6 +181,8 @@
             framesRes?.data?.threads ?? [],
             names,
             stopwatchFrequency,
+            dropped,
+            liveConfig.autoInstrument,
         );
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -399,7 +401,10 @@
             })
             .catch(() => undefined);
         api.config()
-            .then((c) => liveConfig.setRingCapacity(c.sampling.frame_ring_capacity))
+            .then((c) => {
+                liveConfig.setRingCapacity(c.sampling.frame_ring_capacity);
+                liveConfig.setAutoInstrument(c.auto_instrument);
+            })
             .catch(() => undefined);
         patchesRes.start();
         sectionsRes.start();
@@ -637,6 +642,21 @@
     );
     let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
     let dropped = $derived((live ? liveRes?.dropped : importedFrames?.dropped) ?? NO_DROPS);
+
+    // drops that stopped an hour ago are not news, so the badge watches the last half second of
+    // polls and goes quiet again once the counters hold still.
+    const DROP_WINDOW_POLLS = 32;
+    let dropWindow = $state<number[]>([]);
+    $effect(() => {
+        if (!live || !liveRes) return;
+        const total = dropped.pre_frame_samples + dropped.late_samples;
+        untrack(() => {
+            dropWindow = [...dropWindow, total].slice(-DROP_WINDOW_POLLS);
+        });
+    });
+    let lossy = $derived(
+        dropWindow.length > 1 && dropWindow[dropWindow.length - 1] > dropWindow[0],
+    );
     let stopwatchFrequency = $derived(
         (live ? liveRes?.stopwatch_frequency : importedFrames?.stopwatch_frequency) ?? 0,
     );
@@ -917,7 +937,15 @@
                     <b class:warn={orphanCount > 0} data-testid="drop-orphans"
                         >{count(orphanCount)}</b
                     ></span
-                ></span
+                >{#if lossy}<span
+                        class="cell lossy"
+                        data-testid="lossy-badge"
+                        title={t('flamegraph.lossy.hint')}
+                        >{t('flamegraph.lossy')}
+                        <b data-testid="lossy-count"
+                            >{count(dropped.late_samples + dropped.pre_frame_samples)}</b
+                        ></span
+                    >{/if}</span
             >
             <span class="find" data-testid="section-search">
                 <label class="lbl" for="section-search-input">{t('flamegraph.search.label')}</label>
@@ -1128,6 +1156,16 @@
         color: var(--text-dim);
     }
     .warn {
+        color: var(--warn);
+    }
+    .lossy {
+        color: var(--warn);
+        border: 1px solid var(--warn);
+        border-radius: 3px;
+        padding: 0 6px;
+        margin-left: 6px;
+    }
+    .lossy b {
         color: var(--warn);
     }
     .cool {

@@ -140,6 +140,8 @@
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
     "flamegraph.dropped.orphans": "Orphan nodes",
+    "flamegraph.lossy": "Frames incompletos",
+    "flamegraph.lossy.hint": "El búfer de muestras se desbordó mientras se capturaban estos frames, así que faltan llamadas en el flamegraph.",
     "flamegraph.source": "Fuente",
     "flamegraph.source.live": "En vivo",
     "flamegraph.source.import": "Abrir paquete",
