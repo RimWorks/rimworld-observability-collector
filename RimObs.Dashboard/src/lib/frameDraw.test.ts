@@ -95,7 +95,30 @@ const THEME: DrawTheme = {
     hueNone: '#5c6b85',
     font: '11px monospace',
     match: '#39c4d4',
+    zebra: 'rgba(26, 34, 49, 0.45)',
+    laneLine: '#1c2434',
 };
+
+describe('drawLaneBands', () => {
+    it('tints alternate bands and rules each boundary', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ laneBands: [{ rows: 3 }, { rows: 2 }, { rows: 1 }] }));
+
+        const fills = calls.filter((c) => c.op === 'fillRect');
+        // band 2 (rows 3..4) is tinted, boundaries rule rows 3 and 5.
+        expect(
+            fills.some((c) => c.args[1] === 3 * ROW_HEIGHT && c.args[3] === 2 * ROW_HEIGHT),
+        ).toBe(true);
+        expect(fills.some((c) => c.args[1] === 3 * ROW_HEIGHT && c.args[3] === 1)).toBe(true);
+        expect(fills.some((c) => c.args[1] === 5 * ROW_HEIGHT && c.args[3] === 1)).toBe(true);
+    });
+
+    it('draws nothing extra for a single band', () => {
+        const { ctx, calls } = recorder();
+        drawTimeline(ctx, [], opts({ laneBands: [{ rows: 4 }] }));
+        expect(calls.filter((c) => c.op === 'fillRect' && c.args[3] === 1)).toHaveLength(0);
+    });
+});
 
 function opts(over: Partial<DrawOptions> = {}): DrawOptions {
     return {
@@ -625,6 +648,8 @@ describe('readTheme', () => {
             hueNone: '#555555',
             font: '500 11px Test Mono',
             match: '#39c4d4',
+            zebra: 'rgba(26, 34, 49, 0.45)',
+            laneLine: '#1c2434',
         });
         el.remove();
     });
@@ -651,6 +676,8 @@ describe('readTheme', () => {
             hueNone: '#5c6b85',
             font: '500 11px monospace',
             match: '#39c4d4',
+            zebra: 'rgba(26, 34, 49, 0.45)',
+            laneLine: '#1c2434',
         });
         el.remove();
     });

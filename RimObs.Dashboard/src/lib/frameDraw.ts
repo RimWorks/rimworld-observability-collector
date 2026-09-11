@@ -36,6 +36,9 @@ export interface DrawTheme {
     hueNone: string;
     font: string;
     match: string;
+    /** alternate lane bands tint with this, Neo's zebra treatment. */
+    zebra: string;
+    laneLine: string;
 }
 
 export interface DrawOptions {
@@ -54,6 +57,8 @@ export interface DrawOptions {
     matchSectionIds?: ReadonlySet<number> | null;
     /** frame-scoped search: a quad outside this span is not a match even if its section is. */
     matchRange?: { startUs: number; endUs: number } | null;
+    /** per-lane row counts in draw order; two or more bands get zebra fills and boundaries. */
+    laneBands?: { rows: number }[];
 }
 
 export function readTheme(el: Element): DrawTheme {
@@ -71,7 +76,14 @@ export function readTheme(el: Element): DrawTheme {
         hueNone: read('--sub-none', '#5c6b85'),
         font: `500 11px ${read('--font-mono', 'monospace')}`,
         match: read('--cyan', '#39c4d4'),
+        zebra: withAlpha(read('--bg-elev', '#1a2231'), 0.45),
+        laneLine: read('--border-soft', '#1c2434'),
     };
+}
+
+function withAlpha(hex: string, alpha: number): string {
+    const [r, g, b] = parseHex(hex);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function parseHex(hex: string): [number, number, number] {
@@ -125,6 +137,26 @@ function drawGapBands(ctx: CanvasRenderingContext2D, opts: DrawOptions, pxPerUs:
     ctx.restore();
 }
 
+// zebra fills on alternate bands plus a 1px boundary at each band top, so the eye can tell
+// where one thread ends and the next begins without counting rows.
+function drawLaneBands(ctx: CanvasRenderingContext2D, opts: DrawOptions): void {
+    const bands = opts.laneBands;
+    if (!bands || bands.length < 2) return;
+    let row = 0;
+    for (let i = 0; i < bands.length; i++) {
+        const y = row * ROW_HEIGHT;
+        if (i % 2 === 1) {
+            ctx.fillStyle = opts.theme.zebra;
+            ctx.fillRect(0, y, opts.widthPx, bands[i].rows * ROW_HEIGHT);
+        }
+        if (i > 0) {
+            ctx.fillStyle = opts.theme.laneLine;
+            ctx.fillRect(0, y, opts.widthPx, 1);
+        }
+        row += bands[i].rows;
+    }
+}
+
 export function drawTimeline(
     ctx: CanvasRenderingContext2D,
     quads: Quad[],
@@ -143,6 +175,7 @@ export function drawTimeline(
     }
 
     const pxPerUs = widthPx / span;
+    drawLaneBands(ctx, opts);
     drawGapBands(ctx, opts, pxPerUs);
 
     ctx.font = theme.font;

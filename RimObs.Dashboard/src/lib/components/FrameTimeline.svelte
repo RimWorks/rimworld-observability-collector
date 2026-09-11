@@ -503,6 +503,7 @@
             gaps,
             matchSectionIds: matchIds,
             matchRange,
+            laneBands: bands?.bands,
         });
     }
 
