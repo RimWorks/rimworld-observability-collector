@@ -87,6 +87,7 @@ internal static class SectionCatalog {
         if (method == null)
             throw new ArgumentNullException(nameof(method));
 
+        subsystem ??= InferSubsystem(method);
         lock (s_Lock) {
             CatalogEntry entry = new(name, method.DeclaringType?.FullName ?? "?", method.Name, null);
             entry.Resolved = method;
@@ -99,6 +100,27 @@ internal static class SectionCatalog {
             return entry;
         }
     }
+
+    /// <summary>
+    /// Best-effort bucket for a dynamically patched method, so nothing registers untagged.
+    /// Name heuristics over the declaring type and method, engine as the catch-all.
+    /// </summary>
+    public static string InferSubsystem(MethodBase method) {
+        string type = method.DeclaringType?.Name ?? string.Empty;
+        string name = method.Name;
+        if (Mentions(type, name, "Tick"))
+            return TickSubsystem;
+        if (Mentions(type, name, "Draw") || Mentions(type, name, "Render") || Mentions(type, name, "Graphic") || Mentions(type, name, "Camera"))
+            return RenderSubsystem;
+        if (Mentions(type, name, "GUI") || Mentions(type, name, "Window") || Mentions(type, name, "Gizmo") || Mentions(type, name, "Inspect"))
+            return UiSubsystem;
+        if (Mentions(type, name, "Job") || Mentions(type, name, "Think") || Mentions(type, name, "Pathf") || Mentions(type, name, "Lord") || Mentions(type, name, "Toil"))
+            return AiSubsystem;
+        return "engine";
+    }
+
+    private static bool Mentions(string type, string name, string token) =>
+        type.IndexOf(token, StringComparison.Ordinal) >= 0 || name.IndexOf(token, StringComparison.Ordinal) >= 0;
 
     public static void ResolveAll() {
         lock (s_Lock) {
