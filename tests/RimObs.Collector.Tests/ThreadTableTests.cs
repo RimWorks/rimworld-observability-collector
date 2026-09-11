@@ -98,6 +98,25 @@ public sealed class ThreadTableTests {
     }
 
     [Fact]
+    public void A_recycled_id_that_registered_unnamed_starts_its_busy_time_at_zero() {
+        ThreadTable table = new();
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = [""],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+        table.AddBusy(7, 900L);
+        table.Upsert(new ThreadRegistrationsBatch {
+            ThreadIds = [7],
+            Names = ["MyMod"],
+            Roles = [(int)ThreadRole.Mod],
+        });
+
+        table.Snapshot().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new ThreadInfo(7, "MyMod", (int)ThreadRole.Mod, 0L));
+    }
+
+    [Fact]
     public void Busy_ticks_accumulate_per_lane() {
         ThreadTable table = new();
         table.Upsert(new ThreadRegistrationsBatch {

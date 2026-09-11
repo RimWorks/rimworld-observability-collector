@@ -8,6 +8,7 @@ public sealed record ThreadInfo(int Id, string Name, int Role, long BusyTicks);
 /// <summary>The lane name table, filled by registrations and totalled by samples.</summary>
 public sealed class ThreadTable {
     private readonly Dictionary<int, ThreadInfo> _byId = [];
+    private readonly HashSet<int> _registered = [];
     private readonly object _gate = new();
 
     public void Upsert(ThreadRegistrationsBatch batch) {
@@ -17,20 +18,21 @@ public sealed class ThreadTable {
                 string name = i < batch.Names.Length ? batch.Names[i] : string.Empty;
                 int role = i < batch.Roles.Length ? batch.Roles[i] : 0;
                 _byId[id] = new ThreadInfo(id, name, role, CarriedBusy(id, name, role));
+                _registered.Add(id);
             }
         }
     }
 
     /// <summary>
-    /// Busy time the new row keeps. A named row under a new name or role is a recycled id and
-    /// starts over; an unnamed one is a placeholder samples beat the registration to, so it carries.
+    /// Busy time the new row keeps. An already registered id announcing a new name or role is
+    /// recycled and starts over; a row only samples built is a placeholder, so it carries.
     /// </summary>
     private long CarriedBusy(int id, string name, int role) {
         if (!_byId.TryGetValue(id, out ThreadInfo? existing)) {
             return 0L;
         }
 
-        bool recycled = existing.Name.Length > 0 && (existing.Name != name || existing.Role != role);
+        bool recycled = _registered.Contains(id) && (existing.Name != name || existing.Role != role);
         return recycled ? 0L : existing.BusyTicks;
     }
 
