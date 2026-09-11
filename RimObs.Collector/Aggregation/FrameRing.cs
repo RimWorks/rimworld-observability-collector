@@ -45,8 +45,7 @@ public sealed class FrameRing {
     /// </summary>
     public const int DefaultOpenFrameWindow = 16;
 
-    // the sender drains every 100ms, so a frame untouched for twice that is waiting on a
-    // stopped stream, not on a straggler lane.
+    // measured ring-wide, not per frame: any sample arriving keeps a slow frame open.
     private const int QuietMillis = 200;
 
     private FrameSnapshot[] _buffer;
@@ -59,6 +58,7 @@ public sealed class FrameRing {
     private int _sealedThrough;
     private long _preFrameSamples;
     private long _lateSamples;
+    private DateTime _lastAddUtc = DateTime.MinValue;
 
     public FrameRing(int capacity = DefaultCapacity) {
         _buffer = new FrameSnapshot[Math.Max(1, capacity)];
@@ -129,7 +129,7 @@ public sealed class FrameRing {
             open.ElapsedTicks.Add(elapsedTicks);
             open.AllocBytes.Add(allocBytes);
             open.ThreadIds.Add(threadId);
-            open.TouchedUtc = NowUtc();
+            _lastAddUtc = NowUtc();
             if (threadId != 0)
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
@@ -343,23 +343,25 @@ public sealed class FrameRing {
             _sealedThrough = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
+            _lastAddUtc = DateTime.MinValue;
             _open.Clear();
         }
     }
 
-    private void SealThrough(int watermark) => SealSettled(watermark, DateTime.MinValue);
-
     // reads seal what the stream stopped reporting, so a paused game still serves its last frames.
-    private void SealStale() => SealSettled(0, NowUtc().AddMilliseconds(-QuietMillis));
+    private void SealStale() {
+        if (_lastAddUtc > NowUtc().AddMilliseconds(-QuietMillis))
+            return;
+        SealThrough(int.MaxValue);
+    }
 
-    // seals open frames past `watermark` or untouched since `quietBefore`, oldest first so the
-    // ring stays ascending. the first frame that is neither stops the run.
-    private void SealSettled(int watermark, DateTime quietBefore) {
+    // seals open frames up to `watermark`, oldest first so the ring stays ascending.
+    private void SealThrough(int watermark) {
         while (_open.Count > 0) {
             int ordinal = _open.Keys.First();
-            OpenFrame open = _open[ordinal];
-            if (ordinal > watermark && open.TouchedUtc > quietBefore)
+            if (ordinal > watermark)
                 return;
+            OpenFrame open = _open[ordinal];
             _open.Remove(ordinal);
             _sealedThrough = ordinal;
             Seal(ordinal, open);
@@ -408,7 +410,6 @@ public sealed class FrameRing {
         public readonly List<long> ElapsedTicks = [];
         public readonly List<long> AllocBytes = [];
         public readonly List<int> ThreadIds = [];
-        public DateTime TouchedUtc;
         public bool HasThreadIds;
     }
 }
