@@ -18,6 +18,14 @@
         rememberIgnore,
     } from '../autoInstrumentDefaults';
     import { MIN_DEPTH, MAX_DEPTH, clampDepth } from '../captureDepth';
+    import {
+        MIN_SAMPLE_RING,
+        MAX_SAMPLE_RING,
+        MIN_MAX_TARGETS,
+        MAX_MAX_TARGETS,
+        clampSampleRing,
+        clampMaxTargets,
+    } from '../firehose';
     import { previewBand, isDirty, type PreviewBand } from '../autoPreview';
     import type { AutoPreviewCounts } from '../api';
     import { MAX_SESSION_NAME, sessionLabel } from '../sessionLabel';
@@ -191,6 +199,8 @@
             mutate(next);
             next.sampling.frame_ring_capacity = clampRing(next.sampling.frame_ring_capacity);
             next.sampling.max_capture_depth = clampDepth(next.sampling.max_capture_depth);
+            next.sampling.ring_capacity = clampSampleRing(next.sampling.ring_capacity);
+            next.auto_instrument.max_targets = clampMaxTargets(next.auto_instrument.max_targets);
             config = await api.saveConfig(next);
             // the strip sizes its slots from the ring capacity and read it once at mount, so
             // without this a resize left the bars filling a fraction of the panel for good.
@@ -492,6 +502,48 @@
                     }}
                     aria-label={t('settings.ringCapacity')}
                     data-testid="ring-capacity"
+                />
+            </div>
+
+            <div class="field row">
+                <Tooltip text={t('tip.settings.sampleRing')}>
+                    <span class="label">{t('settings.sampleRing')}</span>
+                </Tooltip>
+                <input
+                    class="text num mono"
+                    type="number"
+                    min={MIN_SAMPLE_RING}
+                    max={MAX_SAMPLE_RING}
+                    step="1024"
+                    disabled={config === null || saving}
+                    value={config?.sampling.ring_capacity ?? ''}
+                    onchange={(e) => {
+                        const v = Number(e.currentTarget.value);
+                        void save((c) => (c.sampling.ring_capacity = v));
+                    }}
+                    aria-label={t('settings.sampleRing')}
+                    data-testid="sample-ring"
+                />
+            </div>
+
+            <div class="field row">
+                <Tooltip text={t('tip.settings.maxTargets')}>
+                    <span class="label">{t('settings.maxTargets')}</span>
+                </Tooltip>
+                <input
+                    class="text num mono"
+                    type="number"
+                    min={MIN_MAX_TARGETS}
+                    max={MAX_MAX_TARGETS}
+                    step="1000"
+                    disabled={config === null || saving}
+                    value={config?.auto_instrument.max_targets ?? ''}
+                    onchange={(e) => {
+                        const v = Number(e.currentTarget.value);
+                        void save((c) => (c.auto_instrument.max_targets = v));
+                    }}
+                    aria-label={t('settings.maxTargets')}
+                    data-testid="max-targets"
                 />
             </div>
 

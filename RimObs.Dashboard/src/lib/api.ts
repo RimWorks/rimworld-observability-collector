@@ -452,12 +452,18 @@ function authHeaders(): Record<string, string> {
  */
 export interface RimObsConfig {
     schema_version: number;
-    sampling: { frame_ring_capacity: number; max_capture_depth: number; [key: string]: unknown };
+    sampling: {
+        frame_ring_capacity: number;
+        max_capture_depth: number;
+        ring_capacity: number;
+        [key: string]: unknown;
+    };
     auto_instrument: {
         enabled: boolean;
         filters: string;
         ignore: string;
         mute_trivial: boolean;
+        max_targets: number;
         [key: string]: unknown;
     };
     session: { pending_name: string; prompt_for_name: boolean; [key: string]: unknown };

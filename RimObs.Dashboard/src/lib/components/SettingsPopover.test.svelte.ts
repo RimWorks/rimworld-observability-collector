@@ -38,8 +38,14 @@ const withSession = {
 function configDoc(over: Record<string, unknown> = {}) {
     return {
         schema_version: 1,
-        sampling: { frame_ring_capacity: 3000, max_capture_depth: 8 },
-        auto_instrument: { enabled: false, filters: '', ignore: '', mute_trivial: true },
+        sampling: { frame_ring_capacity: 3000, max_capture_depth: 8, ring_capacity: 16384 },
+        auto_instrument: {
+            enabled: false,
+            filters: '',
+            ignore: '',
+            mute_trivial: true,
+            max_targets: 8192,
+        },
         session: { pending_name: '', prompt_for_name: true },
         ...over,
     };
@@ -545,6 +551,24 @@ describe('SettingsPopover profiling controls', () => {
 
         await waitFor(() => expect(configPosts()).toHaveLength(1));
         expect(configPosts()[0]).toMatchObject({ sampling: { frame_ring_capacity: 20000 } });
+    });
+
+    it('posts the sample ring rounded up to a power of two', async () => {
+        await open();
+
+        await fireEvent.change(screen.getByTestId('sample-ring'), { target: { value: '70000' } });
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({ sampling: { ring_capacity: 131072 } });
+    });
+
+    it('posts the scan cap and floors it at one', async () => {
+        await open();
+
+        await fireEvent.change(screen.getByTestId('max-targets'), { target: { value: '0' } });
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({ auto_instrument: { max_targets: 1 } });
     });
 
     it('posts the session naming prompt toggle', async () => {

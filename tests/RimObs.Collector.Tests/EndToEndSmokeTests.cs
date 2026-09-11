@@ -821,6 +821,83 @@ public sealed class EndToEndSmokeTests {
         }
     }
 
+    // the library polls GET /api/v1/config, so "serves them back" is the whole forwarding path.
+    [Fact]
+    public async Task Config_post_round_trips_the_ring_capacity_and_the_scan_cap() {
+        int port = PickFreePort();
+        Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-firehose-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            string before = await http.GetStringAsync("/api/v1/config");
+            using (JsonDocument pre = JsonDocument.Parse(before)) {
+                pre.RootElement.GetProperty("sampling").GetProperty("ring_capacity").GetInt32()
+                    .Should().Be(Config.SamplingOptions.DefaultRingCapacity);
+                pre.RootElement.GetProperty("auto_instrument").GetProperty("max_targets").GetInt32()
+                    .Should().Be(Config.AutoInstrumentOptions.DefaultMaxTargets);
+            }
+
+            using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/config") {
+                Content = new StringContent(
+                    "{\"schema_version\":1,\"sampling\":{\"ring_capacity\":65536},\"auto_instrument\":{\"max_targets\":40000}}",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+            post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+            post.Headers.Add("Authorization", $"Bearer {token.Value}");
+            HttpResponseMessage postResp = await http.SendAsync(post);
+            postResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            string after = await http.GetStringAsync("/api/v1/config");
+            using JsonDocument doc = JsonDocument.Parse(after);
+            doc.RootElement.GetProperty("sampling").GetProperty("ring_capacity").GetInt32().Should().Be(65536);
+            doc.RootElement.GetProperty("auto_instrument").GetProperty("max_targets").GetInt32().Should().Be(40000);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Config_post_rounds_a_ragged_ring_capacity_up_to_a_power_of_two() {
+        int port = PickFreePort();
+        Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-firehose-clamp-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/config") {
+                Content = new StringContent(
+                    "{\"schema_version\":1,\"sampling\":{\"ring_capacity\":70000},\"auto_instrument\":{\"max_targets\":0}}",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+            post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+            post.Headers.Add("Authorization", $"Bearer {token.Value}");
+            (await http.SendAsync(post)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using JsonDocument doc = JsonDocument.Parse(await http.GetStringAsync("/api/v1/config"));
+            doc.RootElement.GetProperty("sampling").GetProperty("ring_capacity").GetInt32().Should().Be(131072);
+            doc.RootElement.GetProperty("auto_instrument").GetProperty("max_targets").GetInt32().Should().Be(1);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
     [Fact]
     public async Task Config_post_applies_the_open_frame_window_to_the_live_ring() {
         int port = PickFreePort();

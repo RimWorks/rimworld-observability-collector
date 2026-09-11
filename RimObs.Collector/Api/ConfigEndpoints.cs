@@ -25,6 +25,12 @@ public static class ConfigEndpoints {
 
                 incoming!.Sampling.MaxCaptureDepth =
                     SamplingOptions.ClampCaptureDepth(incoming.Sampling.MaxCaptureDepth);
+                // both of these only ever reach the library, which polls this config. clamp here
+                // so a typed-in value cannot hand the game a ring it refuses to allocate.
+                incoming.Sampling.RingCapacity =
+                    SamplingOptions.ClampRingCapacity(incoming.Sampling.RingCapacity);
+                incoming.AutoInstrument.MaxTargets =
+                    AutoInstrumentOptions.ClampMaxTargets(incoming.AutoInstrument.MaxTargets);
                 store.Replace(incoming);
                 // the ring resizes in place so the strip keeps the history that still fits.
                 aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
