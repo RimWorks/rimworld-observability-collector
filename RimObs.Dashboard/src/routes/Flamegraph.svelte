@@ -617,14 +617,26 @@
             busyNs: laneBusyNs(frame.nodes, lane.id),
         };
     }
-    // strict rule: a lane draws only when the current frame holds its calls. main stays.
+    // a lane draws while it has nodes in the newest few drawn frames: workers sample
+    // sporadically, so one-frame strictness blanked them, and window-wide lingered too long.
+    const RECENT_FRAMES = 10;
+    let recentLaneIds = $derived.by(() => {
+        const ids = new Set<number>();
+        const entries = series.entries;
+        for (let e = Math.max(0, entries.length - RECENT_FRAMES); e < entries.length; e++) {
+            for (let i = entries[e].nodeStart; i < entries[e].nodeEnd; i++) {
+                const lane = series.nodes[i].laneId;
+                if (lane !== undefined) ids.add(lane);
+            }
+        }
+        return ids;
+    });
     let visibleLanes = $derived.by(() => {
         if (allLanes.length === 0) return [MAIN_FALLBACK];
         if (userPrefs.mainThreadOnly) return allLanes.filter((l) => l.role === ThreadRole.Main);
         return allLanes.filter(
             (l) =>
-                selectedLanes.has(l.id) &&
-                (l.role === ThreadRole.Main || (laneCallCounts.get(l.id) ?? 0) > 0),
+                selectedLanes.has(l.id) && (l.role === ThreadRole.Main || recentLaneIds.has(l.id)),
         );
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
