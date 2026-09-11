@@ -220,6 +220,8 @@
     "settings.autoInstrument.muted": "Muettes",
     "settings.autoInstrument.skippedTrivial": "Ignorées (triviales)",
     "settings.autoInstrument.skippedOther": "Ignorées (autres)",
+    "settings.autoInstrument.skippedOverCap": "Ignorees (au-dela du plafond)",
+    "settings.autoInstrument.truncated": "Plafond de {cap} methodes atteint. {skipped} correspondances ont ete abandonnees, ces comptes ne couvrent donc pas tout le filtre.",
     "settings.autoInstrument.refused": "Refusées",
     "settings.autoInstrument.pending": "En attente",
     "settings.autoMuteTrivial": "Retirer les portées qui coûtent plus qu'elles ne mesurent",

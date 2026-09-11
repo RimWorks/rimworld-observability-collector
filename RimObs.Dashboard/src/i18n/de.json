@@ -220,6 +220,8 @@
     "settings.autoInstrument.muted": "Stummgeschaltet",
     "settings.autoInstrument.skippedTrivial": "Übersprungen (trivial)",
     "settings.autoInstrument.skippedOther": "Übersprungen (andere)",
+    "settings.autoInstrument.skippedOverCap": "Übersprungen (über Limit)",
+    "settings.autoInstrument.truncated": "Limit von {cap} Methoden erreicht. {skipped} Treffer wurden verworfen, diese Zahlen zeigen also nicht den ganzen Filter.",
     "settings.autoInstrument.refused": "Abgelehnt",
     "settings.autoInstrument.pending": "Ausstehend",
     "settings.autoMuteTrivial": "Bereiche verwerfen, die mehr kosten als sie messen",

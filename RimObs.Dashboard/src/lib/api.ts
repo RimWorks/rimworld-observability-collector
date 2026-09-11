@@ -288,6 +288,9 @@ export interface AutoInstrumentCounters {
     muted: number;
     skippedTrivial: number;
     skippedOther: number;
+    skippedOverCap: number;
+    maxTargets: number;
+    truncated: boolean;
     refused: number;
     pending: number;
 }

@@ -266,6 +266,8 @@
     "settings.autoInstrument.muted": "Muted",
     "settings.autoInstrument.skippedTrivial": "Skipped (trivial)",
     "settings.autoInstrument.skippedOther": "Skipped (other)",
+    "settings.autoInstrument.skippedOverCap": "Skipped (over cap)",
+    "settings.autoInstrument.truncated": "Hit the {cap} method cap. {skipped} matches were dropped, so these counts are not the whole filter.",
     "settings.autoInstrument.refused": "Refused",
     "settings.autoInstrument.pending": "Pending",
     "settings.autoMuteTrivial": "Drop scopes that cost more than they measure",

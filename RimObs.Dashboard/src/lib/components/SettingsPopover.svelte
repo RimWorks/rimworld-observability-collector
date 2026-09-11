@@ -456,11 +456,24 @@
                         <dd class="mono" data-testid="auto-skipped-other">
                             {count(autoStatus.skippedOther)}
                         </dd>
+                        {#if autoStatus.truncated}
+                            <dt>{t('settings.autoInstrument.skippedOverCap')}</dt>
+                            <dd class="mono bad" data-testid="auto-skipped-over-cap">
+                                {count(autoStatus.skippedOverCap)}
+                            </dd>
+                        {/if}
                         <dt>{t('settings.autoInstrument.refused')}</dt>
                         <dd class="mono" data-testid="auto-refused">{count(autoStatus.refused)}</dd>
                         <dt>{t('settings.autoInstrument.pending')}</dt>
                         <dd class="mono" data-testid="auto-pending">{count(autoStatus.pending)}</dd>
                     </dl>
+                    {#if autoStatus.truncated}
+                        <p class="truncated" role="alert" data-testid="auto-truncated">
+                            {t('settings.autoInstrument.truncated')
+                                .replace('{skipped}', count(autoStatus.skippedOverCap))
+                                .replace('{cap}', count(autoStatus.maxTargets))}
+                        </p>
+                    {/if}
                 </details>
             {/if}
 
@@ -957,6 +970,11 @@
         color: var(--cyan);
     }
     .readout dd.bad {
+        color: var(--bad);
+    }
+    .truncated {
+        margin: var(--s-2) 0 0;
+        font-size: 0.76rem;
         color: var(--bad);
     }
 

@@ -220,6 +220,8 @@
     "settings.autoInstrument.muted": "已静音",
     "settings.autoInstrument.skippedTrivial": "跳过（微不足道）",
     "settings.autoInstrument.skippedOther": "跳过（其他）",
+    "settings.autoInstrument.skippedOverCap": "跳过（超出上限）",
+    "settings.autoInstrument.truncated": "已达到 {cap} 个方法的上限，丢弃了 {skipped} 个匹配项，因此这些计数并非整个过滤器的结果。",
     "settings.autoInstrument.refused": "已拒绝",
     "settings.autoInstrument.pending": "待处理",
     "settings.autoMuteTrivial": "丢弃测量开销大于自身耗时的范围",

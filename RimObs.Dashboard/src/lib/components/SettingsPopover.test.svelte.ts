@@ -301,7 +301,7 @@ describe('SettingsPopover session naming', () => {
 // the counters are the only signal that auto-instrumentation actually did anything, so the
 // pane has to show them once the collector reports auto_instrument.enabled.
 describe('SettingsPopover auto-instrument status', () => {
-    function mockAuto(auto: Record<string, number>) {
+    function mockAuto(auto: Record<string, number | boolean>) {
         globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
             const url = typeof input === 'string' ? input : (input as Request).url;
             if (url.includes('/api/v1/instrumentation/auto')) {
@@ -342,6 +342,49 @@ describe('SettingsPopover auto-instrument status', () => {
         await waitFor(() => expect(screen.getByTestId('auto-matched')).toBeTruthy());
         expect(screen.getByTestId('auto-matched').textContent).toContain('10');
         expect(screen.getByTestId('auto-instrumented').textContent).toContain('4');
+    });
+
+    // a wide filter loses everything past the cap, and folding that into "other" hides it.
+    it('names the cap when the applied scan was truncated', async () => {
+        mockAuto({
+            matched: 60000,
+            instrumented: 8192,
+            muted: 0,
+            skippedTrivial: 0,
+            skippedOther: 51808,
+            skippedOverCap: 51808,
+            maxTargets: 8192,
+            truncated: true,
+            refused: 0,
+            pending: 0,
+        });
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+
+        await waitFor(() => expect(screen.getByTestId('auto-truncated')).toBeTruthy());
+        expect(screen.getByTestId('auto-skipped-over-cap').textContent).toContain('51,808');
+        expect(screen.getByTestId('auto-truncated').textContent).toContain('8,192');
+    });
+
+    it('hides the truncation line when nothing hit the cap', async () => {
+        mockAuto({
+            matched: 10,
+            instrumented: 4,
+            muted: 1,
+            skippedTrivial: 3,
+            skippedOther: 2,
+            skippedOverCap: 0,
+            maxTargets: 8192,
+            truncated: false,
+            refused: 0,
+            pending: 0,
+        });
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+
+        await waitFor(() => expect(screen.getByTestId('auto-matched')).toBeTruthy());
+        expect(screen.queryByTestId('auto-truncated')).toBeNull();
+        expect(screen.queryByTestId('auto-skipped-over-cap')).toBeNull();
     });
 
     it('omits the counters block when the collector cannot reach the game', async () => {

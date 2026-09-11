@@ -220,6 +220,8 @@
     "settings.autoInstrument.muted": "Silenciados",
     "settings.autoInstrument.skippedTrivial": "Omitidos (triviales)",
     "settings.autoInstrument.skippedOther": "Omitidos (otros)",
+    "settings.autoInstrument.skippedOverCap": "Omitidos (sobre el limite)",
+    "settings.autoInstrument.truncated": "Se alcanzo el limite de {cap} metodos. Se descartaron {skipped} coincidencias, asi que estos recuentos no son todo el filtro.",
     "settings.autoInstrument.refused": "Rechazados",
     "settings.autoInstrument.pending": "Pendientes",
     "settings.autoMuteTrivial": "Descartar ámbitos que cuestan más de lo que miden",
