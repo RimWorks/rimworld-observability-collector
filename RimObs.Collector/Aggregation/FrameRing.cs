@@ -33,8 +33,8 @@ public sealed record FrameRingStats(
     int OldestOrdinal);
 
 /// <summary>
-/// Frames cut out of the sample stream by their ordinal, newest last. The library drains one
-/// thread lane per call, so a frame stays open until <see cref="OpenFrameWindow"/> newer ones land.
+/// Frames cut out of the sample stream by their ordinal, newest last. A frame stays open until
+/// <see cref="OpenFrameWindow"/> newer ones land, or until the stream goes quiet.
 /// </summary>
 public sealed class FrameRing {
     public const int DefaultCapacity = 2000;
@@ -43,12 +43,16 @@ public sealed class FrameRing {
     /// How far behind the newest ordinal a frame seals. One sender flush covers about six
     /// frames per lane, so this leaves every lane room to report before the cut.
     /// </summary>
-    public const int OpenFrameWindow = 16;
+    public const int DefaultOpenFrameWindow = 16;
+
+    // the sender drains every 100ms, so a frame untouched for twice that is waiting on a
+    // stopped stream, not on a straggler lane.
+    private const int QuietMillis = 200;
 
     private FrameSnapshot[] _buffer;
     private readonly object _gate = new();
     private readonly SortedDictionary<int, OpenFrame> _open = [];
-    private readonly int _window;
+    private int _window = DefaultOpenFrameWindow;
     private int _next;
     private int _count;
     private int _newestOrdinal;
@@ -56,20 +60,34 @@ public sealed class FrameRing {
     private long _preFrameSamples;
     private long _lateSamples;
 
-    public FrameRing()
-        : this(DefaultCapacity) {
+    public FrameRing(int capacity = DefaultCapacity) {
+        _buffer = new FrameSnapshot[Math.Max(1, capacity)];
     }
 
-    public FrameRing(int capacity, int openFrameWindow = OpenFrameWindow) {
-        _buffer = new FrameSnapshot[Math.Max(1, capacity)];
-        _window = Math.Max(1, openFrameWindow);
-    }
+    // test seam: park the clock past the quiet deadline instead of sleeping for it.
+    internal Func<DateTime> NowUtc { get; set; } = () => DateTime.UtcNow;
 
     public int Capacity => _buffer.Length;
+
+    /// <summary>How many newer ordinals must land before a frame seals. Live setting, floors at 1.</summary>
+    public int OpenFrameWindow {
+        get {
+            lock (_gate) {
+                return _window;
+            }
+        }
+
+        set {
+            lock (_gate) {
+                _window = Math.Max(1, value);
+            }
+        }
+    }
 
     public int Count {
         get {
             lock (_gate) {
+                SealStale();
                 return _count;
             }
         }
@@ -111,6 +129,7 @@ public sealed class FrameRing {
             open.ElapsedTicks.Add(elapsedTicks);
             open.AllocBytes.Add(allocBytes);
             open.ThreadIds.Add(threadId);
+            open.TouchedUtc = NowUtc();
             if (threadId != 0)
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
@@ -129,6 +148,7 @@ public sealed class FrameRing {
 
     public FrameSnapshot? Latest() {
         lock (_gate) {
+            SealStale();
             if (_count == 0)
                 return null;
             return _buffer[(_next - 1 + _buffer.Length) % _buffer.Length];
@@ -137,6 +157,7 @@ public sealed class FrameRing {
 
     public FrameSnapshot[] Snapshot() {
         lock (_gate) {
+            SealStale();
             if (_count == 0)
                 return [];
             FrameSnapshot[] frames = new FrameSnapshot[_count];
@@ -170,6 +191,7 @@ public sealed class FrameRing {
     /// <summary>One (ordinal, duration) pair per frame, newest last, for the frame strip.</summary>
     public (int Ordinal, long DurationTicks)[] SnapshotStrip(int count) {
         lock (_gate) {
+            SealStale();
             int take = Math.Min(count <= 0 ? _count : count, _count);
             if (take == 0)
                 return [];
@@ -190,6 +212,7 @@ public sealed class FrameRing {
     /// </summary>
     public FrameSnapshot? FindByOrdinal(int ordinal) {
         lock (_gate) {
+            SealStale();
             int start = _count < _buffer.Length ? 0 : _next;
             int lo = 0;
             int hi = _count - 1;
@@ -227,6 +250,7 @@ public sealed class FrameRing {
     /// </summary>
     public FrameSnapshot[] Range(int fromOrdinal, int count) {
         lock (_gate) {
+            SealStale();
             int take = Math.Min(count <= 0 ? _count : count, _count);
             if (take == 0)
                 return [];
@@ -323,13 +347,19 @@ public sealed class FrameRing {
         }
     }
 
-    // seals open frames up to and including `watermark`, oldest first so the ring stays ascending.
-    private void SealThrough(int watermark) {
+    private void SealThrough(int watermark) => SealSettled(watermark, DateTime.MinValue);
+
+    // reads seal what the stream stopped reporting, so a paused game still serves its last frames.
+    private void SealStale() => SealSettled(0, NowUtc().AddMilliseconds(-QuietMillis));
+
+    // seals open frames past `watermark` or untouched since `quietBefore`, oldest first so the
+    // ring stays ascending. the first frame that is neither stops the run.
+    private void SealSettled(int watermark, DateTime quietBefore) {
         while (_open.Count > 0) {
             int ordinal = _open.Keys.First();
-            if (ordinal > watermark)
-                return;
             OpenFrame open = _open[ordinal];
+            if (ordinal > watermark && open.TouchedUtc > quietBefore)
+                return;
             _open.Remove(ordinal);
             _sealedThrough = ordinal;
             Seal(ordinal, open);
@@ -378,6 +408,7 @@ public sealed class FrameRing {
         public readonly List<long> ElapsedTicks = [];
         public readonly List<long> AllocBytes = [];
         public readonly List<int> ThreadIds = [];
+        public DateTime TouchedUtc;
         public bool HasThreadIds;
     }
 }

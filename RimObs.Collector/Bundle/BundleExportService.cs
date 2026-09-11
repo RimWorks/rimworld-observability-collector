@@ -66,7 +66,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, request.SessionId, StringComparison.Ordinal))
             return Task.FromResult(new BundleExportResult { Status = BundleExportStatus.UnknownSession });
 
-        FrameSnapshot[] frames = request.Includes.Contains(BundleContentKey.Frames) ? _aggregator.Frames.Snapshot() : [];
+        FrameSnapshot[] frames = SealedFrames(request.Includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -94,7 +94,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, sessionId, StringComparison.Ordinal))
             return new BundleEstimateResult { Status = BundleExportStatus.UnknownSession };
 
-        FrameSnapshot[] frames = includes.Contains(BundleContentKey.Frames) ? _aggregator.Frames.Snapshot() : [];
+        FrameSnapshot[] frames = SealedFrames(includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -105,6 +105,15 @@ public sealed class BundleExportService {
             EstimatedBytes = estimate.TotalBytes,
             ExceedsSoftCap = estimate.ExceedsSoftCap,
         };
+    }
+
+    // a bundle is a one-shot read, so it seals the ring itself rather than waiting out the quiet
+    // deadline and shipping a zip that is missing the newest frames.
+    private FrameSnapshot[] SealedFrames(IReadOnlySet<BundleContentKey> includes) {
+        if (!includes.Contains(BundleContentKey.Frames))
+            return [];
+        _aggregator.Frames.Flush();
+        return _aggregator.Frames.Snapshot();
     }
 
     private BundleEstimateInput BuildEstimateInput(IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames) {

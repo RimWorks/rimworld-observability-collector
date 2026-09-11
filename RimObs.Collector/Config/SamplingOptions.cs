@@ -13,6 +13,9 @@ public sealed class SamplingOptions {
     // how many captured frames the live strip keeps. the whole ring ships on every frame poll.
     public int FrameRingCapacity { get; set; } = Aggregation.FrameRing.DefaultCapacity;
 
+    // how many newer frames land before one seals, which is the room a late thread lane gets.
+    public int OpenFrameWindow { get; set; } = Aggregation.FrameRing.DefaultOpenFrameWindow;
+
     // how deep nested profiler sections may nest before the library stops recording them.
     public int MaxCaptureDepth { get; set; } = DefaultMaxCaptureDepth;
 

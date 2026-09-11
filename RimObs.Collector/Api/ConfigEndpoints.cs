@@ -28,6 +28,7 @@ public static class ConfigEndpoints {
                 store.Replace(incoming);
                 // the ring resizes in place so the strip keeps the history that still fits.
                 aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
+                aggregator.Frames.OpenFrameWindow = store.Current.Sampling.OpenFrameWindow;
                 return Results.Json(store.Current, ConfigJson.Options);
             });
 

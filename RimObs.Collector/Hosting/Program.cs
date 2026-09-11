@@ -116,6 +116,7 @@ public static class Program {
             Aggregation.SessionAggregator agg = new(sp.GetService<Storage.ISessionPersister>());
             Config.ConfigStore store = sp.GetRequiredService<Config.ConfigStore>();
             agg.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
+            agg.Frames.OpenFrameWindow = store.Current.Sampling.OpenFrameWindow;
             // a name typed before a game restart waits on disk. the first session to appear
             // afterwards claims it, and it is cleared so the one after that does not inherit it.
             agg.SessionStarted += sessionId => {

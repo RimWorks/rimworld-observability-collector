@@ -822,6 +822,44 @@ public sealed class EndToEndSmokeTests {
     }
 
     [Fact]
+    public async Task Config_post_applies_the_open_frame_window_to_the_live_ring() {
+        int port = PickFreePort();
+        Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-window-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        Aggregation.SessionAggregator aggregator = app.Services.GetRequiredService<Aggregation.SessionAggregator>();
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            aggregator.Frames.OpenFrameWindow.Should().Be(Aggregation.FrameRing.DefaultOpenFrameWindow);
+
+            using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/config") {
+                Content = new StringContent(
+                    "{\"schema_version\":1,\"sampling\":{\"open_frame_window\":3}}",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+            post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+            post.Headers.Add("Authorization", $"Bearer {token.Value}");
+            HttpResponseMessage postResp = await http.SendAsync(post);
+            postResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            string after = await http.GetStringAsync("/api/v1/config");
+            using JsonDocument doc = JsonDocument.Parse(after);
+            doc.RootElement.GetProperty("sampling").GetProperty("open_frame_window").GetInt32().Should().Be(3);
+            aggregator.Frames.OpenFrameWindow.Should().Be(3);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Config_post_with_unsupported_schema_version_returns_400() {
         int port = PickFreePort();
         Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-bearer-token-2");

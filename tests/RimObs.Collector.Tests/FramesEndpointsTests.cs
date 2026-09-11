@@ -43,7 +43,7 @@ public sealed class FramesEndpointsTests {
             ElapsedTicks = [500L, 200L],
             FrameOrdinals = [1, 1],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
         await app.StartAsync();
 
         try {
@@ -81,7 +81,7 @@ public sealed class FramesEndpointsTests {
             ElapsedTicks = [500L, 200L],
             FrameOrdinals = [1, 1],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
         await app.StartAsync();
 
         try {
@@ -126,7 +126,7 @@ public sealed class FramesEndpointsTests {
             ElapsedTicks = [500L, 200L],
             FrameOrdinals = [1, 1],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
         await app.StartAsync();
 
         try {
@@ -228,7 +228,7 @@ public sealed class FramesEndpointsTests {
             ElapsedTicks = [500L, 500L, 500L, 500L, 500L],
             FrameOrdinals = [1, 2, 3, 4, 5],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
     }
 
     private static int[] Ordinals(JsonDocument doc) {
@@ -344,7 +344,7 @@ public sealed class FramesEndpointsTests {
             FrameOrdinals = [1, 1, 1],
             ThreadIds = [1, 7, 1],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
         await app.StartAsync();
 
         try {
@@ -391,7 +391,7 @@ public sealed class FramesEndpointsTests {
             ElapsedTicks = [500L, 200L],
             FrameOrdinals = [1, 1],
         });
-        aggregator.Frames.Flush();
+        aggregator.Frames.GoQuiet();
         await app.StartAsync();
 
         try {
