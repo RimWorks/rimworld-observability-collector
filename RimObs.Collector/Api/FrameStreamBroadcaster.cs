@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Channels;
 using RimWorks.RimObs.Collector.Aggregation;
@@ -38,9 +39,8 @@ public sealed class FrameStreamBroadcaster : IDisposable {
         if (!AnyClientWants(lane))
             return;
         string json = build();
-        foreach (Channel<(string Name, string Json)> client in clients)
-            if (ClientWants(client, lane))
-                client.Writer.TryWrite((lane, json));
+        foreach (Channel<(string Name, string Json)> client in clients.Where(c => ClientWants(c, lane)))
+            client.Writer.TryWrite((lane, json));
     }
 
     private readonly Instrumentation.SessionMetaRegistry? _metaRegistry;
@@ -103,11 +103,8 @@ public sealed class FrameStreamBroadcaster : IDisposable {
 
     private bool AnyClientWants(string lane) {
         lock (_gate) {
-            foreach (HashSet<string>? lanes in _clientLanes.Values)
-                if (lanes is null || lanes.Contains(lane))
-                    return true;
+            return _clientLanes.Values.Any(lanes => lanes is null || lanes.Contains(lane));
         }
-        return false;
     }
 
     private bool ClientWants(Channel<(string Name, string Json)> client, string lane) {
@@ -153,9 +150,8 @@ public sealed class FrameStreamBroadcaster : IDisposable {
                 continue;
 
             string json = BuildEventJson();
-            foreach (Channel<(string Name, string Json)> client in clients)
-                if (ClientWants(client, "frame"))
-                    client.Writer.TryWrite(("frame", json));
+            foreach (Channel<(string Name, string Json)> client in clients.Where(c => ClientWants(c, "frame")))
+                client.Writer.TryWrite(("frame", json));
 
             // aggregate views ride the same pipe on a slow lane, so the dashboard never polls.
             long now = Environment.TickCount64;

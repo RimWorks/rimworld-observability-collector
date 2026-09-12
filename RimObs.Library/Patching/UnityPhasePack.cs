@@ -69,7 +69,7 @@ internal static class UnityPhasePack {
             Installed = true;
         }
         catch (Exception ex) {
-            Log.ErrorTo(LogChannels.Patching, ex, "unity phase pack install failed; loop left alone");
+            Log.ErrorTo(LogChannels.Patching, ex, "unity phase pack install failed, loop left alone");
             RestoreLoop(binding);
             return;
         }
@@ -114,7 +114,7 @@ internal static class UnityPhasePack {
     private static void InstallCameraHooks() {
         Type? camera = Type.GetType("UnityEngine.Camera, UnityEngine.CoreModule", throwOnError: false);
         if (camera == null) {
-            Log.WarnTo(LogChannels.Patching, "UnityEngine.Camera not found; render cost stays folded into the frame");
+            Log.WarnTo(LogChannels.Patching, "UnityEngine.Camera not found, render cost stays folded into the frame");
             return;
         }
 

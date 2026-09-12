@@ -191,7 +191,7 @@ public sealed class ComparisonEndpointsTests : IDisposable {
             res.StatusCode.Should().Be(HttpStatusCode.OK);
             JsonElement root = JsonDocument.Parse(await res.Content.ReadAsStringAsync()).RootElement;
             root.GetProperty("timing").GetProperty("delta_ns").GetInt64().Should().Be(500);
-            root.GetProperty("disclaimer").GetString().Should().Contain("not causation");
+            root.GetProperty("disclaimer").GetString().Should().Contain("not confirmed causes");
         });
     }
 

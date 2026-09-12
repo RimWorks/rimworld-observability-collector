@@ -171,7 +171,7 @@ public static class ComparisonEndpoints {
         return new {
             schema_version = SchemaVersion.Current,
             unit = "ns",
-            disclaimer = "Deltas indicate correlation, not causation. Flagged items are likely regression candidates, not confirmed causes.",
+            disclaimer = "A delta shows what changed, not why. Flagged rows are likely regression candidates, not confirmed causes.",
             @base = MapRef(result.Base),
             head = MapRef(result.Head),
             timing = new {

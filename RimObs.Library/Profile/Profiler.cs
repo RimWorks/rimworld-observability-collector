@@ -181,7 +181,7 @@ public static class Profiler {
         state.Overflow = 0;
         RimWorks.RimLogging.Log.ErrorTo(
             Logging.LogChannels.Sections,
-            "profiler stack healed at frame boundary; an enter/exit pair is leaking",
+            "profiler stack healed at frame boundary, an enter/exit pair is leaking",
             null);
     }
 

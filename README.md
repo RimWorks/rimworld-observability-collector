@@ -79,7 +79,7 @@ different host.
 | `RimObs.Dashboard/`  | Svelte 5 + Vite | Static SPA. Built once, embedded as resource in `Collector.exe`.    |
 
 Test projects (`RimObs.Library.Tests/`, `RimObs.Collector.Tests/`) are
-`net8.0` xUnit hosts; they exercise the library logic that is
+`net8.0` xUnit hosts. They exercise the library logic that is
 RimWorld-independent.
 
 ### Root layout
@@ -91,7 +91,7 @@ RimWorld mod and a multi-project .NET solution:
 - `Assemblies/`: RimWorld's deploy directory. `RimObs.Library` builds straight here.
 - `RimObs.slnx`: single solution so Rider/VS resolve `RimObs.Wire` from both net472 and net10.0 consumers.
 - `Makefile` + `make.ps1`: see `make build`, `make test`, `make publish-collector`.
-- `docs/wiki/`: source for [the wiki](https://github.com/RimWorks/rimworld-observability-collector/wiki). Edit here, not on the wiki site; CI mirrors on push to `main`.
+- `docs/wiki/`: source for [the wiki](https://github.com/RimWorks/rimworld-observability-collector/wiki). Edit here, not on the wiki site. CI mirrors on push to `main`.
 
 ### Quick start
 

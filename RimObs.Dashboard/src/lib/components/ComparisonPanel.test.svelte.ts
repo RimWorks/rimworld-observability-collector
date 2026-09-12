@@ -14,7 +14,7 @@ const SESSIONS = {
 
 function emptyComparison() {
     return {
-        disclaimer: 'Deltas indicate correlation, not causation.',
+        disclaimer: 'A delta shows what changed, not why.',
         warnings: [],
         timing: {
             base_total_ns: 1000,
@@ -117,7 +117,7 @@ describe('ComparisonPanel', () => {
 
         await fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
         await waitFor(() =>
-            expect(screen.queryByText(/deltas indicate correlation/i)).not.toBeInTheDocument(),
+            expect(screen.queryByText(/a delta shows what changed, not why/i)).not.toBeInTheDocument(),
         );
     });
 
@@ -139,7 +139,7 @@ describe('ComparisonPanel', () => {
 
         await fireEvent.focus(trigger.closest('[tabindex]') ?? trigger);
         const tooltip = await screen.findByRole('tooltip');
-        expect(tooltip.textContent).toMatch(/deltas indicate correlation/i);
+        expect(tooltip.textContent).toMatch(/a delta shows what changed, not why/i);
     });
 });
 
