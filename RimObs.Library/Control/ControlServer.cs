@@ -144,9 +144,8 @@ internal sealed class ControlServer {
         ctx.Response.StatusCode = (int)HttpStatusCode.OK;
     }
 
-    // queued, unlike /session/new: restarting touches the window stack and the save pipeline,
-    // so it has to run on the game thread. answered before the restart lands, because the
-    // process is about to go away and the caller would never see a later reply.
+    // queued (restart touches the window stack, so game thread only) and answered before the
+    // restart lands, because the process is about to go away and no later reply would arrive.
     private static void HandleRestartGame(HttpListenerContext ctx) {
         bool save = string.Equals(ctx.Request.QueryString["save"], "true", StringComparison.OrdinalIgnoreCase);
         ControlServices.Queue.Enqueue(new ControlOp(ControlOpKind.Patch, () => SessionRestarter.RestartGame(save)));

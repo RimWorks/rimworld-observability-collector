@@ -331,10 +331,8 @@
         packDirty = true;
     });
 
-    // webgl2 is absent in jsdom and on old browsers, and the 2d path stays whole for both.
-    // untracked: the body writes AND (via logging) read glActive, which made the effect
-    // depend on a signal it flips both ways - an infinite recreate loop leaking a gl
-    // context per bounce. only the canvas binding may retrigger this.
+    // untracked: reading glActive inside once made this effect depend on a signal it flips
+    // both ways, recreating (and leaking) a gl context per bounce. jsdom falls back to 2d.
     $effect(() => {
         const el = glCanvasEl;
         const wantGl = userPrefs.flameRenderer === 'gl';

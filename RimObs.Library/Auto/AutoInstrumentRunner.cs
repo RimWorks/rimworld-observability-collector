@@ -48,9 +48,8 @@ internal static class AutoInstrumentRunner {
     private static readonly List<int> s_Removing = new List<int>();
     private static int s_RemoveNext;
 
-    // SectionCatalog keeps its method mapping after an unpatch, so the scanner would report a
-    // reverted method as already instrumented forever. holding them here lets a re-enable
-    // queue them straight back.
+    // SectionCatalog keeps its mapping after an unpatch, so a reverted method would read as
+    // already instrumented forever; holding it here lets a re-enable queue it straight back.
     private static readonly HashSet<MethodInfo> s_Reverted = new HashSet<MethodInfo>();
 
     // the judge mutes on the sender thread; this pump-side watermark makes the sweep run only

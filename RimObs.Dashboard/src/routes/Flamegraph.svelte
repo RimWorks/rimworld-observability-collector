@@ -516,11 +516,8 @@
 
     let clearing = $state(false);
 
-    // throws away the capture history the strip draws from. resumes through the one gate first,
-    // because a paused view is pinned to a frame the collector is about to forget, and the cuts
-    // go too: they mark gaps in a history that no longer exists.
-    // one click arms, the second clears. the ring is the only copy of what you just captured,
-    // and this button sits next to New session in identical styling.
+    // one click arms, the second clears: the ring is the only copy of the capture, and the
+    // clear resumes through the one gate first so a pinned view never outlives its frame.
     let confirmingClear = $state(false);
 
     function askClearRing(): void {

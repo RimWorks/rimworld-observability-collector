@@ -5,9 +5,8 @@ using RimWorks.RimObs.Session;
 
 namespace RimWorks.RimObs.Patching;
 
-// A session is one launch of the game, which makes a long play one undivided run. Entering a
-// game is the natural seam, so loading a save, starting a colony or a quickstart each begin a
-// fresh session. Backend-agnostic: IPatchBackend covers Harmony and Concord alike.
+// entering a game is the session seam: loading a save, starting a colony, or a quickstart
+// each begin a fresh session. backend-agnostic via IPatchBackend.
 internal static class SessionLifecyclePatches {
     internal const string EntryMethod = "Verse.Game.FinalizeInit";
 

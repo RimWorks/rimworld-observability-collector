@@ -32,9 +32,8 @@ internal static class UnityPhasePack {
         "PresentBeforeUpdate",
         "PresentAfterDraw",
         "XRPostPresent",
-        // measured, not assumed: 5,745us of a 7,144us frame at ~140fps. it does real render
-        // submit too, but it is dominated by the block on vsync, and colouring 80% of every
-        // frame as cost makes a frame-capped game look permanently broken.
+        // measured: 5,745us of a 7,144us frame at ~140fps is the block on vsync, and
+        // colouring 80% of every frame as cost makes a capped game look broken.
         "FinishFrameRendering",
     ];
 

@@ -110,9 +110,8 @@ public static class Program {
         builder.Services.AddSingleton(configStore ?? new Config.ConfigStore(ResolveConfigFilePath(sessionsDir)));
         builder.Services.AddSingleton<Panels.PanelRegistry>();
         builder.Services.AddSingleton(sp => {
-            // resolve the persister rather than calling new(): the parameterless constructor
-            // leaves the aggregator with no persister, which silently stops every session
-            // reaching disk.
+            // resolve the persister rather than new(): the parameterless constructor leaves
+            // the aggregator persister-less, silently stopping every session reaching disk.
             Aggregation.SessionAggregator agg = new(sp.GetService<Storage.ISessionPersister>());
             Config.ConfigStore store = sp.GetRequiredService<Config.ConfigStore>();
             agg.Frames.Resize(store.Current.Sampling.FrameRingCapacity);

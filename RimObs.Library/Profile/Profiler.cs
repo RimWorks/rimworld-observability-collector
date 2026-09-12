@@ -151,9 +151,8 @@ public static class Profiler {
             return;
         }
 
-        // an inactive section still pushes a sentinel frame. skipping the push entirely lets
-        // its Exit eat an Overflow credit some deeper real frame is owed, and the judge can
-        // flip a section mid-scope, so enter and exit must always pair on the stack.
+        // an inactive section still pushes a sentinel: a skipped push lets its Exit eat a
+        // deeper frame's Overflow credit, and the judge can flip a section mid-scope.
         if (!Enabled
             || (uint)sectionId >= (uint)SectionRegistry.MaxSections
             || !SectionRegistry.s_Active[sectionId]) {

@@ -23,9 +23,8 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private const int DrainIntervalMs = 10;
     private const int MetaInitialBurstTicks = 100;
     private const int MetaHeartbeatTicks = 500;
-    // the collector seals a frame once 16 newer ordinals land and drops everything older, so a
-    // sample this far behind cannot land in any open frame. 300 is ~20x that window, which is
-    // conservative enough that only samples the collector would certainly drop get cut here.
+    // the collector seals a frame 16 ordinals back and drops older samples; 300 is ~20x that
+    // window, so only samples the collector would certainly discard get cut here.
     private const int LateFrameCutoff = 300;
 
     private readonly UdpClient _client;

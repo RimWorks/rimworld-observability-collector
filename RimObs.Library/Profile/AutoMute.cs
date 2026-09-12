@@ -84,9 +84,8 @@ internal static class AutoMute {
 
         long perCallTicks = Math.Max(1L, Stopwatch.Frequency * ScopeOverheadNanos / 1_000_000_000L);
         long budgetTicks = Stopwatch.Frequency * BudgetUsPerFrame * framesElapsed / 1_000_000L;
-        // force-judge stragglers still short of the one-shot sample size. below the call floor
-        // the evidence is noise: clear pending so the section reports, and let the one-shot
-        // decide later at the full sample size.
+        // force-judge stragglers short of the one-shot sample size. below the call floor the
+        // evidence is noise, so pending clears and the one-shot decides at full size later.
         bool[]? pendingFlags = s_Pending;
         if (pendingFlags is not null) {
             for (int id = 0; id < calls.Length; id++) {
