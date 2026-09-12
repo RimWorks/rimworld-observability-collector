@@ -55,6 +55,16 @@ public sealed class SpinClockTests : IDisposable {
         }
     }
 
+    [Theory]
+    [InlineData("600000 100000", 6)]
+    [InlineData("max 100000", 0)]
+    [InlineData("150000 100000", 1)]
+    [InlineData("garbage", 0)]
+    [InlineData("100000 0", 0)]
+    public void ParseCpuMax_reads_the_cgroup_quota_as_whole_cpus(string text, int cores) {
+        SpinClock.ParseCpuMax(text).Should().Be(cores);
+    }
+
     [Fact]
     public void Refuses_to_start_below_the_core_gate() {
         SpinClock.MinCores = int.MaxValue;

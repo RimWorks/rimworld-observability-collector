@@ -71,6 +71,96 @@ public sealed class FramesEndpointsTests {
     }
 
     [Fact]
+    public async Task Stream_pushes_a_frame_event_when_a_frame_seals() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-stream-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-stream",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            using HttpResponseMessage res = await client.GetAsync(
+                $"http://127.0.0.1:{port}/api/v1/stream", HttpCompletionOption.ResponseHeadersRead);
+            res.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+
+            aggregator.OnSectionBatch(new SectionBatch {
+                SectionIds = [10],
+                ParentIds = [-1],
+                StartTimestamps = [100L],
+                ElapsedTicks = [500L],
+                FrameOrdinals = [1],
+            });
+
+            using var reader = new System.IO.StreamReader(await res.Content.ReadAsStreamAsync());
+            string data = string.Empty;
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline) {
+                string? line = await reader.ReadLineAsync();
+                if (line is null)
+                    break;
+                if (line.StartsWith("data: ") && line.Contains("\"capture_ordinal\":1")) {
+                    data = line;
+                    break;
+                }
+            }
+
+            data.Should().NotBeEmpty("a sealed frame must arrive as an SSE data line");
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Summaries_return_one_row_per_ring_frame_with_section_sums() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-summaries-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-summaries",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10, 20, 10],
+            ParentIds = [-1, 10, -1],
+            StartTimestamps = [100L, 150L, 900L],
+            ElapsedTicks = [500L, 200L, 300L],
+            FrameOrdinals = [1, 1, 2],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync(
+                $"http://127.0.0.1:{port}/api/v1/frames/summaries?sections=10,999");
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement root = doc.RootElement;
+
+            root.GetProperty("frame_count").GetInt32().Should().BeGreaterThanOrEqualTo(1);
+            int rows = root.GetProperty("ordinals").GetArrayLength();
+            root.GetProperty("duration_us").GetArrayLength().Should().Be(rows);
+            root.GetProperty("node_counts").GetArrayLength().Should().Be(rows);
+            JsonElement sums = root.GetProperty("section_durations");
+            sums.GetProperty("10").GetArrayLength().Should().Be(rows);
+            sums.GetProperty("999")[0].GetDouble().Should().Be(0.0);
+            // frame 1 holds one section-10 node of 500 ticks at 10MHz = 50us.
+            root.GetProperty("ordinals")[0].GetInt32().Should().Be(1);
+            sums.GetProperty("10")[0].GetDouble().Should().BeApproximately(50.0, 0.01);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task Range_drops_nodes_under_the_requested_duration_floor() {
         int port = PickFreePort();
         CollectorToken token = CollectorToken.FromExplicitValue("frames-lod-token");

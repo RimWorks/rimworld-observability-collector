@@ -117,7 +117,8 @@ public sealed class AutoMuteTests : IDisposable {
     public void Budget_judge_leaves_everything_alone_while_the_tax_fits() {
         AutoMute.BudgetUsPerFrame = 1000;
         AutoMute.Watch(_cheap.Id);
-        Observe(_cheap.Id, 1, 100);
+        // just under the one-shot sample size, so only the budget judge is on trial here.
+        Observe(_cheap.Id, 1, AutoMute.SampleCount - 1);
 
         AutoMute.JudgeBudget(framesElapsed: 100);
 

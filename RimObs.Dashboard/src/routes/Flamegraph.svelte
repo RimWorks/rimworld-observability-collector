@@ -14,6 +14,7 @@
     import InstrumentationPanel from '../lib/components/InstrumentationPanel.svelte';
     import { liveSectionIds, type MergedPatch } from '../lib/livePatches';
     import { Resource } from '../lib/poll.svelte';
+    import { StreamResource } from '../lib/stream.svelte';
     import { liveVitals } from '../lib/vitals.svelte';
     import type {
         FrameData,
@@ -46,7 +47,7 @@
     import ThreadFilter from '../lib/components/ThreadFilter.svelte';
     import { recordCut, visibleCuts } from '../lib/frameCuts';
     import { lodFloorUs, refinementFor } from '../lib/lod';
-    import { buildFrameExport, exportFileName } from '../lib/frameExport';
+    import { buildFrameExport, buildTimelineExport, exportFileName } from '../lib/frameExport';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
     import {
         estimateOverheadUs,
@@ -143,7 +144,10 @@
             framesRes = null;
             return;
         }
-        const res = new Resource<FrameResponse>(
+        // pushed, not polled: one SSE event per sealed-frame window, with the old poll as
+        // the automatic fallback while the stream is down.
+        const res = new StreamResource<FrameResponse>(
+            '/api/v1/stream',
             () => api.frames(),
             untrack(() => pollMs),
         );
@@ -312,6 +316,27 @@
     async function exportRing(): Promise<void> {
         const range = await api.frameRange(undefined, 0);
         saveExport('ring', range.frames, range.stopwatch_frequency);
+    }
+
+    // every ring frame as a summary row; tick sections ride along so the file answers
+    // convergence questions without any node data.
+    async function exportTimeline(): Promise<void> {
+        const tickIds = [...names.entries()]
+            .filter(([, s]) => s.name.includes('TickManager.DoSingleTick'))
+            .map(([id]) => id);
+        const summaries = await api.frameSummaries(tickIds);
+        const payload = buildTimelineExport(
+            summaries,
+            names,
+            live ? liveConfig.autoInstrument : (importedFrames?.auto_instrument ?? null),
+        );
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = exportFileName('timeline', null);
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     function resume(): void {
@@ -991,6 +1016,12 @@
                     class="clearring"
                     onclick={() => void exportRing()}
                     data-testid="export-ring">{t('flamegraph.exportRing')}</button
+                >
+                <button
+                    type="button"
+                    class="clearring"
+                    onclick={() => void exportTimeline()}
+                    data-testid="export-timeline">{t('flamegraph.exportTimeline')}</button
                 >
                 <button
                     type="button"

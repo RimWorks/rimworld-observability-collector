@@ -8,27 +8,8 @@ namespace RimWorks.RimObs.Collector.Api;
 
 public static class FramesEndpoints {
     public static IEndpointRouteBuilder MapFramesEndpoints(this IEndpointRouteBuilder endpoints) {
-        endpoints.MapGet("/api/v1/frames/latest", (SessionAggregator aggregator) => {
-            SessionMeta? meta = aggregator.Meta;
-            double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
-            long anchor = meta?.AnchorTimestamp ?? 0L;
-            FrameSnapshot? frame = aggregator.Frames.Latest();
-            FrameRingStats stats = aggregator.Frames.ComputeStats();
-            return Results.Ok(new {
-                schema_version = SchemaVersion.Current,
-                stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
-                frame = frame is null ? null : FramePayload.Map(frame, anchor, usPerTick),
-                strip = MapStrip(aggregator, usPerTick, 0),
-                stats = FramePayload.MapStats(stats, usPerTick),
-                threads = MapThreads(aggregator, TickConverter.NsPerTick(meta)),
-                vitals = MapVitals(aggregator),
-                dropped = new {
-                    pre_frame_samples = aggregator.Frames.PreFrameSamples,
-                    late_samples = aggregator.Frames.LateSamples,
-                    library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
-                },
-            });
-        });
+        endpoints.MapGet("/api/v1/frames/latest", (SessionAggregator aggregator) =>
+            Results.Ok(BuildLatestPayload(aggregator)));
 
         // clipped, not padded: an evicted `from` starts at the oldest frame held, and holes
         // inside the run stay missing so the client can draw them.
@@ -51,6 +32,83 @@ public static class FramesEndpoints {
                 strip = MapStrip(aggregator, usPerTick, 0),
                 stats = FramePayload.MapStats(aggregator.Frames.ComputeStats(), usPerTick),
                 vitals = MapVitals(aggregator),
+                dropped = new {
+                    pre_frame_samples = aggregator.Frames.PreFrameSamples,
+                    late_samples = aggregator.Frames.LateSamples,
+                    library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
+                },
+            });
+        });
+
+        // push instead of poll: one `frame` event per coalesce window, same payload as
+        // /frames/latest, comment keepalives while the game is idle.
+        endpoints.MapGet("/api/v1/stream", async (HttpContext context, FrameStreamBroadcaster broadcaster) => {
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            System.Threading.Channels.ChannelReader<string> reader = broadcaster.Subscribe();
+            try {
+                await WriteEvent(context, broadcaster.BuildEventJson());
+                while (!context.RequestAborted.IsCancellationRequested) {
+                    Task<string> next = reader.ReadAsync(context.RequestAborted).AsTask();
+                    Task winner = await Task.WhenAny(next, Task.Delay(10_000, context.RequestAborted));
+                    if (winner == next) {
+                        await WriteEvent(context, await next);
+                    }
+                    else {
+                        await context.Response.WriteAsync(": keepalive\n\n", context.RequestAborted);
+                        await context.Response.Body.FlushAsync(context.RequestAborted);
+                    }
+                }
+            }
+            catch (OperationCanceledException) {
+                // the client hung up; nothing to clean but the subscription.
+            }
+            finally {
+                broadcaster.Unsubscribe(reader);
+            }
+        });
+
+        // one summary row per ring frame, flat arrays. the node-carrying export caps at 256
+        // frames for size; this is how a 20k ring answers convergence and tick questions.
+        endpoints.MapGet("/api/v1/frames/summaries", (SessionAggregator aggregator, string? sections) => {
+            SessionMeta? meta = aggregator.Meta;
+            double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+            long anchor = meta?.AnchorTimestamp ?? 0L;
+            FrameSnapshot[] frames = aggregator.Frames.Range(-1, 0);
+
+            int[] wanted = ParseSectionIds(sections);
+            int[] ordinals = new int[frames.Length];
+            double[] startUs = new double[frames.Length];
+            double[] durationUs = new double[frames.Length];
+            int[] nodeCounts = new int[frames.Length];
+            var sectionDurations = new Dictionary<string, double[]>(wanted.Length);
+            foreach (int id in wanted)
+                sectionDurations[id.ToString()] = new double[frames.Length];
+
+            for (int f = 0; f < frames.Length; f++) {
+                FrameSnapshot frame = frames[f];
+                ordinals[f] = frame.CaptureOrdinal;
+                startUs[f] = (frame.StartTicks - anchor) * usPerTick;
+                durationUs[f] = frame.DurationTicks * usPerTick;
+                nodeCounts[f] = frame.NodeCount;
+                for (int w = 0; w < wanted.Length; w++) {
+                    double[] sums = sectionDurations[wanted[w].ToString()];
+                    for (int i = 0; i < frame.NodeCount; i++) {
+                        if (frame.SectionIds[i] == wanted[w])
+                            sums[f] += frame.NodeElapsedTicks[i] * usPerTick;
+                    }
+                }
+            }
+
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
+                frame_count = frames.Length,
+                ordinals,
+                start_us = startUs,
+                duration_us = durationUs,
+                node_counts = nodeCounts,
+                section_durations = sectionDurations,
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
@@ -136,6 +194,46 @@ public static class FramesEndpoints {
             };
         }
         return mapped;
+    }
+
+    private static async Task WriteEvent(HttpContext context, string json) {
+        await context.Response.WriteAsync($"event: frame\ndata: {json}\n\n", context.RequestAborted);
+        await context.Response.Body.FlushAsync(context.RequestAborted);
+    }
+
+    /// <summary>The /frames/latest shape. The SSE stream sends the same payload per event.</summary>
+    public static object BuildLatestPayload(SessionAggregator aggregator) {
+        SessionMeta? meta = aggregator.Meta;
+        double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+        long anchor = meta?.AnchorTimestamp ?? 0L;
+        FrameSnapshot? frame = aggregator.Frames.Latest();
+        FrameRingStats stats = aggregator.Frames.ComputeStats();
+        return new {
+            schema_version = SchemaVersion.Current,
+            stopwatch_frequency = meta?.StopwatchFrequency ?? 0L,
+            frame = frame is null ? null : FramePayload.Map(frame, anchor, usPerTick),
+            strip = MapStrip(aggregator, usPerTick, 0),
+            stats = FramePayload.MapStats(stats, usPerTick),
+            threads = MapThreads(aggregator, TickConverter.NsPerTick(meta)),
+            vitals = MapVitals(aggregator),
+            dropped = new {
+                pre_frame_samples = aggregator.Frames.PreFrameSamples,
+                late_samples = aggregator.Frames.LateSamples,
+                library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
+            },
+        };
+    }
+
+    private static int[] ParseSectionIds(string? csv) {
+        if (string.IsNullOrEmpty(csv))
+            return [];
+        string[] parts = csv.Split(',');
+        List<int> ids = new(parts.Length);
+        foreach (string part in parts) {
+            if (int.TryParse(part, out int id))
+                ids.Add(id);
+        }
+        return ids.ToArray();
     }
 
     private static object MapStrip(SessionAggregator aggregator, double usPerTick, int count) {

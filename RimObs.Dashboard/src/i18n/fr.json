@@ -244,5 +244,6 @@
     "tip.settings.sessionName": "Un nom pour cette exécution. Il apparaît dans la liste des sessions et dans les comparaisons, alors choisissez quelque chose que vous reconnaîtrez la semaine prochaine.",
     "settings.readonly": "Lecture seule",
     "flamegraph.exportFrame": "Exporter la frame",
-    "flamegraph.exportRing": "Exporter l'anneau"
+    "flamegraph.exportRing": "Exporter l'anneau",
+    "flamegraph.exportTimeline": "Exporter la chronologie"
 }

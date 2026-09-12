@@ -244,5 +244,6 @@
     "tip.settings.sessionName": "Ein Name für diesen Durchlauf. Er erscheint in der Sitzungsliste und in Vergleichen, wähle also etwas, das du nächste Woche wiedererkennst.",
     "settings.readonly": "Nur lesbar",
     "flamegraph.exportFrame": "Frame exportieren",
-    "flamegraph.exportRing": "Ring exportieren"
+    "flamegraph.exportRing": "Ring exportieren",
+    "flamegraph.exportTimeline": "Zeitverlauf exportieren"
 }

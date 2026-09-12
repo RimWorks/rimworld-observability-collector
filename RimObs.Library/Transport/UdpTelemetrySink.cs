@@ -18,9 +18,11 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     public const int DefaultPort = 17654;
     public const int DefaultRingCapacity = 16384;
     private const int BatchSize = 256;
-    private const int DrainIntervalMs = 100;
-    private const int MetaInitialBurstTicks = 10;
-    private const int MetaHeartbeatTicks = 50;
+    // a busy main lane fills 16384 slots in ~40ms at speed 3, so the drain has to wake well
+    // inside that. meta ticks are scaled to keep the ~1s burst and ~5s heartbeat.
+    private const int DrainIntervalMs = 10;
+    private const int MetaInitialBurstTicks = 100;
+    private const int MetaHeartbeatTicks = 500;
 
     private readonly UdpClient _client;
     private readonly IPEndPoint _endpoint;

@@ -289,6 +289,76 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
         PatchRegistry.Snapshot().Should().HaveCount(3);
     }
 
+    // enabling with no positive line means "everything". scoped to a synthetic assembly:
+    // starring the test assembly itself patches the sink, which recurses.
+    [Fact]
+    public void Enabled_filters_with_only_exclusions_assume_a_star_include() {
+        Assembly synthetic = BuildStarFixture();
+
+        AutoInstrumentPlan plan = AutoInstrumentRunner.ApplyFilters(
+            "!*!StarFixture.Excluded::*", ignore: null, autoMute: true, "test.owner", [synthetic]);
+        Drain();
+
+        plan.Eligible.Should().Be(2);
+        PatchRegistry.Snapshot().Should().HaveCount(2);
+        PatchRegistry.Snapshot().Should().OnlyContain(p => !p.Signature.Contains("Excluded"));
+    }
+
+    [Fact]
+    public void Enabled_with_an_empty_filter_box_also_means_everything() {
+        Assembly synthetic = BuildStarFixture();
+
+        AutoInstrumentPlan plan = AutoInstrumentRunner.ApplyFilters(
+            string.Empty, ignore: null, autoMute: true, "test.owner", [synthetic]);
+        Drain();
+
+        plan.Eligible.Should().Be(3);
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+    }
+
+    private static Assembly BuildStarFixture() {
+        System.Reflection.Emit.AssemblyBuilder asm = System.Reflection.Emit.AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"StarFixture_{Guid.NewGuid():N}"), System.Reflection.Emit.AssemblyBuilderAccess.Run);
+        System.Reflection.Emit.ModuleBuilder mod = asm.DefineDynamicModule("Main");
+        DefineType(mod, "StarFixture.Wanted", ["A", "B"]);
+        DefineType(mod, "StarFixture.Excluded", ["C"]);
+        return asm;
+    }
+
+    private static void DefineType(System.Reflection.Emit.ModuleBuilder mod, string name, string[] methods) {
+        System.Reflection.Emit.TypeBuilder type = mod.DefineType(name, TypeAttributes.Public | TypeAttributes.Class);
+        foreach (string method in methods) {
+            System.Reflection.Emit.MethodBuilder m = type.DefineMethod(
+                method, MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes);
+            System.Reflection.Emit.ILGenerator il = m.GetILGenerator();
+            // enough body to clear the triviality filter's IL floor.
+            il.DeclareLocal(typeof(int));
+            il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, 7);
+            il.Emit(System.Reflection.Emit.OpCodes.Stloc_0);
+            for (int i = 0; i < 8; i++) {
+                il.Emit(System.Reflection.Emit.OpCodes.Ldloc_0);
+                il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, i);
+                il.Emit(System.Reflection.Emit.OpCodes.Add);
+                il.Emit(System.Reflection.Emit.OpCodes.Stloc_0);
+            }
+            il.Emit(System.Reflection.Emit.OpCodes.Ldloc_0);
+            il.Emit(System.Reflection.Emit.OpCodes.Ret);
+        }
+        type.CreateType();
+    }
+
+    [Fact]
+    public void Disabled_null_filters_still_mean_nothing_and_unpatch_everything() {
+        Apply("RimObsTest.AutoFixtures.AutoTargets");
+        Drain();
+        PatchRegistry.Snapshot().Should().HaveCount(3);
+
+        AutoInstrumentRunner.ApplyFilters(null, ignore: null, autoMute: true, "test.owner", s_Here);
+        Drain();
+
+        PatchRegistry.Snapshot().Should().BeEmpty();
+    }
+
     private static void MuteThroughTheJudge(int sectionId) {
         for (int i = 0; i < AutoMute.SampleCount; i++)
             AutoMute.Observe(sectionId, 0);

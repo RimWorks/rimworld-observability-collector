@@ -161,10 +161,14 @@ public static class Program {
             builder.Services.AddHostedService<ParentProcessWatcher>();
         }
 
+        builder.Services.AddSingleton<Api.FrameStreamBroadcaster>();
+
         WebApplication app = builder.Build();
         app.UseOriginCheck(port);
         app.UseBearerAuth(token);
         MapApiEndpoints(app);
+        // resolve eagerly so the seal hook is wired before the first client asks for it.
+        app.Services.GetRequiredService<Api.FrameStreamBroadcaster>();
         return app;
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -37,7 +38,7 @@ internal static class SpinClock {
         s_Spinning ? Volatile.Read(ref s_Now) : Stopwatch.GetTimestamp();
 
     public static void Start() {
-        if (s_Thread != null || s_Disabled || Environment.ProcessorCount < MinCores)
+        if (s_Thread != null || s_Disabled || EffectiveCores() < MinCores)
             return;
 
         s_Now = Stopwatch.GetTimestamp();
@@ -70,6 +71,33 @@ internal static class SpinClock {
             s_Disabled = true;
             Stop();
         }
+    }
+
+    // ProcessorCount sees the host's cores inside a container; the cgroup quota is the real
+    // budget. a 6-cpu cap on a 32-core host must read as 6 or the spinner starves the game.
+    private static int EffectiveCores() {
+        try {
+            string path = "/sys/fs/cgroup/cpu.max";
+            if (File.Exists(path)) {
+                int quota = ParseCpuMax(File.ReadAllText(path));
+                if (quota > 0)
+                    return Math.Min(quota, Environment.ProcessorCount);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // no cgroup file or no permission: fall through to the raw core count.
+        }
+        return Environment.ProcessorCount;
+    }
+
+    /// <summary>Parses cgroup v2 "quota period" into whole cpus, or 0 when unlimited/garbage.</summary>
+    internal static int ParseCpuMax(string text) {
+        string[] parts = text.Trim().Split(' ');
+        if (parts.Length != 2 || parts[0] == "max")
+            return 0;
+        if (!long.TryParse(parts[0], out long quota) || !long.TryParse(parts[1], out long period) || period <= 0)
+            return 0;
+        return (int)(quota / period);
     }
 
     private static void Spin() {

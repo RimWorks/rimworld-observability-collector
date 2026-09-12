@@ -244,5 +244,6 @@
     "tip.settings.sessionName": "这次运行的名字。它会出现在会话列表和对比里，取一个下周还认得出来的名字。",
     "settings.readonly": "只读",
     "flamegraph.exportFrame": "导出帧",
-    "flamegraph.exportRing": "导出环"
+    "flamegraph.exportRing": "导出环",
+    "flamegraph.exportTimeline": "导出时间线"
 }

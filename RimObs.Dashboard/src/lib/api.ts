@@ -1,4 +1,9 @@
-import type { FrameResponse, FrameRangeResponse, BundleFramesResponse } from './frameTree';
+import type {
+    FrameResponse,
+    FrameRangeResponse,
+    FrameSummariesResponse,
+    BundleFramesResponse,
+} from './frameTree';
 import { MAX_WINDOW_FRAMES } from './frameSeries';
 
 export interface StatusResponse {
@@ -518,6 +523,10 @@ export const api = {
             `/api/v1/frames?count=${count}${from === undefined ? '' : `&from=${from}`}${
                 minDurUs > 0 ? `&min_dur_us=${minDurUs}` : ''
             }`,
+        ),
+    frameSummaries: (sections: number[] = []) =>
+        get<FrameSummariesResponse>(
+            `/api/v1/frames/summaries${sections.length > 0 ? `?sections=${sections.join(',')}` : ''}`,
         ),
     frameBaseline: (frames = 128) =>
         get<{ median_us: Record<string, number> }>(`/api/v1/frames/baseline?frames=${frames}`),

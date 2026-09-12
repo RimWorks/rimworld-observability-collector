@@ -14,8 +14,9 @@ internal static class AutoMute {
     /// <summary>Enabled Start/Stop pair, measured at 44-45 ns in game and 67-74 ns offline.</summary>
     public const long ScopeOverheadNanos = 75;
 
-    /// <summary>Calls observed before a section is judged once and never re-judged.</summary>
-    public const int SampleCount = 256;
+    /// <summary>Calls observed before a section is judged once and never re-judged. 64 keeps
+    /// the verdict honest while letting chatter die within a second of being patched.</summary>
+    public const int SampleCount = 64;
 
     /// <summary>Set once when auto-instrumentation submits its first batch. Never cleared.</summary>
     public static volatile bool Armed;
@@ -37,8 +38,9 @@ internal static class AutoMute {
 
     public static int JudgedCount => s_Judged;
 
-    /// <summary>How often the budget judge runs, in frames. ~5s at 60fps.</summary>
-    public const int JudgeWindowFrames = 300;
+    /// <summary>How often the budget judge runs, in frames. ~1s at 60fps, so the tick tax of
+    /// freshly patched chatter is clipped fast during the instrumentation ramp.</summary>
+    public const int JudgeWindowFrames = 60;
 
     private static long s_BudgetUsPerFrame = 1000;
 

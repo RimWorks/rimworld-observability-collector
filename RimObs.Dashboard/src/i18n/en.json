@@ -290,5 +290,6 @@
     "tip.settings.sessionName": "A name for this run. It shows in the session list and in comparisons, so give it something you would recognise next week.",
     "settings.readonly": "Read-only",
     "flamegraph.exportFrame": "Export frame",
-    "flamegraph.exportRing": "Export ring"
+    "flamegraph.exportRing": "Export ring",
+    "flamegraph.exportTimeline": "Export timeline"
 }

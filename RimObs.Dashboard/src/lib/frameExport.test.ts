@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildFrameExport, exportFileName } from './frameExport';
-import type { FrameData } from './frameTree';
+import { buildFrameExport, buildTimelineExport, exportFileName } from './frameExport';
+import type { FrameData, FrameSummariesResponse } from './frameTree';
 
 const FRAME: FrameData = {
     capture_ordinal: 7,
@@ -64,9 +64,36 @@ describe('buildFrameExport', () => {
     });
 });
 
+describe('buildTimelineExport', () => {
+    const SUMMARIES: FrameSummariesResponse = {
+        schema_version: 10,
+        stopwatch_frequency: 10_000_000,
+        frame_count: 2,
+        ordinals: [1, 2],
+        start_us: [0, 4000],
+        duration_us: [4100, 4200],
+        node_counts: [3000, 3100],
+        section_durations: { '10': [900, 950], '20': [0, 0] },
+        dropped: { pre_frame_samples: 1, late_samples: 2, library_ring_samples: 3 },
+    };
+
+    it('carries the rows through and names the summed sections', () => {
+        const names = new Map([[10, { name: 'Verse.TickManager.DoSingleTick', subsystem: null }]]);
+        const out = buildTimelineExport(SUMMARIES, names);
+
+        expect(out.kind).toBe('timeline');
+        expect(out.ordinals).toEqual([1, 2]);
+        expect(out.section_durations['10']).toEqual([900, 950]);
+        expect(out.sections['10'].name).toBe('Verse.TickManager.DoSingleTick');
+        expect(out.sections['20'].name).toBe('#20');
+        expect(out.dropped.late_samples).toBe(2);
+    });
+});
+
 describe('exportFileName', () => {
-    it('names a frame export by its ordinal and a ring export by kind', () => {
+    it('names a frame export by its ordinal and other kinds by kind', () => {
         expect(exportFileName('frame', 4321)).toMatch(/^rimobs-frame-4321-/);
         expect(exportFileName('ring', null)).toMatch(/^rimobs-ring-/);
+        expect(exportFileName('timeline', null)).toMatch(/^rimobs-timeline-/);
     });
 });

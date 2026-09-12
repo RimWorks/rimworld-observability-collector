@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
+using System.Threading;
 using RimWorks.RimObs.Library.Control;
 using RimWorks.RimObs.Patching;
 using RimWorks.RimObs.Profile;
@@ -17,9 +19,26 @@ internal static class AutoInstrumentRunner {
     public const double BudgetMillis = 4.0;
 
     private static MethodInfo[]? s_Pending;
-    private static int s_Next;
     private static string s_OwnerId = string.Empty;
     private static int s_MaxTargets = AutoInstrumentScanner.DefaultMaxTargets;
+
+    // one dedicated patch thread: concord serializes concurrent applies (a pool ran 0.23x),
+    // and off-main the pump costs the frame nothing. list mutations stay on the main thread.
+    private static Thread? s_Worker;
+    private static readonly ManualResetEventSlim s_WorkerStop = new(false);
+    private static readonly AutoResetEvent s_WorkArrived = new(false);
+    private static readonly object s_WorkGate = new object();
+    private static WorkBatch? s_WorkerBatch;
+    private static int s_Generation;
+    private static int s_InFlight;
+    private static readonly ConcurrentQueue<WorkResult> s_Results = new();
+    private static MethodPattern[] s_CurrentIncludes = [];
+    private static MethodPattern[] s_CurrentExcludes = [];
+
+    private sealed record WorkBatch(MethodInfo[] Targets, string OwnerId, int Generation);
+
+    private sealed record WorkResult(
+        MethodInfo Method, int PatchId, int SectionId, bool Active, bool WasInCatalog, int Generation);
 
     // what this runner patched, so a later filter change can undo its own work and nobody
     // else's. a patch a user applied by hand through the control endpoint never lands here.
@@ -71,7 +90,10 @@ internal static class AutoInstrumentRunner {
     public static int Muted => AutoMute.MutedCount;
 
     public static int Pending =>
-        (s_Pending is null ? 0 : s_Pending.Length - s_Next) + (s_Removing.Count - s_RemoveNext);
+        (s_Pending is null ? 0 : s_Pending.Length)
+        + Volatile.Read(ref s_InFlight)
+        + s_Results.Count
+        + (s_Removing.Count - s_RemoveNext);
 
     /// <summary>Scans and queues in one call. The scan is blocking; the patching is not.</summary>
     public static AutoInstrumentPlan ApplyFilters(
@@ -79,6 +101,8 @@ internal static class AutoInstrumentRunner {
     ) {
         MethodPattern[] patterns = Combine(filters, ignore);
         MethodPattern.Split(patterns, out MethodPattern[] includes, out MethodPattern[] excludes);
+        s_CurrentIncludes = includes;
+        s_CurrentExcludes = excludes;
 
         QueueStaleRemovals(includes, excludes);
         AutoInstrumentPlan plan = AutoInstrumentScanner.Scan(
@@ -105,6 +129,15 @@ internal static class AutoInstrumentRunner {
     /// <summary>Include lines and ignore lines as one list. Ignore lines are forced negative.</summary>
     private static MethodPattern[] Combine(string? filters, string? ignore) {
         MethodPattern[] included = MethodPattern.ParseAll(filters);
+        // enabled (non-null) with no positive line means everything: the default filter set
+        // ships exclusions only. null stays "off".
+        if (filters is not null && !HasPositive(included)) {
+            MethodPattern[] star = MethodPattern.ParseAll("*");
+            MethodPattern[] widened = new MethodPattern[included.Length + star.Length];
+            star.CopyTo(widened, 0);
+            included.CopyTo(widened, star.Length);
+            included = widened;
+        }
         MethodPattern[] excluded = MethodPattern.ParseAll(ignore, negate: true);
         if (excluded.Length == 0)
             return included;
@@ -184,6 +217,14 @@ internal static class AutoInstrumentRunner {
         }
     }
 
+    private static bool HasPositive(MethodPattern[] patterns) {
+        for (int i = 0; i < patterns.Length; i++) {
+            if (!patterns[i].Negated)
+                return true;
+        }
+        return false;
+    }
+
     private static bool StillWanted(MethodInfo method, MethodPattern[] includes, MethodPattern[] excludes) {
         if (includes.Length == 0)
             return false;
@@ -215,7 +256,8 @@ internal static class AutoInstrumentRunner {
         Refused = 0;
 
         s_OwnerId = ownerId;
-        s_Next = 0;
+        // a bumped generation tells the worker to abandon whatever older batch it holds.
+        Interlocked.Increment(ref s_Generation);
         s_Pending = plan.Targets.Count == 0 ? null : plan.Targets.ToArray();
 
         AutoMute.Enabled = autoMute;
@@ -235,7 +277,19 @@ internal static class AutoInstrumentRunner {
         }
 
         MethodInfo[]? pending = s_Pending;
-        if (pending is null && s_RemoveNext == s_Removing.Count)
+        if (pending is not null) {
+            s_Pending = null;
+            Interlocked.Add(ref s_InFlight, pending.Length);
+            lock (s_WorkGate) {
+                s_WorkerBatch = new WorkBatch(pending, s_OwnerId, s_Generation);
+            }
+            EnsureWorker();
+            s_WorkArrived.Set();
+        }
+
+        DrainWorkerResults();
+
+        if (s_RemoveNext == s_Removing.Count)
             return;
 
         long deadline = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * BudgetMillis / 1000.0);
@@ -247,37 +301,77 @@ internal static class AutoInstrumentRunner {
         }
         s_Removing.Clear();
         s_RemoveNext = 0;
-
-        if (pending is null)
-            return;
-
-        while (s_Next < pending.Length) {
-            PatchOne(pending[s_Next++]);
-            if (Stopwatch.GetTimestamp() >= deadline)
-                return;
-        }
-
-        s_Pending = null;
     }
 
-    private static void PatchOne(MethodInfo method) {
-        try {
-            // a catalog entry we did not leave behind means someone else owns this method, so
-            // patch it but never revert it.
-            bool foreign = SectionCatalog.TryGetSectionId(method, out int _) && !s_Reverted.Remove(method);
-            ApplyResult result = PatchRegistry.Apply(s_OwnerId, method, MethodResolver.BuildSignature(method));
-            if (result.Status != PatchStatus.Active) {
-                Refused++;
-                return;
+    private static void EnsureWorker() {
+        if (s_Worker is not null)
+            return;
+        s_Worker = new Thread(WorkerLoop) {
+            Name = "RimObs.PatchPump",
+            IsBackground = true,
+        };
+        s_Worker.Start();
+    }
+
+    private static void WorkerLoop() {
+        while (!s_WorkerStop.IsSet) {
+            s_WorkArrived.WaitOne();
+            WorkBatch? batch;
+            lock (s_WorkGate) {
+                batch = s_WorkerBatch;
+                s_WorkerBatch = null;
             }
-            Instrumented++;
-            if (!foreign)
-                s_Applied.Add(new AppliedPatch(method, result.PatchId, result.SectionId));
-            AutoMute.Watch(result.SectionId);
+            if (batch is null)
+                continue;
+
+            MethodInfo[] targets = batch.Targets;
+            for (int i = 0; i < targets.Length; i++) {
+                if (Volatile.Read(ref s_Generation) != batch.Generation) {
+                    Interlocked.Add(ref s_InFlight, -(targets.Length - i));
+                    break;
+                }
+                PatchOneOnWorker(targets[i], batch.OwnerId, batch.Generation);
+                Interlocked.Decrement(ref s_InFlight);
+            }
+        }
+    }
+
+    private static void PatchOneOnWorker(MethodInfo method, string ownerId, int generation) {
+        try {
+            bool wasInCatalog = SectionCatalog.TryGetSectionId(method, out int _);
+            ApplyResult result = PatchRegistry.Apply(ownerId, method, MethodResolver.BuildSignature(method));
+            s_Results.Enqueue(new WorkResult(
+                method, result.PatchId, result.SectionId,
+                result.Status == PatchStatus.Active, wasInCatalog, generation));
         }
         catch (System.Exception) {
             // one unpatchable target must not stop the run. the count is the user-facing signal.
-            Refused++;
+            s_Results.Enqueue(new WorkResult(method, 0, -1, Active: false, WasInCatalog: false, generation));
+        }
+    }
+
+    private static void DrainWorkerResults() {
+        while (s_Results.TryDequeue(out WorkResult? result)) {
+            if (!result.Active) {
+                Refused++;
+                continue;
+            }
+
+            Instrumented++;
+            // a catalog entry we did not leave behind means someone else owns this method, so
+            // patch it but never revert it.
+            bool foreign = result.WasInCatalog && !s_Reverted.Remove(result.Method);
+            if (result.Generation != s_Generation
+                && !StillWanted(result.Method, s_CurrentIncludes, s_CurrentExcludes)) {
+                // landed after the filters moved on: physically patched, so queue the undo.
+                s_Removing.Add(result.PatchId);
+                s_Reverted.Add(result.Method);
+                continue;
+            }
+
+            if (!foreign)
+                s_Applied.Add(new AppliedPatch(result.Method, result.PatchId, result.SectionId));
+            AutoMute.Watch(result.SectionId);
         }
     }
 
@@ -292,7 +386,14 @@ internal static class AutoInstrumentRunner {
     internal static void ResetForTests() {
         AutoInstrumentRequest.ResetForTests();
         s_Pending = null;
-        s_Next = 0;
+        // the bump makes a mid-batch worker abandon the rest; then wait for it to let go.
+        Interlocked.Increment(ref s_Generation);
+        SpinWait.SpinUntil(() => Volatile.Read(ref s_InFlight) == 0, 2000);
+        while (s_Results.TryDequeue(out WorkResult? _)) {
+            // drop results from the abandoned batch; the next test starts clean.
+        }
+        s_CurrentIncludes = [];
+        s_CurrentExcludes = [];
         s_OwnerId = string.Empty;
         s_Applied.Clear();
         s_Removing.Clear();

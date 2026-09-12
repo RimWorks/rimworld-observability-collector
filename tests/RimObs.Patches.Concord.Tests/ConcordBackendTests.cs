@@ -264,6 +264,60 @@ public sealed class ConcordBackendTests : IDisposable {
         }
     }
 
+    // the auto-instrument pump wants worker threads; concord has to survive concurrent Patch
+    // calls and the patched methods have to still compute the right thing.
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void ParallelPatchIsSafeAndReportsItsSpeedup() {
+        SectionCatalog.RegisterCorePack();
+        const int warm = 8;
+        const int n = 48;
+        MethodInfo[] methods = BuildBenchTargets(warm + n * 2);
+
+        for (int i = 0; i < warm; i++)
+            _backend.Patch(methods[i]);
+
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = warm; i < warm + n; i++)
+            _backend.Patch(methods[i]);
+        sw.Stop();
+        double sequentialUs = sw.Elapsed.TotalMilliseconds * 1000.0 / n;
+
+        sw.Restart();
+        System.Threading.Tasks.Parallel.For(0, 4, lane => {
+            for (int i = warm + n + lane; i < warm + n * 2; i += 4)
+                _backend.Patch(methods[i]);
+        });
+        sw.Stop();
+        double parallelUs = sw.Elapsed.TotalMilliseconds * 1000.0 / n;
+
+        for (int i = 0; i < warm + n * 2; i++)
+            methods[i].Invoke(null, null).Should().Be(i, "a parallel patch must not corrupt the body");
+
+        Console.WriteLine(
+            $"concord patch: sequential {sequentialUs:F1} us, 4-thread wall {parallelUs:F1} us, "
+            + $"speedup {sequentialUs / parallelUs:F2}x");
+    }
+
+    private static MethodInfo[] BuildBenchTargets(int count) {
+        System.Reflection.Emit.AssemblyBuilder asm = System.Reflection.Emit.AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"ConcordBench_{Guid.NewGuid():N}"), System.Reflection.Emit.AssemblyBuilderAccess.Run);
+        System.Reflection.Emit.TypeBuilder type = asm.DefineDynamicModule("Main")
+            .DefineType("BenchTargets", TypeAttributes.Public | TypeAttributes.Class);
+        for (int i = 0; i < count; i++) {
+            System.Reflection.Emit.MethodBuilder m = type.DefineMethod(
+                $"Target{i}", MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes);
+            System.Reflection.Emit.ILGenerator il = m.GetILGenerator();
+            il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, i);
+            il.Emit(System.Reflection.Emit.OpCodes.Ret);
+        }
+        Type built = type.CreateType();
+        MethodInfo[] methods = new MethodInfo[count];
+        for (int i = 0; i < count; i++)
+            methods[i] = built.GetMethod($"Target{i}")!;
+        return methods;
+    }
+
     // regression: CONC123. an async target's body compiles into a generated MoveNext, and
     // Concord refuses At.Transpiler on the declared method rather than time its setup.
     [Fact]

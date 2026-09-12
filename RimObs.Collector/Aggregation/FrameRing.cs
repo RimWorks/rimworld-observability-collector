@@ -140,7 +140,11 @@ public sealed class FrameRing {
         }
     }
 
+    /// <summary>Fires after the lock whenever a seal advances. Must be cheap; the receive path calls it.</summary>
+    public Action? FrameSealed { get; set; }
+
     public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L, int threadId = 0, bool mainLane = true) {
+        bool sealedAdvanced = false;
         lock (_gate) {
             if (frameOrdinal <= 0) {
                 _preFrameSamples++;
@@ -166,16 +170,25 @@ public sealed class FrameRing {
                 open.HasThreadIds = true;
             if (frameOrdinal > _newestOrdinal) {
                 _newestOrdinal = frameOrdinal;
+                int before = _sealedThrough;
                 SealThrough(_newestOrdinal - Math.Max(_window, _fpsFloor));
+                sealedAdvanced = _sealedThrough != before;
             }
         }
+        if (sealedAdvanced)
+            FrameSealed?.Invoke();
     }
 
     /// <summary>Seals every open frame, for teardown. The only reader-facing way to move the watermark.</summary>
     public void Flush() {
+        bool sealedAdvanced;
         lock (_gate) {
+            int before = _sealedThrough;
             SealThrough(int.MaxValue);
+            sealedAdvanced = _sealedThrough != before;
         }
+        if (sealedAdvanced)
+            FrameSealed?.Invoke();
     }
 
     /// <summary>

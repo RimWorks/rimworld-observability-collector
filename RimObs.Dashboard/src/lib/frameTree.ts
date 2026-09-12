@@ -66,6 +66,19 @@ export interface FrameRangeResponse {
     dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
 }
 
+export interface FrameSummariesResponse {
+    schema_version: number;
+    stopwatch_frequency: number;
+    frame_count: number;
+    ordinals: number[];
+    start_us: number[];
+    duration_us: number[];
+    node_counts: number[];
+    /** per requested section id, its summed duration per frame, aligned with ordinals. */
+    section_durations: Record<string, number[]>;
+    dropped: { pre_frame_samples: number; late_samples: number; library_ring_samples: number };
+}
+
 export interface BundleFramesResponse {
     schema_version: number;
     session_id: string;
