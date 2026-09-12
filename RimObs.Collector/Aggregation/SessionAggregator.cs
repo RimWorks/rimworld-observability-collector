@@ -17,7 +17,11 @@ public sealed class SessionAggregator {
 
     // the frame anchor: navigation may only land on frames this section reached.
     private const string FrameRootSection = "Verse.Root_Play.Update";
-    private volatile int _frameRootSectionId;
+    private const string TickSection = "Verse.TickManager.DoSingleTick";
+    private const int NoSection = -1;
+    private volatile int _frameRootSectionId = NoSection;
+    private volatile int _tickSectionId = NoSection;
+    private long _tickEmaTicksBits;
     private readonly ISessionPersister? _persister;
     private SessionMeta? _meta;
     private PatchConflictRecord[] _patchConflicts = [];
@@ -73,6 +77,15 @@ public sealed class SessionAggregator {
     public double LatestFps => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _latestFpsBits));
     public long LatestTpsFpsTick => Interlocked.Read(ref _latestTpsFpsTick);
 
+    /// <summary>Smoothed DoSingleTick duration in stopwatch ticks; 0 until the section reports.</summary>
+    public double TickEmaTicks => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _tickEmaTicksBits));
+
+    private void UpdateTickEma(long elapsedTicks) {
+        double previous = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _tickEmaTicksBits));
+        double next = previous <= 0 ? elapsedTicks : (previous * 0.95) + (elapsedTicks * 0.05);
+        Interlocked.Exchange(ref _tickEmaTicksBits, BitConverter.DoubleToInt64Bits(next));
+    }
+
     // Each of these copies the whole dictionary, so they are methods, not properties.
     public IReadOnlyCollection<SectionStats> SnapshotSections() => _sections.Values.ToArray();
     public IReadOnlyCollection<MetricStats> SnapshotMetrics() => _metrics.Values.ToArray();
@@ -102,7 +115,7 @@ public sealed class SessionAggregator {
         bool changed = previous != null && previous != meta.SessionId;
         if (changed) {
             _frames.Clear();
-            _frameRootSectionId = 0;
+            _frameRootSectionId = NoSection;
             // a name belongs to the session it was given to, never to the next one.
             SessionName = string.Empty;
         }
@@ -122,8 +135,11 @@ public sealed class SessionAggregator {
             SectionStats stats = _sections.GetOrAdd(id, key => new SectionStats { SectionId = key });
             stats.Name = name;
             stats.Subsystem = subsystem;
+            stats.Assembly = i < batch.Assemblies.Length ? batch.Assemblies[i] : null;
             if (name == FrameRootSection)
                 _frameRootSectionId = id;
+            if (name == TickSection)
+                _tickSectionId = id;
             SectionRegistrationObserver?.Invoke(id, name);
         }
     }
@@ -256,6 +272,8 @@ public sealed class SessionAggregator {
             UpdateMin(ref stats.MinElapsedTicks, elapsed);
             UpdateMax(ref stats.MaxElapsedTicks, elapsed);
             stats.Distribution.Record(nowEpochSeconds, elapsed);
+            if (id == _tickSectionId && _tickSectionId != NoSection)
+                UpdateTickEma(elapsed);
             int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
             int parentNode = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
             // a nested child is already inside its parent's elapsed, so only roots add busy time.
@@ -273,7 +291,7 @@ public sealed class SessionAggregator {
             // of thread data; only a sample from a KNOWN non-main lane is a worker's.
             bool fromMain = laneId == 0 || mainLane == 0 || laneId == mainLane;
             // once the frame root is known, only Root_Play.Update itself anchors a frame.
-            bool anchor = _frameRootSectionId != 0 ? id == _frameRootSectionId : fromMain;
+            bool anchor = _frameRootSectionId != NoSection ? id == _frameRootSectionId : fromMain;
             _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, laneId, anchor);
         }
         Interlocked.Add(ref _totalSamples, n);

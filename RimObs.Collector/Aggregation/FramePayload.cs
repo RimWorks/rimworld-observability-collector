@@ -9,15 +9,17 @@ public static class FramePayload {
         int n = frame.NodeCount;
         double[] startUs = new double[n];
         double[] durUs = new double[n];
+        // one decimal: timer resolution is 100ns anyway, and shortest-roundtrip doubles like
+        // 194435307.20000002 tripled the json size of every hot array.
         for (int i = 0; i < n; i++) {
-            startUs[i] = (frame.NodeStartTicks[i] - anchor) * usPerTick;
-            durUs[i] = frame.NodeElapsedTicks[i] * usPerTick;
+            startUs[i] = System.Math.Round((frame.NodeStartTicks[i] - anchor) * usPerTick, 1);
+            durUs[i] = System.Math.Round(frame.NodeElapsedTicks[i] * usPerTick, 1);
         }
         return new {
             capture_ordinal = frame.CaptureOrdinal,
-            start_us = (frame.StartTicks - anchor) * usPerTick,
-            end_us = (frame.EndTicks - anchor) * usPerTick,
-            duration_us = frame.DurationTicks * usPerTick,
+            start_us = System.Math.Round((frame.StartTicks - anchor) * usPerTick, 1),
+            end_us = System.Math.Round((frame.EndTicks - anchor) * usPerTick, 1),
+            duration_us = System.Math.Round(frame.DurationTicks * usPerTick, 1),
             node_count = n,
             nodes = new {
                 section_ids = frame.SectionIds,

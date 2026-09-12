@@ -674,6 +674,42 @@ public sealed class SessionAggregatorTests {
         stats.SampleCount.Should().Be(1);
         stats.TotalElapsedTicks.Should().Be(200);
     }
+
+    [Fact]
+    public void Tick_ema_tracks_the_tick_section() {
+        SessionAggregator agg = new();
+        agg.OnSectionRegistrations(new() {
+            SectionIds = [7],
+            Names = ["Verse.TickManager.DoSingleTick"],
+        });
+
+        agg.OnSectionBatch(new() {
+            SectionIds = [7],
+            StartTimestamps = [100],
+            ElapsedTicks = [500],
+        });
+
+        agg.TickEmaTicks.Should().Be(500);
+    }
+
+    // regression: the tick id was guarded with a 0 sentinel, so a session where DoSingleTick
+    // registered first (id 0) never updated the ema and tick_ms stayed null in the vitals.
+    [Fact]
+    public void Tick_ema_still_updates_when_the_tick_section_registers_as_id_zero() {
+        SessionAggregator agg = new();
+        agg.OnSectionRegistrations(new() {
+            SectionIds = [0],
+            Names = ["Verse.TickManager.DoSingleTick"],
+        });
+
+        agg.OnSectionBatch(new() {
+            SectionIds = [0],
+            StartTimestamps = [100],
+            ElapsedTicks = [500],
+        });
+
+        agg.TickEmaTicks.Should().Be(500);
+    }
 }
 
 public sealed class SessionAggregatorSubsystemTests {

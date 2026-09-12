@@ -313,8 +313,13 @@ public static class SessionsEndpoints {
 
     private static IResult GetCurrentGc(SessionAggregator aggregator, int? limit) {
         int take = QueryLimit.Clamp(limit, DefaultGcEventLimit, MaxGcEventLimit);
+        return Results.Ok(BuildGcPayload(aggregator, take));
+    }
+
+    /// <summary>Shared by the endpoint and the SSE slow lane, so the shapes cannot drift.</summary>
+    public static object BuildGcPayload(SessionAggregator aggregator, int take) {
         GcEventRecord[] snapshot = aggregator.SnapshotGcEvents(take);
-        return Results.Ok(new {
+        return new {
             schema_version = SchemaVersion.Current,
             total_events = aggregator.TotalGcEvents,
             events = snapshot.Select(e => new {
@@ -327,7 +332,7 @@ public static class SessionsEndpoints {
                 allocation_rate_bpm = e.AllocationRateBytesPerMinute,
                 frame_ordinal = e.FrameOrdinal,
             }).ToArray(),
-        });
+        };
     }
 
     private static IResult GetCurrentMetrics(SessionAggregator aggregator) {
@@ -364,33 +369,41 @@ public static class SessionsEndpoints {
     }
 
     private static IResult GetCurrentCallTree(SessionAggregator aggregator, int? depth, int? top) {
-        double nsPerTick = NsPerTick(aggregator.Meta);
         int depthCap = depth is int d && d > 0 ? Math.Min(d, MaxCallTreeDepth) : CallTreeBuilder.DefaultDepthCap;
         int topN = top is int t && t > 0 ? Math.Min(t, MaxCallTreeTopN) : CallTreeBuilder.DefaultTopN;
+        return Results.Ok(BuildCallTreePayload(aggregator, depthCap, topN));
+    }
 
+    /// <summary>Shared by the endpoint and the SSE slow lane, so the shapes cannot drift.</summary>
+    public static object BuildCallTreePayload(SessionAggregator aggregator, int depthCap, int topN) {
+        double nsPerTick = NsPerTick(aggregator.Meta);
         List<SectionStats> sections = [.. aggregator.SnapshotSections()];
         Dictionary<int, string> names = sections.ToDictionary(s => s.SectionId, s => s.Name);
         Dictionary<int, string?> subsystems = sections.ToDictionary(s => s.SectionId, s => s.Subsystem);
         IReadOnlyList<CallTreeNode> roots = CallTreeBuilder.Build(
             aggregator.SnapshotCallEdges(), names, nsPerTick, depthCap, topN, subsystems);
 
-        return Results.Ok(new {
+        return new {
             schema_version = SchemaVersion.Current,
             depth_cap = depthCap,
             top_n = topN,
             roots = roots.Select(MapCallNode).ToArray(),
-        });
+        };
     }
 
-    private static IResult GetSections(SessionAggregator aggregator) {
-        return Results.Ok(new {
+    private static IResult GetSections(SessionAggregator aggregator) => Results.Ok(BuildSectionsPayload(aggregator));
+
+    /// <summary>Shared by the endpoint and the SSE slow lane, so the shapes cannot drift.</summary>
+    public static object BuildSectionsPayload(SessionAggregator aggregator) {
+        return new {
             schema_version = SchemaVersion.Current,
             sections = aggregator.SnapshotSections().Select(s => new {
                 id = s.SectionId,
                 name = s.Name,
                 subsystem = s.Subsystem,
+                assembly = s.Assembly,
             }).ToArray(),
-        });
+        };
     }
 
     private static double NsPerTick(SessionMeta? meta) => TickConverter.NsPerTick(meta);

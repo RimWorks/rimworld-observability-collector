@@ -15,7 +15,8 @@ public sealed record FrameSnapshot(
     long[] NodeStartTicks,
     long[] NodeElapsedTicks,
     long[] NodeAllocBytes,
-    int[] ThreadIds) {
+    int[] ThreadIds,
+    long RootAllocBytes = 0) {
     public int NodeCount => SectionIds.Length;
 
     public long DurationTicks => EndTicks - StartTicks;
@@ -247,17 +248,17 @@ public sealed class FrameRing {
     }
 
     /// <summary>One (ordinal, duration) pair per frame, newest last, for the frame strip.</summary>
-    public (int Ordinal, long DurationTicks)[] SnapshotStrip(int count) {
+    public (int Ordinal, long DurationTicks, long AllocBytes)[] SnapshotStrip(int count) {
         lock (_gate) {
             FrameSnapshot[] view = View();
             int take = Math.Min(count <= 0 ? view.Length : count, view.Length);
             if (take == 0)
                 return [];
-            (int, long)[] strip = new (int, long)[take];
+            (int, long, long)[] strip = new (int, long, long)[take];
             // walk the newest `take`, so a strip narrower than the ring shows the recent end.
             for (int i = 0; i < take; i++) {
                 FrameSnapshot frame = view[view.Length - take + i];
-                strip[i] = (frame.CaptureOrdinal, frame.DurationTicks);
+                strip[i] = (frame.CaptureOrdinal, frame.DurationTicks, frame.RootAllocBytes);
             }
             return strip;
         }
@@ -470,6 +471,13 @@ public sealed class FrameRing {
                     end = nodeEnd;
             }
 
+            // roots only: a child's bytes are already inside its parent's scope delta.
+            long rootAlloc = 0;
+            for (int i = 0; i < SectionIds.Count; i++) {
+                if (ParentIds[i] < 0)
+                    rootAlloc += AllocBytes[i];
+            }
+
             return _snapshot = new FrameSnapshot(
                 ordinal,
                 start,
@@ -482,7 +490,8 @@ public sealed class FrameRing {
                 [.. ElapsedTicks],
                 [.. AllocBytes],
                 // a v8 sender stamps no ids, so the lane array stays empty instead of all zeros.
-                HasThreadIds ? [.. ThreadIds] : []);
+                HasThreadIds ? [.. ThreadIds] : [],
+                rootAlloc);
         }
     }
 }

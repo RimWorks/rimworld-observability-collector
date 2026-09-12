@@ -20,7 +20,9 @@ public static class FramesEndpoints {
             // duration floor for wide selections: nodes a zoomed-out view cannot draw are
             // most of the payload, and serializing them is what made a range take seconds.
             long minDurTicks = min_dur_us is > 0 && usPerTick > 0 ? (long)(min_dur_us.Value / usPerTick) : 0L;
-            FrameSnapshot[] frames = aggregator.Frames.Range(from ?? -1, QueryLimit.Clamp(count, 64, 256));
+            // the max is the ring itself: a whole-ring export is a legitimate ask, and 256 silently
+            // shipped 13% of the history while looking complete.
+            FrameSnapshot[] frames = aggregator.Frames.Range(from ?? -1, QueryLimit.Clamp(count, 64, aggregator.Frames.Capacity));
             object[] mapped = new object[frames.Length];
             for (int i = 0; i < frames.Length; i++)
                 mapped[i] = FramePayload.Map(FrameLod.Filter(frames[i], minDurTicks), anchor, usPerTick);
@@ -42,17 +44,35 @@ public static class FramesEndpoints {
 
         // push instead of poll: one `frame` event per coalesce window, same payload as
         // /frames/latest, comment keepalives while the game is idle.
-        endpoints.MapGet("/api/v1/stream", async (HttpContext context, FrameStreamBroadcaster broadcaster) => {
+        endpoints.MapGet("/api/v1/stream", async (HttpContext context, FrameStreamBroadcaster broadcaster, string? lanes) => {
             context.Response.Headers.ContentType = "text/event-stream";
             context.Response.Headers.CacheControl = "no-cache";
-            System.Threading.Channels.ChannelReader<string> reader = broadcaster.Subscribe();
+            string[]? requested = string.IsNullOrWhiteSpace(lanes)
+                ? null
+                : lanes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            bool Wants(string lane) => requested is null || Array.IndexOf(requested, lane) >= 0;
+            System.Threading.Channels.ChannelReader<(string Name, string Json)> reader = broadcaster.Subscribe(requested);
             try {
-                await WriteEvent(context, broadcaster.BuildEventJson());
+                if (Wants("frame"))
+                    await WriteEvent(context, "frame", broadcaster.BuildEventJson());
+                if (Wants("status"))
+                    await WriteEvent(context, "status", broadcaster.BuildStatusJson());
+                if (Wants("call_tree"))
+                    await WriteEvent(context, "call_tree", broadcaster.BuildCallTreeJson());
+                if (Wants("gc"))
+                    await WriteEvent(context, "gc", broadcaster.BuildGcJson());
+                if (Wants("sections"))
+                    await WriteEvent(context, "sections", broadcaster.BuildSectionsJson());
+                if (Wants("baseline"))
+                    await WriteEvent(context, "baseline", broadcaster.BuildBaselineJson());
+                if (Wants("auto") && broadcaster.BuildAutoJsonOrNull() is { } auto)
+                    await WriteEvent(context, "auto", auto);
                 while (!context.RequestAborted.IsCancellationRequested) {
-                    Task<string> next = reader.ReadAsync(context.RequestAborted).AsTask();
+                    Task<(string Name, string Json)> next = reader.ReadAsync(context.RequestAborted).AsTask();
                     Task winner = await Task.WhenAny(next, Task.Delay(10_000, context.RequestAborted));
                     if (winner == next) {
-                        await WriteEvent(context, await next);
+                        (string name, string json) = await next;
+                        await WriteEvent(context, name, json);
                     }
                     else {
                         await context.Response.WriteAsync(": keepalive\n\n", context.RequestAborted);
@@ -151,19 +171,8 @@ public static class FramesEndpoints {
 
         // its own endpoint on a slow poll: 128 frames of nodes is far too much work to put
         // on /frames/latest at 10/s.
-        endpoints.MapGet("/api/v1/frames/baseline", (SessionAggregator aggregator, int? frames) => {
-            SessionMeta? meta = aggregator.Meta;
-            double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
-            Dictionary<int, long> medians = aggregator.Frames.BaselineMedians(frames ?? 128);
-            Dictionary<string, double> mapped = new(medians.Count);
-            foreach (KeyValuePair<int, long> entry in medians)
-                mapped[entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] = entry.Value * usPerTick;
-            return Results.Ok(new {
-                schema_version = SchemaVersion.Current,
-                frames = frames ?? 128,
-                median_us = mapped,
-            });
-        });
+        endpoints.MapGet("/api/v1/frames/baseline", (SessionAggregator aggregator, int? frames) =>
+            Results.Ok(BuildBaselinePayload(aggregator, frames ?? 128)));
 
         return endpoints;
     }
@@ -173,10 +182,13 @@ public static class FramesEndpoints {
     private static object? MapVitals(SessionAggregator aggregator) {
         if (!aggregator.HasTpsFps)
             return null;
+        double usPerTick = TickConverter.NsPerTick(aggregator.Meta) / 1000.0;
+        double emaTicks = aggregator.TickEmaTicks;
         return new {
             tps = aggregator.LatestTps,
             fps = aggregator.LatestFps,
             tick = aggregator.LatestTpsFpsTick,
+            tick_ms = emaTicks > 0 ? emaTicks * usPerTick / 1000.0 : (double?)null,
         };
     }
 
@@ -196,9 +208,24 @@ public static class FramesEndpoints {
         return mapped;
     }
 
-    private static async Task WriteEvent(HttpContext context, string json) {
-        await context.Response.WriteAsync($"event: frame\ndata: {json}\n\n", context.RequestAborted);
+    private static async Task WriteEvent(HttpContext context, string name, string json) {
+        await context.Response.WriteAsync($"event: {name}\ndata: {json}\n\n", context.RequestAborted);
         await context.Response.Body.FlushAsync(context.RequestAborted);
+    }
+
+    /// <summary>Shared by the endpoint and the SSE slow lane, so the shapes cannot drift.</summary>
+    public static object BuildBaselinePayload(SessionAggregator aggregator, int frames) {
+        SessionMeta? meta = aggregator.Meta;
+        double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
+        Dictionary<int, long> medians = aggregator.Frames.BaselineMedians(frames);
+        Dictionary<string, double> mapped = new(medians.Count);
+        foreach (KeyValuePair<int, long> entry in medians)
+            mapped[entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] = entry.Value * usPerTick;
+        return new {
+            schema_version = SchemaVersion.Current,
+            frames,
+            median_us = mapped,
+        };
     }
 
     /// <summary>The /frames/latest shape. The SSE stream sends the same payload per event.</summary>
@@ -237,13 +264,15 @@ public static class FramesEndpoints {
     }
 
     private static object MapStrip(SessionAggregator aggregator, double usPerTick, int count) {
-        (int Ordinal, long DurationTicks)[] strip = aggregator.Frames.SnapshotStrip(count);
+        (int Ordinal, long DurationTicks, long AllocBytes)[] strip = aggregator.Frames.SnapshotStrip(count);
         int[] ordinals = new int[strip.Length];
         double[] durations = new double[strip.Length];
+        long[] allocs = new long[strip.Length];
         for (int i = 0; i < strip.Length; i++) {
             ordinals[i] = strip[i].Ordinal;
-            durations[i] = strip[i].DurationTicks * usPerTick;
+            durations[i] = Math.Round(strip[i].DurationTicks * usPerTick, 1);
+            allocs[i] = strip[i].AllocBytes;
         }
-        return new { ordinals, durations_us = durations };
+        return new { ordinals, durations_us = durations, alloc_bytes = allocs };
     }
 }

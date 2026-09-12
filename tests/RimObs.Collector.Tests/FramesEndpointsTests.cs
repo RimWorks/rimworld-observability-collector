@@ -117,6 +117,83 @@ public sealed class FramesEndpointsTests {
         }
     }
 
+    // the dashboard must never poll for aggregate views; status and call_tree ride the pipe.
+    [Fact]
+    public async Task Stream_opens_with_status_and_call_tree_events() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-multiplex-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-multiplex",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            using HttpResponseMessage res = await client.GetAsync(
+                $"http://127.0.0.1:{port}/api/v1/stream", HttpCompletionOption.ResponseHeadersRead);
+            using var reader = new System.IO.StreamReader(await res.Content.ReadAsStreamAsync());
+
+            HashSet<string> seen = [];
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && (!seen.Contains("status") || !seen.Contains("call_tree"))) {
+                string? line = await reader.ReadLineAsync();
+                if (line is null)
+                    break;
+                if (line.StartsWith("event: "))
+                    seen.Add(line["event: ".Length..]);
+            }
+
+            seen.Should().Contain(["frame", "status", "call_tree"]);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Vitals_carry_the_smoothed_tick_cost_once_the_tick_section_reports() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-tickms-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-tickms",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnTpsFps(new TpsFpsBatch { Tps = 60, Fps = 240, Tick = 1 });
+        aggregator.OnSectionRegistrations(new SectionRegistrationsBatch {
+            SectionIds = [7],
+            Names = ["Verse.TickManager.DoSingleTick"],
+            Subsystems = ["tick"],
+        });
+        // 9000 ticks at 10MHz = 0.9ms per tick.
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [7],
+            ParentIds = [-1],
+            StartTimestamps = [100L],
+            ElapsedTicks = [9000L],
+            FrameOrdinals = [1],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement vitals = doc.RootElement.GetProperty("vitals");
+
+            vitals.GetProperty("tick_ms").GetDouble().Should().BeApproximately(0.9, 0.01);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
     [Fact]
     public async Task Summaries_return_one_row_per_ring_frame_with_section_sums() {
         int port = PickFreePort();
@@ -191,6 +268,43 @@ public sealed class FramesEndpointsTests {
             JsonElement frame = doc.RootElement.GetProperty("frames")[0];
             frame.GetProperty("nodes").GetProperty("section_ids").GetArrayLength().Should().Be(1);
             frame.GetProperty("nodes").GetProperty("section_ids")[0].GetInt32().Should().Be(10);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
+    // regression: the range cap was a hard 256, so the "whole ring" export silently shipped
+    // 13% of the history while looking complete. the cap is now the ring capacity itself.
+    [Fact]
+    public async Task Range_serves_more_than_the_old_256_cap_when_asked() {
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-cap-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-cap",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        for (int ordinal = 1; ordinal <= 400; ordinal++) {
+            aggregator.OnSectionBatch(new SectionBatch {
+                SectionIds = [10],
+                ParentIds = [-1],
+                StartTimestamps = [ordinal * 100L],
+                ElapsedTicks = [50L],
+                FrameOrdinals = [ordinal],
+            });
+        }
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync(
+                $"http://127.0.0.1:{port}/api/v1/frames?count=2000");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("frames").GetArrayLength().Should().BeGreaterThan(256);
         }
         finally {
             await app.StopAsync();

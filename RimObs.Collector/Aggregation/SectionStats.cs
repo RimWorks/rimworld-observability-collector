@@ -4,6 +4,7 @@ public sealed class SectionStats {
     public int SectionId { get; init; }
     public string Name { get; set; } = string.Empty;
     public string? Subsystem { get; set; }
+    public string? Assembly { get; set; }
     public long SampleCount;
     public long TotalElapsedTicks;
     public long TotalAllocBytes;

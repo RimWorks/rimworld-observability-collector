@@ -488,7 +488,7 @@ public sealed class FrameRingTests {
         for (int ordinal = 1; ordinal <= 6; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, ordinal * 10L);
 
-        (int Ordinal, long DurationTicks)[] strip = ring.SnapshotStrip(3);
+        (int Ordinal, long DurationTicks, long AllocBytes)[] strip = ring.SnapshotStrip(3);
 
         strip.Select(e => e.Ordinal).Should().Equal(4, 5, 6);
         strip[0].DurationTicks.Should().Be(40);
@@ -816,5 +816,20 @@ public sealed class FrameRingTests {
 
         ring.OpenFrameWindow.Should().Be(4);
         ring.EffectiveOpenFrameWindow.Should().Be(256);
+    }
+    // strip alloc totals sum root scopes only: a child's bytes already live inside its parent.
+    [Fact]
+    public void Strip_carries_root_alloc_totals_without_double_counting_children() {
+        FrameRing ring = RingWithWindow(64, 1);
+        ring.Add(1, 10, -1, 100, -1, 1000L, 100L, 512L, 1);
+        ring.Add(1, 11, 10, 101, 100, 1010L, 50L, 128L, 1);
+        ring.Add(1, 12, -1, 102, -1, 1100L, 60L, 256L, 1);
+        ring.Add(2, 10, -1, 103, -1, 2000L, 100L, 64L, 1);
+
+        (int Ordinal, long DurationTicks, long AllocBytes)[] strip = ring.SnapshotStrip(0);
+
+        strip[0].Ordinal.Should().Be(1);
+        strip[0].AllocBytes.Should().Be(768);
+        strip[1].AllocBytes.Should().Be(64);
     }
 }
