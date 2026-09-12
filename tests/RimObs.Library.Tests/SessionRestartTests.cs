@@ -62,12 +62,13 @@ public sealed class SessionRestartTests {
         int[] ids = new int[16];
         string[] names = new string[16];
         string?[] subsystems = new string?[16];
-        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems).Should().Be(2);
-        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems).Should().Be(0);
+        string?[] assemblies = new string?[16];
+        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems, assemblies).Should().Be(2);
+        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems, assemblies).Should().Be(0);
 
         SectionRegistry.RequeueAllRegistrations();
 
-        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems).Should().Be(2);
+        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems, assemblies).Should().Be(2);
         names[0].Should().Be("requeue-one");
         names[1].Should().Be("requeue-two");
     }
@@ -81,6 +82,7 @@ public sealed class SessionRestartTests {
         int[] ids = new int[4];
         string[] names = new string[4];
         string?[] subsystems = new string?[4];
-        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems).Should().Be(0);
+        string?[] assemblies = new string?[4];
+        SectionRegistry.DrainPendingRegistrations(ids, names, subsystems, assemblies).Should().Be(0);
     }
 }

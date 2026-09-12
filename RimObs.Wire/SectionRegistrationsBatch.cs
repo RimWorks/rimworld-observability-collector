@@ -10,4 +10,8 @@ public sealed class SectionRegistrationsBatch {
     /// empty, when decoded from a v2 payload, so guard with <c>i &lt; Subsystems.Length</c>.
     /// </summary>
     public string?[] Subsystems { get; set; } = [];
+
+    /// <summary>Declaring assembly per section, parallel to <see cref="Names"/>. May be shorter
+    /// when decoded from an older payload, so guard with <c>i &lt; Assemblies.Length</c>.</summary>
+    public string?[] Assemblies { get; set; } = [];
 }

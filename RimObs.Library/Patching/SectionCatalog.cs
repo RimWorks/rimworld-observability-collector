@@ -92,7 +92,8 @@ internal static class SectionCatalog {
             CatalogEntry entry = new(name, method.DeclaringType?.FullName ?? "?", method.Name, null);
             entry.Resolved = method;
             entry.Subsystem = subsystem;
-            SectionHandle handle = SectionRegistry.Register(name, subsystem);
+            SectionHandle handle = SectionRegistry.Register(
+                name, subsystem, method.DeclaringType?.Assembly.GetName().Name);
             entry.SectionId = handle.Id;
             SectionRegistry.SetActive(handle.Id, true);
             s_Entries.Add(entry);
@@ -141,7 +142,8 @@ internal static class SectionCatalog {
                         continue;
                     }
 
-                    SectionHandle handle = SectionRegistry.Register(entry.Name, entry.Subsystem);
+                    SectionHandle handle = SectionRegistry.Register(
+                        entry.Name, entry.Subsystem, method.DeclaringType?.Assembly.GetName().Name);
                     entry.SectionId = handle.Id;
                     entry.Resolved = method;
                     SectionRegistry.SetActive(handle.Id, true);

@@ -117,10 +117,11 @@ public static class WireCodec {
 
     public static byte[] Serialize(SectionRegistrationsBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
-        writer.WriteArrayHeader(3);
+        writer.WriteArrayHeader(4);
         WriteInt32Array(writer, value.SectionIds);
         WriteStringArray(writer, value.Names);
         WriteNullableStringArray(writer, value.Subsystems);
+        WriteNullableStringArray(writer, value.Assemblies);
         return writer.ToArray();
     }
 
@@ -433,6 +434,8 @@ public static class WireCodec {
         };
         if (fieldCount >= 3)
             batch.Subsystems = ReadNullableStringArray(reader);
+        if (fieldCount >= 4)
+            batch.Assemblies = ReadNullableStringArray(reader);
         return batch;
     }
 
