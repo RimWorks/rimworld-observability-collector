@@ -140,13 +140,6 @@ internal static class AllocationHook {
         }
     }
 
-    private static void ReleaseSuspend() {
-        lock (s_Gate) {
-            if (--s_SuspendCount == 0 && s_State == On)
-                s_SetCallback?.Invoke(s_Handle, s_CallbackPtr);
-        }
-    }
-
     private sealed class SuspendToken : IDisposable {
         private bool _disposed;
 
@@ -155,6 +148,13 @@ internal static class AllocationHook {
                 return;
             _disposed = true;
             ReleaseSuspend();
+        }
+
+        private static void ReleaseSuspend() {
+            lock (s_Gate) {
+                if (--s_SuspendCount == 0 && s_State == On)
+                    s_SetCallback?.Invoke(s_Handle, s_CallbackPtr);
+            }
         }
     }
 

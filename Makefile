@@ -5,6 +5,7 @@ RIDS ?= win-x64 linux-x64 osx-arm64 osx-x64
 DASHBOARD_DIR := RimObs.Dashboard
 SLN := RimObs.slnx
 LIBRARY_TEST_PROJ := tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj
+COLLECTOR_TEST_PROJ := tests/RimObs.Collector.Tests/RimObs.Collector.Tests.csproj
 
 # The collector must NOT live under Assemblies/: RimWorld's ModAssemblyHandler loads every
 # .dll under Assemblies/ recursively and Mono segfaults trying to read the net10 collector's
@@ -85,6 +86,8 @@ deploy-collector:
 test:
 	dotnet test $(SLN) -c $(CONFIG) --nologo --no-build --filter "Category!=Benchmark"
 	dotnet test $(LIBRARY_TEST_PROJ) -c $(CONFIG) --nologo --no-build \
+		-p:RunSettingsFilePath= --filter "Category=Benchmark"
+	dotnet test $(COLLECTOR_TEST_PROJ) -c $(CONFIG) --nologo --no-build \
 		-p:RunSettingsFilePath= --filter "Category=Benchmark"
 
 format:
