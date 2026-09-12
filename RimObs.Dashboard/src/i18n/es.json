@@ -245,5 +245,9 @@
     "settings.readonly": "Solo lectura",
     "flamegraph.exportFrame": "Exportar fotograma",
     "flamegraph.exportRing": "Exportar anillo",
-    "flamegraph.exportTimeline": "Exportar cronología"
+    "flamegraph.exportTimeline": "Exportar cronología",
+    "strip.allocTitle": "bytes asignados por frame",
+    "settings.flameRendererGl": "Renderizado GPU del flame",
+    "tip.settings.flameRendererGl": "Dibuja los rellenos del flame en la GPU (WebGL). Apagado usa el renderizador CPU.",
+    "topbar.patching": "parcheando"
 }

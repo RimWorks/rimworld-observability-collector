@@ -31,9 +31,9 @@
     import NewSessionDialog from '../lib/components/NewSessionDialog.svelte';
     import StatusFooter from '../lib/components/StatusFooter.svelte';
     import { comparisonBaselineUs } from '../lib/comparison';
-    import { buildFrameTree } from '../lib/frameTree';
     import {
         buildSeries,
+        frameTreeNodes,
         pushFrame,
         MAX_WINDOW_FRAMES,
         type SeriesCacheEntry,
@@ -69,9 +69,11 @@
     import { t } from '../lib/i18n';
     import {
         laneBands,
+        laneDepths,
         laneLabel,
-        lanesFromNodes,
+        lanesFromEntries,
         orderLanes,
+        recentLaneIds,
         ThreadRole,
         windowLaneStats,
     } from '../lib/threadLanes';
@@ -132,7 +134,7 @@
         role: ThreadRole.Main,
         busy_ns: 0,
     };
-    const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [] };
+    const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [], alloc_bytes: [] };
     // the baseline is a median over 128 frames, so it says nothing about a session total.
     const NO_BASELINE = new Map<number, number>();
 
@@ -150,6 +152,8 @@
             '/api/v1/stream',
             () => api.frames(),
             untrack(() => pollMs),
+            undefined,
+            0,
         );
         framesRes = res;
         res.start();
@@ -164,13 +168,15 @@
         if (next !== untrack(() => pollMs)) pollMs = next;
     });
     $effect(() => {
+        // fallback-only retune for the frame lane. never the session tree: retuning it to
+        // the frame cadence once made the fallback fetch 4.4MB of call_tree at 69ms intervals.
         framesRes?.setIntervalMs(pollMs);
-        sessionTreeRes?.setIntervalMs(pollMs);
     });
 
     // rides along on /frames/latest, so the strip costs no second request. pausing freezes it
     // with the frame, and resuming leaves a cut mark where the gap is.
     let frozenStrip = $state<FrameStripData | null>(null);
+    let stripMode = $state<'time' | 'alloc'>('time');
     let frozenRoots = $state<CallTreeResponse['roots'] | null>(null);
     let cutOrdinals = $state<number[]>([]);
     let strip = $derived(frozenStrip ?? framesRes?.data?.strip ?? NO_STRIP);
@@ -314,7 +320,8 @@
     }
 
     async function exportRing(): Promise<void> {
-        const range = await api.frameRange(undefined, 0);
+        // count=0 means "server default" (64), not "everything"; ask for the whole ring.
+        const range = await api.frameRange(undefined, ringCapacity ?? DEFAULT_STRIP_SLOTS);
         saveExport('ring', range.frames, range.stopwatch_frequency);
     }
 
@@ -421,13 +428,27 @@
     }
 
     // 128 frames of nodes is real work, so it gets its own slow poll.
-    const baselineRes = new Resource(() => api.frameBaseline(), 5000);
+    const baselineRes = new StreamResource(
+        '/api/v1/stream',
+        () => api.frameBaseline(),
+        10000,
+        undefined,
+        0,
+        'baseline',
+    );
     let baselineUs = $derived(
         new Map(Object.entries(baselineRes.data?.median_us ?? {}).map(([k, v]) => [Number(k), v])),
     );
 
     // the speed setting is guessed from the TPS the collector already reports.
-    const statusRes = new Resource<StatusResponse>(() => api.status(), 1000);
+    const statusRes = new StreamResource<StatusResponse>(
+        '/api/v1/stream',
+        () => api.status(),
+        2000,
+        undefined,
+        0,
+        'status',
+    );
     let tps = $derived(statusRes.data?.receive?.tps ?? null);
 
     // per-section percentiles for the session-scope columns; the frame ring cannot produce them.
@@ -441,7 +462,14 @@
         ),
     );
 
-    const gcRes = new Resource<GcResponse>(() => api.gc(200), 4000);
+    const gcRes = new StreamResource<GcResponse>(
+        '/api/v1/stream',
+        () => api.gc(200),
+        8000,
+        undefined,
+        0,
+        'gc',
+    );
     let peakAllocRate = $derived(summarize(gcRes.data?.events ?? []).peakAllocRate);
     let gcOrdinals = $derived((gcRes.data?.events ?? []).map((e) => e.frame_ordinal));
 
@@ -455,7 +483,14 @@
     let panel = $state<InstrumentationPanel | null>(null);
     let livePatches = $state<MergedPatch[]>([]);
     let liveBySection = $derived(liveSectionIds(livePatches));
-    const sectionsRes = new Resource(() => api.allSections(), 10000);
+    const sectionsRes = new StreamResource(
+        '/api/v1/stream',
+        () => api.allSections(),
+        20000,
+        undefined,
+        0,
+        'sections',
+    );
     // read once: the ring capacity only moves when someone edits it in Settings, and the
     // status footer just needs a number to divide the held count by.
     let ringCapacity = $derived(liveConfig.ringCapacity);
@@ -516,16 +551,24 @@
             liveVitals.clear();
             return;
         }
-        liveVitals.set(framesRes?.data?.vitals);
+        liveVitals.set(framesRes?.data?.vitals, framesRes?.data?.stats?.median_us);
     });
 
-    // the session tree keeps pace with the frame poll. it costs about the same as one
-    // /frames/latest.
+    // pushed on the stream's slow lane, and only while the drawer is open: the session tree
+    // json is 15MB+ late-session, and an unwatched 15MB parse per push froze the tab.
     let sessionTreeRes = $state<Resource<CallTreeResponse> | null>(null);
     $effect(() => {
-        const res = new Resource<CallTreeResponse>(
+        if (!treeOpen) {
+            sessionTreeRes = null;
+            return;
+        }
+        const res = new StreamResource<CallTreeResponse>(
+            '/api/v1/stream',
             () => api.callTree(12, 24),
-            untrack(() => pollMs),
+            5000,
+            undefined,
+            0,
+            'call_tree',
         );
         sessionTreeRes = res;
         res.start();
@@ -688,12 +731,24 @@
 
     // the live poll still carries one frame; the window is accumulated here so the timeline
     // spans many without a second request per tick.
-    let liveWindow = $state<FrameData[]>([]);
-    let pinnedWindow = $state<FrameData[]>([]);
+    let liveWindow = $state.raw<FrameData[]>([]);
+    let pinnedWindow = $state.raw<FrameData[]>([]);
     $effect(() => {
         if (!live || pinned) return;
-        liveWindow = pushFrame(liveWindow, framesRes?.data?.frame ?? null);
+        const next = pushFrame(liveWindow, framesRes?.data?.frame ?? null);
+        if (next !== liveWindow) pruneTreeCache(next);
+        liveWindow = next;
     });
+
+    // the cache gains an entry per frame at 30/s; without eviction it retains every frame
+    // of the session and major-gc marking grows with it (the "cpu rises over time" leak).
+    function pruneTreeCache(window: FrameData[]): void {
+        if (treeCache.size <= window.length + MAX_WINDOW_FRAMES) return;
+        const keep = new Set<number>();
+        for (const f of window) keep.add(f.capture_ordinal);
+        for (const f of pinnedWindow) keep.add(f.capture_ordinal);
+        for (const key of treeCache.keys()) if (!keep.has(key)) treeCache.delete(key);
+    }
 
     // a pinned recent frame may still be taking lane fills, so it refreshes until sealed.
     // cadence-capped: refetching a whole range on every 16ms poll re-downloaded it 60x/s.
@@ -734,7 +789,9 @@
     let polledLanes = $derived(orderLanes(framesRes?.data?.threads ?? []));
     // a bundle carries no thread list, so its lanes come back off the nodes' own thread ids.
     // with neither, draw the main lane the page has always drawn.
-    let allLanes = $derived(polledLanes.length > 0 ? polledLanes : lanesFromNodes(series.nodes));
+    let allLanes = $derived(
+        polledLanes.length > 0 ? polledLanes : lanesFromEntries(series.entries),
+    );
     // a lane starts drawn and stays that way unless the filter panel turns it off; seeded
     // tracks what has been offered so the effect cannot undo a click.
     const seededLanes = new Set<number>();
@@ -752,34 +809,21 @@
     let mainLaneId = $derived(allLanes.find((l) => l.role === ThreadRole.Main)?.id ?? 0);
     // the gutter counts the same recent window that decides visibility, so a drawn lane
     // never reads 0 | 0 just because it skipped the frame under the c‍ursor.
-    let laneWindowStats = $derived(
-        windowLaneStats(series.entries, series.nodes, RECENT_FRAMES, mainLaneId),
-    );
+    let laneWindowStats = $derived(windowLaneStats(series.entries, RECENT_FRAMES, mainLaneId));
     function laneStats(lane: ThreadLane): { calls: number; busyNs: number } {
         return laneWindowStats.get(lane.id) ?? { calls: 0, busyNs: 0 };
     }
-    let recentLaneIds = $derived.by(() => {
-        const ids = new Set<number>();
-        const entries = series.entries;
-        for (let e = Math.max(0, entries.length - RECENT_FRAMES); e < entries.length; e++) {
-            for (let i = entries[e].nodeStart; i < entries[e].nodeEnd; i++) {
-                const lane = series.nodes[i].laneId;
-                if (lane !== undefined) ids.add(lane);
-            }
-        }
-        return ids;
-    });
+    let recentLanes = $derived(recentLaneIds(series.entries, RECENT_FRAMES));
     let visibleLanes = $derived.by(() => {
         if (allLanes.length === 0) return [MAIN_FALLBACK];
         if (userPrefs.mainThreadOnly) return allLanes.filter((l) => l.role === ThreadRole.Main);
         return allLanes.filter(
-            (l) =>
-                selectedLanes.has(l.id) && (l.role === ThreadRole.Main || recentLaneIds.has(l.id)),
+            (l) => selectedLanes.has(l.id) && (l.role === ThreadRole.Main || recentLanes.has(l.id)),
         );
     });
     // one band per visible lane. the canvas and the gutter read the same offsets, so a lane
     // label always sits level with the flame it names.
-    let bands = $derived(laneBands(visibleLanes, series.nodes, MAX_DEPTH));
+    let bands = $derived(laneBands(visibleLanes, laneDepths(series.entries), MAX_DEPTH));
     // the call tree stays on one frame, so its row indices need rebasing onto the window.
     let currentEntry = $derived(
         series.entries.find((e) => e.ordinal === frame?.capture_ordinal) ?? null,
@@ -843,7 +887,11 @@
             ? new Map(
                   (sectionsRes.data?.sections ?? []).map((s) => [
                       s.id,
-                      { name: sectionLabel(s.name), subsystem: s.subsystem },
+                      {
+                          name: sectionLabel(s.name),
+                          subsystem: s.subsystem,
+                          assembly: s.assembly ?? null,
+                      },
                   ]),
               )
             : importedNames,
@@ -851,7 +899,7 @@
     let timerResNs = $derived(timerResolutionNs(stopwatchFrequency));
     // the timeline builds this too, but a shared derived keeps the row indices and the bar
     // indices talking about the same array.
-    let frameNodes = $derived(frame ? buildFrameTree(frame).nodes : []);
+    let frameNodes = $derived(frame ? frameTreeNodes(frame, treeCache) : []);
     let liveRoots = $derived(sessionTreeRes?.data?.roots ?? []);
     let sessionRoots = $derived(frozenRoots ?? liveRoots);
     let treeNodes = $derived(treeScope === 'session' ? flattenCallNodes(sessionRoots) : frameNodes);
@@ -993,14 +1041,16 @@
     {#if live}
         <div class="modes">
             <div class="seg" role="group" aria-label={t('flamegraph.mode')}>
-                <button type="button" class="on" data-testid="mode-time"
-                    >{t('flamegraph.mode.time')}</button
+                <button
+                    type="button"
+                    class={stripMode === 'time' ? 'on' : 'off'}
+                    onclick={() => (stripMode = 'time')}
+                    data-testid="mode-time">{t('flamegraph.mode.time')}</button
                 >
                 <button
                     type="button"
-                    class="off"
-                    disabled
-                    title={t('tree.soon')}
+                    class={stripMode === 'alloc' ? 'on' : 'off'}
+                    onclick={() => (stripMode = 'alloc')}
                     data-testid="mode-alloc">{t('flamegraph.mode.alloc')}</button
                 >
             </div>
@@ -1066,6 +1116,8 @@
         <FrameStrip
             ordinals={strip.ordinals}
             durationsUs={strip.durations_us}
+            allocBytes={strip.alloc_bytes ?? []}
+            mode={stripMode}
             cutOrdinals={shownCuts}
             {gcOrdinals}
             slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
@@ -1528,9 +1580,6 @@
         background: color-mix(in srgb, var(--cyan) 20%, var(--bg-elev));
         color: var(--cyan-soft);
         font-weight: 500;
-    }
-    .seg button[disabled] {
-        cursor: not-allowed;
     }
     .import-error {
         color: var(--bad);

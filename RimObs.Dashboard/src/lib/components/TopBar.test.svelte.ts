@@ -142,4 +142,24 @@ describe('TopBar keyboard help', () => {
         expect(tip.textContent).toContain(t('flamegraph.keys'));
         expect(tip.textContent).toContain(t('flamegraph.keys.transport'));
     });
+    it('shows patch progress while the worker drains and hides it when done', () => {
+        const auto = {
+            matched: 40,
+            instrumented: 30,
+            muted: 0,
+            skippedTrivial: 0,
+            skippedOther: 0,
+            skippedOverCap: 0,
+            maxTargets: 100,
+            truncated: false,
+            refused: 0,
+            pending: 10,
+        };
+        const { unmount } = render(TopBar, { status: status(), auto });
+        expect(screen.getByTestId('patch-progress').textContent).toContain('75%');
+        unmount();
+
+        render(TopBar, { status: status(), auto: { ...auto, pending: 0 } });
+        expect(screen.queryByTestId('patch-progress')).toBeNull();
+    });
 });

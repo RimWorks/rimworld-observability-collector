@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { api, type StatusResponse } from './lib/api';
+    import { api, type StatusResponse, type InstrumentationAutoResponse } from './lib/api';
+    import { StreamResource } from './lib/stream.svelte';
     import { Resource } from './lib/poll.svelte';
     import { userPrefs } from './lib/userPrefs.svelte';
     import TopBar from './lib/components/TopBar.svelte';
@@ -8,13 +9,34 @@
     import NameSessionPrompt from './lib/components/NameSessionPrompt.svelte';
     import { sessionsStore } from './lib/sessions.svelte';
 
-    const status = new Resource<StatusResponse>(() => api.status(), 2000);
+    const status = new StreamResource<StatusResponse>(
+        '/api/v1/stream',
+        () => api.status(),
+        4000,
+        undefined,
+        0,
+        'status',
+    );
+    const autoRes = new StreamResource<InstrumentationAutoResponse>(
+        '/api/v1/stream',
+        () => api.instrumentationAuto(),
+        8000,
+        undefined,
+        0,
+        'auto',
+    );
     const DISCONNECT_THRESHOLD = 3;
     let hasBeenConnected = $state(false);
     let closeRequested = $state(false);
 
-    onMount(() => status.start());
-    onDestroy(() => status.stop());
+    onMount(() => {
+        status.start();
+        autoRes.start();
+    });
+    onDestroy(() => {
+        status.stop();
+        autoRes.stop();
+    });
 
     $effect(() => {
         if (status.data != null && !hasBeenConnected) hasBeenConnected = true;
@@ -75,7 +97,7 @@
 </script>
 
 <div class="shell">
-    <TopBar status={status.data} />
+    <TopBar status={status.data} auto={autoRes.data?.auto ?? null} />
     <main class="main" id="main">
         <Flamegraph />
     </main>

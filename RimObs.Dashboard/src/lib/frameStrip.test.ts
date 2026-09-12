@@ -3,7 +3,13 @@ import {
     barHeight,
     budgetLine,
     buildBars,
+    buildAllocBars,
+    allocBarHeight,
+    allocGridLines,
+    ALLOC_MIN_BYTES,
+    ALLOC_MAX_BYTES,
     barIndexAt,
+    slotSpanPx,
     slotWidthPx,
     DEFAULT_STRIP_SLOTS,
     barColor,
@@ -237,5 +243,57 @@ describe('gcMarkIndices', () => {
     // the strip's ring already dropped this frame, so there is nothing to mark it against.
     it('drops an ordinal the ring has already evicted', () => {
         expect(gcMarkIndices(bars([5, 6, 7]), [99])).toEqual([]);
+    });
+});
+
+describe('alloc mode', () => {
+    it('zero bytes draws no bar', () => {
+        expect(allocBarHeight(0)).toBe(0);
+    });
+
+    it('clamps the log scale to 0..1 with a visible floor', () => {
+        expect(allocBarHeight(1)).toBeCloseTo(0.03);
+        expect(allocBarHeight(ALLOC_MAX_BYTES * 4)).toBe(1);
+        const mid = allocBarHeight(65536);
+        expect(mid).toBeGreaterThan(0.4);
+        expect(mid).toBeLessThan(0.6);
+    });
+
+    it('buildAllocBars carries bytes and never flags budget', () => {
+        const bars = buildAllocBars([1, 2], [1024, 0]);
+        expect(bars[0].allocBytes).toBe(1024);
+        expect(bars[0].overBudget).toBe(false);
+        expect(bars[1].height).toBe(0);
+    });
+
+    it('grid lines span 1KB..4MB inside the scale', () => {
+        const lines = allocGridLines();
+        expect(lines[0].bytes).toBe(1024);
+        expect(lines[lines.length - 1].bytes).toBe(4 * 1024 * 1024);
+        for (const line of lines) {
+            expect(line.at).toBeGreaterThan(0);
+            expect(line.at).toBeLessThan(1);
+        }
+        expect(ALLOC_MIN_BYTES).toBeLessThan(1024);
+    });
+});
+
+describe('slotSpanPx', () => {
+    it('adjacent sub-pixel slots tile with no gap or overlap', () => {
+        const bw = 1400 / 2000;
+        for (const dpr of [1, 1.25, 2]) {
+            for (let i = 0; i < 50; i++) {
+                const a = slotSpanPx(i, bw, dpr);
+                const b = slotSpanPx(i + 1, bw, dpr);
+                expect(a.x + a.w).toBeGreaterThanOrEqual(b.x - 1e-9);
+                expect(a.w).toBeGreaterThanOrEqual(1 / dpr - 1e-9);
+            }
+        }
+    });
+
+    it('snaps to whole device pixels', () => {
+        const span = slotSpanPx(3, 0.7, 2);
+        expect(Math.round(span.x * 2)).toBeCloseTo(span.x * 2);
+        expect(Math.round(span.w * 2)).toBeCloseTo(span.w * 2);
     });
 });

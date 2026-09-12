@@ -1,6 +1,8 @@
 import type { StripBar } from './frameStrip';
 import {
+    allocGridLines,
     budgetLine,
+    slotSpanPx,
     slotWidthPx,
     barColor,
     gridLines,
@@ -39,6 +41,8 @@ export interface StripDrawOptions {
     gcOrdinals?: readonly number[];
     /** slots to lay out, so a bar keeps its width while the strip is still filling */
     slots?: number;
+    /** alloc mode: log byte gridlines, flat warn-colored bars, no budget ramp. */
+    allocMode?: boolean;
     theme: StripTheme;
 }
 
@@ -66,8 +70,11 @@ export function drawStrip(
     ctx.strokeStyle = theme.grid;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
-    for (const line of gridLines()) {
-        const y = Math.round(barAreaHeight - line.at * barAreaHeight) + 0.5;
+    const fractions = opts.allocMode
+        ? allocGridLines().map((l) => l.at)
+        : gridLines().map((l) => l.at);
+    for (const at of fractions) {
+        const y = Math.round(barAreaHeight - at * barAreaHeight) + 0.5;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(w, y);
@@ -84,13 +91,16 @@ export function drawStrip(
             ? theme.selected
             : hovered
               ? theme.hover
-              : barColor(bar.durationUs, FRAME_BUDGET_US, theme);
+              : opts.allocMode
+                ? theme.warn
+                : barColor(bar.durationUs, FRAME_BUDGET_US, theme);
         // a full ring puts 2000 bars in ~1400px, so a marked bar is a sub-pixel sliver at its
         // own width and the click or hover reads as having done nothing.
+        const span = slotSpanPx(i, bw, dpr);
         ctx.fillRect(
-            i * bw,
+            span.x,
             barAreaHeight - barH,
-            selected || hovered ? Math.max(fillW, MARK_MIN_W) : fillW,
+            selected || hovered ? Math.max(span.w, MARK_MIN_W) : span.w,
             barH,
         );
     }
@@ -114,22 +124,32 @@ export function drawStrip(
         ctx.restore();
     }
 
-    // budget line last, so it reads on top of the bars it is judging.
-    const lineY = barAreaHeight - budgetLine(FRAME_BUDGET_US) * barAreaHeight;
-    ctx.strokeStyle = theme.line;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, lineY + 0.5);
-    ctx.lineTo(w, lineY + 0.5);
-    ctx.stroke();
+    // budget line last, so it reads on top of the bars it is judging. meaningless for bytes.
+    if (!opts.allocMode) {
+        const lineY = barAreaHeight - budgetLine(FRAME_BUDGET_US) * barAreaHeight;
+        ctx.strokeStyle = theme.line;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, lineY + 0.5);
+        ctx.lineTo(w, lineY + 0.5);
+        ctx.stroke();
+    }
 
     // one fixed-height mark per frame that collected; Boehm always reports generation 0,
     // so there is nothing else on the sample worth encoding as color or height.
     const gcOrdinals = opts.gcOrdinals ?? [];
     if (gcOrdinals.length > 0) {
-        ctx.fillStyle = theme.gc;
         for (const index of gcMarkIndices(bars, gcOrdinals)) {
-            ctx.fillRect(index * bw, barAreaHeight, fillW, GC_BAND_PX);
+            const w = Math.max(fillW, MARK_MIN_W);
+            // neighboring frames spike too (catchup after the pause), so the collection frame
+            // gets a full-height rule the eye can find inside a spike cluster.
+            ctx.save();
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = theme.gc;
+            ctx.fillRect(index * bw, 0, w, barAreaHeight);
+            ctx.restore();
+            ctx.fillStyle = theme.gc;
+            ctx.fillRect(index * bw, barAreaHeight, w, GC_BAND_PX);
         }
     }
 }

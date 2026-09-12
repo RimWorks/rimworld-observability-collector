@@ -291,5 +291,9 @@
     "settings.readonly": "Read-only",
     "flamegraph.exportFrame": "Export frame",
     "flamegraph.exportRing": "Export ring",
-    "flamegraph.exportTimeline": "Export timeline"
+    "flamegraph.exportTimeline": "Export timeline",
+    "strip.allocTitle": "bytes allocated per frame",
+    "settings.flameRendererGl": "GPU flame rendering",
+    "tip.settings.flameRendererGl": "Draw flame fills on the GPU (WebGL). Off falls back to the CPU canvas renderer.",
+    "topbar.patching": "patching"
 }

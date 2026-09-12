@@ -10,9 +10,11 @@ import {
     visibleEntries,
     visibleGaps,
     EMPTY_SERIES,
+    frameTreeNodes,
+    seriesMaxDepth,
     type SeriesCacheEntry,
 } from './frameSeries';
-import type { FrameData } from './frameTree';
+import { buildFrameTree, type FrameData } from './frameTree';
 
 // one root [start, start+100) with a child [start+10, start+30).
 function frame(ordinal: number, startUs: number, durationUs = 100): FrameData {
@@ -333,5 +335,110 @@ describe('buildSeries cache reuse', () => {
         expect(together.nodes[2]).toBe(alone.nodes[0]);
         expect(together.nodes[3]).toBe(alone.nodes[1]);
         expect(together.nodes[3].parentIndex).toBe(2);
+    });
+});
+
+// three lanes, two depths, so the per-frame rollups have something to disagree about.
+function lanedFrame(ordinal: number, startUs: number): FrameData {
+    const lanes = [1, 1, 2, 7];
+    return {
+        capture_ordinal: ordinal,
+        start_us: startUs,
+        end_us: startUs + 100,
+        duration_us: 100,
+        node_count: 4,
+        nodes: {
+            section_ids: [10, 20, 30, 40],
+            parent_ids: [-1, 10, -1, -1],
+            node_ids: [1, 2, 3, 4],
+            parent_node_ids: [-1, 1, -1, -1],
+            start_us: [startUs, startUs + 10, startUs + 5, startUs + 40],
+            dur_us: [100, 20, 30, 10],
+            thread_ids: lanes,
+        },
+    };
+}
+
+function shape(s: ReturnType<typeof buildSeries>) {
+    return {
+        nodes: s.nodes.map((n) => ({ ...n })),
+        entries: s.entries.map((e) => ({ ...e, agg: undefined })),
+        gaps: s.gaps,
+        startUs: s.startUs,
+        endUs: s.endUs,
+        orphanCount: s.orphanCount,
+    };
+}
+
+// the cache skips the parentIndex rewrite for a frame that did not move, so a cached rebuild
+// has to land on exactly the array a cold build would have produced.
+describe('buildSeries incremental rebuilds', () => {
+    it('matches a cold build after a frame is appended', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const window = [lanedFrame(1, 1000), lanedFrame(2, 2000)];
+        buildSeries(window, cache);
+
+        const next = [...window, lanedFrame(3, 3000)];
+        expect(shape(buildSeries(next, cache))).toEqual(shape(buildSeries(next)));
+    });
+
+    it('matches a cold build after the oldest frame expires', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        buildSeries([lanedFrame(1, 1000), lanedFrame(2, 2000), lanedFrame(3, 3000)], cache);
+
+        const slid = [lanedFrame(2, 2000), lanedFrame(3, 3000), lanedFrame(4, 4000)];
+        expect(shape(buildSeries(slid, cache))).toEqual(shape(buildSeries(slid)));
+    });
+
+    it('matches a cold build when a pinned window is rebuilt unchanged', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const window = [lanedFrame(1, 1000), lanedFrame(2, 2000)];
+        buildSeries(window, cache);
+        buildSeries(window, cache);
+
+        expect(shape(buildSeries(window, cache))).toEqual(shape(buildSeries(window)));
+    });
+
+    it('matches a cold build after a frame comes back fuller', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        buildSeries([lanedFrame(1, 1000), frame(2, 2000)], cache);
+
+        const fuller = [lanedFrame(1, 1000), lanedFrame(2, 2000)];
+        expect(shape(buildSeries(fuller, cache))).toEqual(shape(buildSeries(fuller)));
+    });
+});
+
+describe('frame aggregates', () => {
+    const window = [lanedFrame(1, 1000), lanedFrame(2, 2000), lanedFrame(3, 3000)];
+
+    it('folds the same max depth a full node scan finds', () => {
+        const s = buildSeries(window);
+        const brute = s.nodes.reduce((max, n) => Math.max(max, n.depth), 0);
+
+        expect(seriesMaxDepth(s)).toBe(brute);
+        expect(seriesMaxDepth(s, 1)).toBe(0);
+    });
+
+    it('counts every node of the frame in its lane stats', () => {
+        const s = buildSeries(window);
+        const calls = [...s.entries[0].agg.laneStats.values()].reduce((n, v) => n + v.calls, 0);
+
+        expect(calls).toBe(s.entries[0].nodeEnd - s.entries[0].nodeStart);
+        expect(s.entries[0].agg.laneStats.get(1)).toEqual({ calls: 2, busyNs: 100_000 });
+    });
+});
+
+describe('frameTreeNodes', () => {
+    it('rebuilds the frame-local tree out of the series cache', () => {
+        const cache = new Map<number, SeriesCacheEntry>();
+        const f = lanedFrame(2, 2000);
+        buildSeries([lanedFrame(1, 1000), f], cache);
+
+        expect(frameTreeNodes(f, cache)).toEqual(buildFrameTree(f).nodes);
+    });
+
+    it('falls back to a real build when the frame is not cached', () => {
+        const f = lanedFrame(9, 9000);
+        expect(frameTreeNodes(f, new Map())).toEqual(buildFrameTree(f).nodes);
     });
 });

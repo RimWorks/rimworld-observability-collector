@@ -1,8 +1,9 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, untrack } from 'svelte';
     import type { TreeNode } from '../frameTree';
     import { quadIndexForNode, MAX_DEPTH } from '../frameLayout';
     import { laneRow, type LaneBands } from '../threadLanes';
+    import { userPrefs } from '../userPrefs.svelte';
     import {
         EMPTY_SERIES,
         layoutSeries,
@@ -12,6 +13,7 @@
         visibleEntries,
         visibleGaps,
         type FrameSeries,
+        seriesMaxDepth,
     } from '../frameSeries';
     import {
         fitView,
@@ -26,7 +28,8 @@
         type Focus,
         type FocusMove,
     } from '../frameView';
-    import { readTheme, drawTimeline, ROW_HEIGHT } from '../frameDraw';
+    import { readTheme, drawTimeline, ROW_HEIGHT, type DrawOptions } from '../frameDraw';
+    import { createFlameRenderer, packInstances, type FlameRenderer } from '../flameGl';
     import { shareOfFrame, shareOfBudget, percent } from '../frameCost';
     import { sectionSearch } from '../sectionSearchState.svelte';
     import { ns } from '../format';
@@ -53,7 +56,7 @@
         selectedOrdinal?: number | null;
         /** a pinned ordinal range: the default fit spans it instead of one frame. */
         selectedRange?: { from: number; to: number } | null;
-        names: Map<number, { name: string; subsystem: string | null }>;
+        names: Map<number, { name: string; subsystem: string | null; assembly?: string | null }>;
         selectedNode?: number;
         /** one flame band per thread lane. absent draws every node in one band. */
         bands?: LaneBands;
@@ -137,6 +140,8 @@
     );
     let sampledIds = $derived.by(() => {
         const set = new Set<number>();
+        // only the search catalog reads this; without a query its a 3.5k-insert set per apply.
+        if (!query.trim()) return set;
         const entry = currentFrameEntry;
         if (!entry) return set;
         for (let i = entry.nodeStart; i < entry.nodeEnd; i++) set.add(series.nodes[i].sectionId);
@@ -181,9 +186,7 @@
 
     // rows of the whole window, capped like the layout, so height is stable instead of
     // resizing every time a zoom step folds or reveals a row.
-    let deepestDepth = $derived(
-        series.nodes.reduce((max, n) => Math.max(max, Math.min(n.depth, MAX_DEPTH - 1)), 0),
-    );
+    let deepestDepth = $derived(seriesMaxDepth(series, MAX_DEPTH));
     let rowCount = $derived(bands ? bands.rows : deepestDepth + 1);
     let heightPx = $derived(Math.max(1, rowCount) * ROW_HEIGHT);
 
@@ -285,6 +288,11 @@
     }
 
     let canvasEl = $state<HTMLCanvasElement | null>(null);
+    let glCanvasEl = $state<HTMLCanvasElement | null>(null);
+    let glActive = $state(false);
+    let renderer: FlameRenderer | null = null;
+    let packDirty = true;
+    let packedThemeKey = '';
     let hostEl = $state<HTMLDivElement | null>(null);
     let scrollEl = $state<HTMLDivElement | null>(null);
     let hoverClientX = $state(0);
@@ -310,18 +318,86 @@
         dirty = true;
     });
 
+    // everything the instance buffer bakes in. pan and zoom alone move a uniform instead.
+    $effect(() => {
+        void quads;
+        void matchIds;
+        void matchRange;
+        void names;
+        void gaps;
+        void widthPx;
+        void heightPx;
+        void bands;
+        packDirty = true;
+    });
+
+    // webgl2 is absent in jsdom and on old browsers, and the 2d path stays whole for both.
+    // untracked: the body writes AND (via logging) read glActive, which made the effect
+    // depend on a signal it flips both ways - an infinite recreate loop leaking a gl
+    // context per bounce. only the canvas binding may retrigger this.
+    $effect(() => {
+        const el = glCanvasEl;
+        const wantGl = userPrefs.flameRenderer === 'gl';
+        if (!el) return;
+        return untrack(() => {
+            if (!wantGl) {
+                renderer = null;
+                glActive = false;
+                dirty = true;
+                return;
+            }
+            renderer = createFlameRenderer(el);
+            glActive = renderer !== null;
+            console.info(`rimobs flame renderer: ${renderer ? 'webgl' : '2d fallback'}`);
+            packDirty = true;
+            dirty = true;
+
+            const onLost = (event: Event): void => {
+                event.preventDefault();
+                renderer?.dispose();
+                renderer = null;
+                glActive = false;
+                dirty = true;
+            };
+            const onRestored = (): void => {
+                renderer = createFlameRenderer(el);
+                glActive = renderer !== null;
+                packDirty = true;
+                dirty = true;
+            };
+            el.addEventListener('webglcontextlost', onLost);
+            el.addEventListener('webglcontextrestored', onRestored);
+
+            return () => {
+                el.removeEventListener('webglcontextlost', onLost);
+                el.removeEventListener('webglcontextrestored', onRestored);
+                renderer?.dispose();
+                renderer = null;
+                glActive = false;
+            };
+        });
+    });
+
     let contentPx = $derived(scrollContentPx(effectiveView, bounds, widthPx));
     let wantScrollLeft = $derived(scrollLeftPx(effectiveView, bounds, widthPx, contentPx));
+
+    // reading el.scrollLeft forces synchronous layout, and this effect fires per live view
+    // change (30/s). the last known position is tracked instead and only writes touch the dom.
+    let knownScrollLeft = 0;
 
     $effect(() => {
         const el = scrollEl;
         const want = wantScrollLeft;
-        if (el && Math.abs(el.scrollLeft - want) > 1) el.scrollLeft = want;
+        if (el && Math.abs(knownScrollLeft - want) > 1) {
+            knownScrollLeft = want;
+            el.scrollLeft = want;
+        }
     });
 
     function handleScroll(): void {
         const el = scrollEl;
         if (!el || empty) return;
+        knownScrollLeft = el.scrollLeft;
         const next = viewFromScrollLeft(el.scrollLeft, effectiveView, bounds, widthPx, contentPx);
         const pxUs = (effectiveView.endUs - effectiveView.startUs) / Math.max(widthPx, 1);
         // sub-pixel moves are the echo of our own write; acting on them oscillates.
@@ -529,7 +605,7 @@
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
         if (!ctx) return;
-        drawTimeline(ctx, quads, {
+        const opts: DrawOptions = {
             view: drawView,
             widthPx,
             heightPx,
@@ -545,7 +621,18 @@
             matchRange,
             laneBands: bands?.bands,
             frameEdgesUs,
-        });
+            skipFills: renderer !== null,
+        };
+        if (renderer) {
+            const themeKey = `${opts.theme.background}|${opts.theme.collapsed}|${opts.theme.zebra}`;
+            if (packDirty || themeKey !== packedThemeKey) {
+                renderer.upload(packInstances(quads, opts));
+                packedThemeKey = themeKey;
+                packDirty = false;
+            }
+            renderer.render(drawView, widthPx, heightPx, dpr, opts.theme.background);
+        }
+        drawTimeline(ctx, quads, opts);
     }
 
     function tick(now: number): void {
@@ -616,24 +703,37 @@
                 <span style="left:{tick.at * 100}%">{tick.label}</span>
             {/each}
         </div>
-        <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
-        <canvas
-            bind:this={canvasEl}
-            tabindex="0"
-            role="application"
-            aria-roledescription="frame timeline"
-            aria-label={ariaLabel}
-            width={widthPx * dpr}
-            height={heightPx * dpr}
-            style="width: {widthPx}px; height: {heightPx}px;"
-            onkeydown={handleKeydown}
-            oncontextmenu={handleContextMenu}
-            onwheel={handleWheel}
-            onpointerdown={handlePointerDown}
-            onpointermove={handlePointerMove}
-            onpointerup={handlePointerUp}
-            onpointerleave={handlePointerLeave}
-        ></canvas>
+        <div class="stack">
+            <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+            <canvas
+                bind:this={canvasEl}
+                tabindex="0"
+                role="application"
+                aria-roledescription="frame timeline"
+                aria-label={ariaLabel}
+                class:transparent={glActive}
+                width={widthPx * dpr}
+                height={heightPx * dpr}
+                style="width: {widthPx}px; height: {heightPx}px;"
+                onkeydown={handleKeydown}
+                oncontextmenu={handleContextMenu}
+                onwheel={handleWheel}
+                onpointerdown={handlePointerDown}
+                onpointermove={handlePointerMove}
+                onpointerup={handlePointerUp}
+                onpointerleave={handlePointerLeave}
+            ></canvas>
+            <!-- after the 2d canvas in the dom so it stays the first one a query finds. -->
+            <canvas
+                bind:this={glCanvasEl}
+                class="gl"
+                aria-hidden="true"
+                data-testid="frame-gl"
+                style="width: {widthPx}px; height: {heightPx}px; display: {glActive
+                    ? 'block'
+                    : 'none'};"
+            ></canvas>
+        </div>
         {#if hoverIndex >= 0}
             {@const hoverNode = series.nodes[hoverIndex]}
             {@const hoverQuad = hoverQuadIndex >= 0 ? quads[hoverQuadIndex] : null}
@@ -642,6 +742,8 @@
                 <dl>
                     <dt>subsystem</dt>
                     <dd>{names.get(hoverNode.sectionId)?.subsystem ?? 'untagged'}</dd>
+                    <dt>assembly</dt>
+                    <dd class="mono">{names.get(hoverNode.sectionId)?.assembly ?? 'unknown'}</dd>
                     <dt>frame</dt>
                     <dd class="mono">{entryOfNode(series, hoverIndex)?.ordinal ?? '--'}</dd>
                     <dt>duration</dt>
@@ -690,12 +792,28 @@
         position: relative;
         width: 100%;
     }
+    .stack {
+        position: relative;
+    }
     canvas {
         display: block;
         max-width: 100%;
         border-radius: var(--r-sm);
         background: var(--bg-surface);
         outline: none;
+    }
+    /* the quad fills live here; the 2d canvas turns transparent and draws over them. */
+    canvas.gl {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 0;
+        pointer-events: none;
+    }
+    canvas.transparent {
+        position: relative;
+        z-index: 1;
+        background: transparent;
     }
     /* sticky, so the time axis survives however tall the lane bands stack the canvas */
     .ruler {

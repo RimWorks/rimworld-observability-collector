@@ -4,12 +4,15 @@ export interface PersistedPrefs {
     closeOnDisconnect: boolean;
     lang: string;
     mainThreadOnly: boolean;
+    /** flame quad fills: 'gl' renders on the gpu, 'cpu' uses the 2d canvas alone. */
+    flameRenderer: 'gl' | 'cpu';
 }
 
 export const DEFAULT_PREFS: PersistedPrefs = {
     closeOnDisconnect: true,
     lang: '',
     mainThreadOnly: true,
+    flameRenderer: 'gl',
 };
 
 function load(): PersistedPrefs {
@@ -37,12 +40,14 @@ export class UserPrefs {
     closeOnDisconnect = $state<boolean>(DEFAULT_PREFS.closeOnDisconnect);
     lang = $state<string>(DEFAULT_PREFS.lang);
     mainThreadOnly = $state<boolean>(DEFAULT_PREFS.mainThreadOnly);
+    flameRenderer = $state<'gl' | 'cpu'>(DEFAULT_PREFS.flameRenderer);
 
     constructor() {
         const loaded = load();
         this.closeOnDisconnect = loaded.closeOnDisconnect;
         this.lang = loaded.lang;
         this.mainThreadOnly = loaded.mainThreadOnly;
+        this.flameRenderer = loaded.flameRenderer;
     }
 
     private snapshot(): PersistedPrefs {
@@ -50,6 +55,7 @@ export class UserPrefs {
             closeOnDisconnect: this.closeOnDisconnect,
             lang: this.lang,
             mainThreadOnly: this.mainThreadOnly,
+            flameRenderer: this.flameRenderer,
         };
     }
 
@@ -68,10 +74,16 @@ export class UserPrefs {
         persist(this.snapshot());
     }
 
+    setFlameRenderer(value: 'gl' | 'cpu'): void {
+        this.flameRenderer = value;
+        persist(this.snapshot());
+    }
+
     reset(): void {
         this.closeOnDisconnect = DEFAULT_PREFS.closeOnDisconnect;
         this.lang = DEFAULT_PREFS.lang;
         this.mainThreadOnly = DEFAULT_PREFS.mainThreadOnly;
+        this.flameRenderer = DEFAULT_PREFS.flameRenderer;
         if (typeof localStorage !== 'undefined') {
             try {
                 localStorage.removeItem(STORAGE_KEY);

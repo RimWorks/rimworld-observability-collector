@@ -190,11 +190,13 @@ describe('drawStrip', () => {
         expect(cut!.x1).toBeGreaterThan(0);
     });
 
-    it('draws a gc mark hanging below the baseline for a frame that collected', () => {
+    it('draws a gc band tick plus a full-height rule for a frame that collected', () => {
         const { ctx, rects } = fakeCtx();
         drawStrip(ctx, buildBars([1, 2], [1000, 1000]), opts(null, [], [2]));
-        const mark = rects.find((r) => r.fill === '#gc');
-        expect(mark).toMatchObject({ y: 40 - GC_BAND_PX, h: GC_BAND_PX });
+        const marks = rects.filter((r) => r.fill === '#gc');
+        expect(marks).toHaveLength(2);
+        expect(marks[0]).toMatchObject({ y: 0, h: 40 - GC_BAND_PX });
+        expect(marks[1]).toMatchObject({ y: 40 - GC_BAND_PX, h: GC_BAND_PX });
     });
 
     it('draws no gc marks when nothing collected', () => {

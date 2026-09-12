@@ -1067,4 +1067,25 @@ describe('FrameTimeline search scope', () => {
         await waitForFrame();
         expect(sectionSearch.unsampledCount).toBe(0);
     });
+    // regression: the renderer init effect once read a signal it also wrote, recreating
+    // (and leaking) a gl context per svelte flush. one mount must mean one init.
+    it('initialises the flame renderer exactly once per mount', async () => {
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+        try {
+            render(FrameTimeline, {
+                series: buildSeries(TWO_FRAMES),
+                names: NAMES,
+                selectedOrdinal: TWO_FRAMES[1].capture_ordinal,
+            });
+            await waitFor(() => {
+                expect(info.mock.calls.some(([m]) => String(m).includes('flame renderer'))).toBe(
+                    true,
+                );
+            });
+            const inits = info.mock.calls.filter(([m]) => String(m).includes('flame renderer'));
+            expect(inits).toHaveLength(1);
+        } finally {
+            info.mockRestore();
+        }
+    });
 });

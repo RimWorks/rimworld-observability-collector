@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { foldFrame, layoutFrame, quadIndexForNode, type LayoutOptions } from './frameLayout';
 import type { TreeNode } from './frameTree';
 import { laneBands, laneRow, ThreadRole } from './threadLanes';
+import { aggregateNodes } from './frameSeries';
 
 function node(depth: number, startUs: number, durUs: number, sectionId = 1): TreeNode {
     return {
@@ -250,7 +251,11 @@ describe('layoutFrame thread bands', () => {
             { id: 1, name: '', role: ThreadRole.Main, busy_ns: 0 },
             { id: 2, name: 'worker', role: ThreadRole.UnityJob, busy_ns: 0 },
         ],
-        [lane(node(0, 0, 100), 1), lane(node(1, 0, 50), 1), lane(node(0, 0, 100), 2)],
+        aggregateNodes([
+            lane(node(0, 0, 100), 1),
+            lane(node(1, 0, 50), 1),
+            lane(node(0, 0, 100), 2),
+        ]).laneDepth,
         128,
     );
 

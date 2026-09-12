@@ -245,5 +245,9 @@
     "settings.readonly": "只读",
     "flamegraph.exportFrame": "导出帧",
     "flamegraph.exportRing": "导出环",
-    "flamegraph.exportTimeline": "导出时间线"
+    "flamegraph.exportTimeline": "导出时间线",
+    "strip.allocTitle": "每帧分配字节",
+    "settings.flameRendererGl": "GPU 火焰图渲染",
+    "tip.settings.flameRendererGl": "使用 GPU (WebGL) 绘制火焰图填充。关闭则回退到 CPU 画布渲染。",
+    "topbar.patching": "补丁中"
 }

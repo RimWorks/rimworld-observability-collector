@@ -245,5 +245,9 @@
     "settings.readonly": "Nur lesbar",
     "flamegraph.exportFrame": "Frame exportieren",
     "flamegraph.exportRing": "Ring exportieren",
-    "flamegraph.exportTimeline": "Zeitverlauf exportieren"
+    "flamegraph.exportTimeline": "Zeitverlauf exportieren",
+    "strip.allocTitle": "Bytes pro Frame alloziert",
+    "settings.flameRendererGl": "GPU-Flame-Rendering",
+    "tip.settings.flameRendererGl": "Flame-Fuellungen auf der GPU zeichnen (WebGL). Aus nutzt den CPU-Canvas-Renderer.",
+    "topbar.patching": "patcht"
 }

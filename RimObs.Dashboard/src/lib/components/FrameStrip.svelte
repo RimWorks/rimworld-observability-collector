@@ -2,22 +2,26 @@
     import { onMount, onDestroy } from 'svelte';
     import {
         buildBars,
+        buildAllocBars,
         barIndexAt,
         stepOrdinal,
         DEFAULT_STRIP_SLOTS,
         clampTooltipX,
         gridLines,
+        allocGridLines,
         GC_BAND_PX,
         type StripBar,
     } from '../frameStrip';
     import { drawStrip } from '../stripDraw';
-    import { ns } from '../format';
+    import { ns, bytes } from '../format';
     import { t } from '../i18n';
     import { FRAME_BUDGET_US } from '../frameCost';
 
     let {
         ordinals,
         durationsUs,
+        allocBytes = [],
+        mode = 'time',
         selectedOrdinal = null,
         cutOrdinals = [],
         gcOrdinals = [],
@@ -28,6 +32,9 @@
     }: {
         ordinals: readonly number[];
         durationsUs: readonly number[];
+        /** per-frame root-scope alloc totals, parallel to ordinals. */
+        allocBytes?: readonly number[];
+        mode?: 'time' | 'alloc';
         selectedOrdinal?: number | null;
         cutOrdinals?: readonly number[];
         gcOrdinals?: readonly number[];
@@ -42,7 +49,9 @@
 
     const HEIGHT_PX = 132 + GC_BAND_PX;
 
-    let bars = $derived(buildBars(ordinals, durationsUs));
+    let bars = $derived(
+        mode === 'alloc' ? buildAllocBars(ordinals, allocBytes) : buildBars(ordinals, durationsUs),
+    );
     let canvasEl = $state<HTMLCanvasElement | null>(null);
     let hostEl = $state<HTMLDivElement | null>(null);
     let widthPx = $state(600);
@@ -58,6 +67,11 @@
         return getComputedStyle(el).getPropertyValue(token).trim();
     }
 
+    // 12 getComputedStyle reads per paint at 30/s forced style recalc; tokens change on
+    // theme switches only, so a 1s cache is invisible and free.
+    let themeCache: Record<string, string> | null = null;
+    let themeCachedAt = 0;
+
     function paint(): void {
         const canvas = canvasEl;
         const host = hostEl;
@@ -65,15 +79,28 @@
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const read = (token: string, fallback: string) => cssVar(host, token) || fallback;
-        canvas.width = Math.max(1, Math.round(widthPx * dpr));
-        canvas.height = Math.max(1, Math.round(heightPx * dpr));
+        const now = performance.now();
+        if (!themeCache || now - themeCachedAt > 1000) {
+            themeCache = {};
+            themeCachedAt = now;
+        }
+        const cache = themeCache;
+        const read = (token: string, fallback: string) =>
+            (cache[token] ??= cssVar(host, token) || fallback);
+        const w = Math.max(1, Math.round(widthPx * dpr));
+        const h = Math.max(1, Math.round(heightPx * dpr));
+        // reassigning canvas dims reallocates the backing store even when unchanged.
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
         drawStrip(ctx, bars, {
             widthPx,
             heightPx,
             dpr,
+            allocMode: mode === 'alloc',
             selectedOrdinal,
-            hoveredOrdinal: bars[hoverIndex]?.ordinal ?? null,
+            // no hover recolor: live data slides under a parked cursor, so a painted hover
+            // mark strobes every bar that passes it. the tooltip carries the hover reading.
+            hoveredOrdinal: null,
             cutOrdinals,
             gcOrdinals,
             slots,
@@ -96,6 +123,7 @@
 
     $effect(() => {
         void bars;
+        void mode;
         void selectedOrdinal;
         void hoverIndex;
         void cutOrdinals;
@@ -111,7 +139,8 @@
         const box = hostEl.getBoundingClientRect();
         widthPx = Math.max(1, Math.round(box.width));
         heightPx = Math.max(1, Math.round(box.height) || HEIGHT_PX);
-        dpr = globalThis.devicePixelRatio || 1;
+        // bars are sub-pixel at 2000 slots, so hidpi backing buys nothing but 4x the pixels.
+        dpr = Math.min(globalThis.devicePixelRatio || 1, 1);
     }
 
     onMount(() => {
@@ -213,6 +242,8 @@
     }
 
     let hovered = $derived<StripBar | null>(bars[hoverIndex] ?? null);
+    const barLabel = (bar: StripBar) =>
+        mode === 'alloc' ? bytes(bar.allocBytes ?? 0) : ns(bar.durationUs * 1000);
     let current = $derived(bars.find((b) => b.ordinal === selectedOrdinal) ?? null);
     let tooltipLeft = $derived(clampTooltipX(hoverX, tooltipWidth, widthPx));
     let budgetMs = $derived((FRAME_BUDGET_US / 1000).toFixed(1));
@@ -223,19 +254,33 @@
         <span class="dim">{t('strip.title')}</span>
         {#if hovered}
             <span class="read" data-testid="strip-hover">
-                {hovered.ordinal} | {ns(hovered.durationUs * 1000)}
+                {hovered.ordinal} | {barLabel(hovered)}
             </span>
+        {:else if mode === 'alloc'}
+            <span class="read dim">{t('strip.allocTitle')}</span>
         {:else}
             <span class="read dim">{t('strip.budget')} ({budgetMs} ms)</span>
         {/if}
     </div>
     <div class="plot" style="--gc-band-px: {GC_BAND_PX}px">
         <div class="axis" aria-hidden="true">
-            {#each gridLines() as line (line.fps)}
-                <span style="bottom: calc({GC_BAND_PX}px + {line.at} * (100% - {GC_BAND_PX}px))">
-                    <b>{line.fps} FPS</b><em>{line.ms.toFixed(1)} ms</em>
-                </span>
-            {/each}
+            {#if mode === 'alloc'}
+                {#each allocGridLines() as line (line.bytes)}
+                    <span
+                        style="bottom: calc({GC_BAND_PX}px + {line.at} * (100% - {GC_BAND_PX}px))"
+                    >
+                        <b>{bytes(line.bytes)}</b>
+                    </span>
+                {/each}
+            {:else}
+                {#each gridLines() as line (line.fps)}
+                    <span
+                        style="bottom: calc({GC_BAND_PX}px + {line.at} * (100% - {GC_BAND_PX}px))"
+                    >
+                        <b>{line.fps} FPS</b><em>{line.ms.toFixed(1)} ms</em>
+                    </span>
+                {/each}
+            {/if}
         </div>
         <div class="canvaswrap" bind:this={hostEl}>
             <canvas
@@ -254,9 +299,7 @@
                 aria-valuemin={bars[0]?.ordinal ?? 0}
                 aria-valuemax={bars[bars.length - 1]?.ordinal ?? 0}
                 aria-valuenow={current?.ordinal ?? undefined}
-                aria-valuetext={current
-                    ? `${current.ordinal} | ${ns(current.durationUs * 1000)}`
-                    : undefined}
+                aria-valuetext={current ? `${current.ordinal} | ${barLabel(current)}` : undefined}
             ></canvas>
             {#if rangeIndices}
                 <div
@@ -275,7 +318,7 @@
                     style="left: {tooltipLeft}px"
                     data-testid="strip-tooltip"
                 >
-                    <b>#{hovered.ordinal}</b><span>{ns(hovered.durationUs * 1000)}</span>
+                    <b>#{hovered.ordinal}</b><span>{barLabel(hovered)}</span>
                 </div>
             {/if}
         </div>

@@ -10,6 +10,8 @@ export interface StripBar {
     /** 0..1 against STRIP_FULL_SCALE_US */
     height: number;
     overBudget: boolean;
+    /** set in alloc mode; height then comes from the log byte scale instead. */
+    allocBytes?: number;
 }
 
 export function barHeight(durationUs: number): number {
@@ -87,6 +89,52 @@ export function stepOrdinal(
 }
 
 /** Neo labels the history axis in FPS, which is what a reader actually thinks in. */
+// log scale like Neo's alloc strip: 1 KB..4 MB labels, evenly spaced per power of 8.
+export const ALLOC_MIN_BYTES = 256;
+export const ALLOC_MAX_BYTES = 16 * 1024 * 1024;
+const ALLOC_LOG_RANGE = Math.log(ALLOC_MAX_BYTES / ALLOC_MIN_BYTES);
+
+export function allocBarHeight(bytesValue: number): number {
+    if (!(bytesValue > 0)) return 0;
+    const f = Math.log(bytesValue / ALLOC_MIN_BYTES) / ALLOC_LOG_RANGE;
+    // a sub-floor allocation still gets a visible sliver rather than vanishing.
+    return Math.min(1, Math.max(0.03, f));
+}
+
+export function buildAllocBars(
+    ordinals: readonly number[],
+    allocBytes: readonly number[],
+): StripBar[] {
+    const n = Math.min(ordinals.length, allocBytes.length);
+    const bars = new Array<StripBar>(n);
+    for (let i = 0; i < n; i++) {
+        const value = allocBytes[i];
+        bars[i] = {
+            ordinal: ordinals[i],
+            durationUs: 0,
+            height: allocBarHeight(value),
+            overBudget: false,
+            allocBytes: value,
+        };
+    }
+    return bars;
+}
+
+export const ALLOC_GRID_BYTES = [1024, 8192, 65536, 524288, 4194304] as const;
+
+export interface AllocGridLine {
+    bytes: number;
+    /** 0..1 from the bottom */
+    at: number;
+}
+
+export function allocGridLines(): AllocGridLine[] {
+    return ALLOC_GRID_BYTES.map((b) => ({
+        bytes: b,
+        at: Math.log(b / ALLOC_MIN_BYTES) / ALLOC_LOG_RANGE,
+    }));
+}
+
 export const FPS_GRID = [15, 20, 30, 60, 120] as const;
 
 export interface GridLine {
@@ -178,6 +226,20 @@ export function clampTooltipX(x: number, tooltipWidthPx: number, containerWidthP
 }
 
 /** Reserved pixel height below the bar baseline for the GC tick lane. */
+/**
+ * A slot's device-pixel-snapped span. Sub-pixel slots drawn at fractional x alias into a
+ * vertical moire; snapping start and end to device pixels tiles the columns exactly.
+ */
+export function slotSpanPx(
+    index: number,
+    slotWidthPx: number,
+    dpr: number,
+): { x: number; w: number } {
+    const x0 = Math.round(index * slotWidthPx * dpr) / dpr;
+    const x1 = Math.round((index + 1) * slotWidthPx * dpr) / dpr;
+    return { x: x0, w: Math.max(x1 - x0, 1 / dpr) };
+}
+
 export const GC_BAND_PX = 8;
 
 /**

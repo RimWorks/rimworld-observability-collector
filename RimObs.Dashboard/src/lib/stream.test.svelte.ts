@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StreamResource } from './stream.svelte';
+import { StreamResource, resetStreamHubs } from './stream.svelte';
 
 class FakeEventSource {
     static latest: FakeEventSource | null = null;
@@ -28,6 +28,7 @@ describe('StreamResource', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.stubGlobal('EventSource', FakeEventSource);
+        resetStreamHubs();
     });
 
     afterEach(() => {

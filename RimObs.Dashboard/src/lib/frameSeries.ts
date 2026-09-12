@@ -1,6 +1,36 @@
-import { buildFrameTree, type FrameData, type TreeNode } from './frameTree';
+import { buildFrameTree, UNKNOWN_LANE, type FrameData, type TreeNode } from './frameTree';
 import { layoutFrame, type LayoutOptions, type Quad } from './frameLayout';
-import { laneRow, type LaneBands } from './threadLanes';
+import { laneRow, type LaneBands, type WindowLaneStats } from './threadLanes';
+
+/**
+ * Per-frame rollups, built once with the tree and folded over the window instead of
+ * rescanning every node on every apply.
+ */
+export interface FrameAggregates {
+    /** deepest node in the frame, uncapped. */
+    maxDepth: number;
+    /** lane to its deepest node. a node with no thread id keys on UNKNOWN_LANE. */
+    laneDepth: Map<number, number>;
+    /** lane to its call count and outermost-scope busy time. same keying. */
+    laneStats: Map<number, WindowLaneStats>;
+}
+
+export function aggregateNodes(nodes: TreeNode[]): FrameAggregates {
+    const laneDepth = new Map<number, number>();
+    const laneStats = new Map<number, WindowLaneStats>();
+    let maxDepth = 0;
+    for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const lane = n.laneId ?? UNKNOWN_LANE;
+        if (n.depth > maxDepth) maxDepth = n.depth;
+        if (n.depth > (laneDepth.get(lane) ?? 0)) laneDepth.set(lane, n.depth);
+        let s = laneStats.get(lane);
+        if (s === undefined) laneStats.set(lane, (s = { calls: 0, busyNs: 0 }));
+        s.calls++;
+        if (n.parentIndex < 0) s.busyNs += (n.endUs - n.startUs) * 1000;
+    }
+    return { maxDepth, laneDepth, laneStats };
+}
 
 export interface FrameEntry {
     ordinal: number;
@@ -11,6 +41,7 @@ export interface FrameEntry {
     nodeStart: number;
     nodeEnd: number;
     orphanCount: number;
+    agg: FrameAggregates;
 }
 
 export interface FrameGap {
@@ -37,6 +68,9 @@ export interface SeriesCacheEntry {
     orphanCount: number;
     /** revalidation key: a backfilled frame returns the same ordinal with more nodes. */
     nodeCount: number;
+    agg: FrameAggregates;
+    /** base the parentIndex values already carry. an unmoved frame skips the rewrite. */
+    appliedBase: number;
 }
 
 export const EMPTY_SERIES: FrameSeries = {
@@ -65,11 +99,13 @@ function treeFor(frame: FrameData, cache?: Map<number, SeriesCacheEntry>): Serie
     const built = buildFrameTree(frame);
     const parentLocal = new Int32Array(built.nodes.length);
     for (let i = 0; i < built.nodes.length; i++) parentLocal[i] = built.nodes[i].parentIndex;
-    const entry = {
+    const entry: SeriesCacheEntry = {
         nodes: shifted(built.nodes, frame.start_us),
         parentLocal,
         orphanCount: built.orphanCount,
         nodeCount: frame.node_count,
+        agg: aggregateNodes(built.nodes),
+        appliedBase: -1,
     };
     cache?.set(frame.capture_ordinal, entry);
     return entry;
@@ -83,21 +119,35 @@ export function buildSeries(
     if (usable.length === 0) return EMPTY_SERIES;
     const ordered = [...usable].sort((a, b) => a.capture_ordinal - b.capture_ordinal);
 
-    const nodes: TreeNode[] = [];
+    const builts = new Array<SeriesCacheEntry>(ordered.length);
+    let total = 0;
+    for (let f = 0; f < ordered.length; f++) {
+        builts[f] = treeFor(ordered[f], cache);
+        total += builts[f].nodes.length;
+    }
+
+    const nodes = new Array<TreeNode>(total);
     const entries: FrameEntry[] = [];
     const gaps: FrameGap[] = [];
     let orphanCount = 0;
+    let at = 0;
 
-    for (const frame of ordered) {
-        const built = treeFor(frame, cache);
-        const nodeStart = nodes.length;
-        // no per-node allocation on the hot rebuild: the cached objects are pushed as-is and
-        // only their parentIndex is rewritten against this window's base.
+    for (let f = 0; f < ordered.length; f++) {
+        const frame = ordered[f];
+        const built = builts[f];
+        const nodeStart = at;
+        // the cached objects are copied by reference, and parentIndex is only rewritten when
+        // this frame actually moved in the window. an append-only poll rewrites nothing.
+        const rebase = built.appliedBase !== nodeStart;
         for (let i = 0; i < built.nodes.length; i++) {
-            const local = built.parentLocal[i];
-            built.nodes[i].parentIndex = local < 0 ? local : local + nodeStart;
-            nodes.push(built.nodes[i]);
+            const node = built.nodes[i];
+            if (rebase) {
+                const local = built.parentLocal[i];
+                node.parentIndex = local < 0 ? local : local + nodeStart;
+            }
+            nodes[at++] = node;
         }
+        built.appliedBase = nodeStart;
         orphanCount += built.orphanCount;
 
         const previous = entries.at(-1);
@@ -107,8 +157,9 @@ export function buildSeries(
             endUs: frame.end_us,
             durationUs: frame.duration_us,
             nodeStart,
-            nodeEnd: nodes.length,
+            nodeEnd: at,
             orphanCount: built.orphanCount,
+            agg: built.agg,
         });
         if (previous && frame.start_us > previous.endUs) {
             gaps.push({
@@ -187,6 +238,36 @@ export function entryOfNode(series: FrameSeries, nodeIndex: number): FrameEntry 
     return null;
 }
 
+/** deepest node across the window, folded from the per-frame maxima. cap is exclusive. */
+export function seriesMaxDepth(series: FrameSeries, cap = Infinity): number {
+    let max = 0;
+    for (const e of series.entries) if (e.agg.maxDepth > max) max = e.agg.maxDepth;
+    return Math.min(max, cap - 1);
+}
+
+/**
+ * The frame's own tree back out of the series cache, with frame-local times and parent
+ * indices. Falls back to a real build when the frame is not in the window.
+ */
+export function frameTreeNodes(
+    frame: FrameData,
+    cache?: Map<number, SeriesCacheEntry>,
+): TreeNode[] {
+    const hit = cache?.get(frame.capture_ordinal);
+    if (!hit || hit.nodeCount !== frame.node_count) return buildFrameTree(frame).nodes;
+    const out = new Array<TreeNode>(hit.nodes.length);
+    for (let i = 0; i < hit.nodes.length; i++) {
+        const n = hit.nodes[i];
+        out[i] = {
+            ...n,
+            parentIndex: hit.parentLocal[i],
+            startUs: n.startUs - frame.start_us,
+            endUs: n.endUs - frame.start_us,
+        };
+    }
+    return out;
+}
+
 export function hitTestSeries(
     series: FrameSeries,
     row: number,
@@ -240,8 +321,6 @@ export function visibleGaps(gaps: FrameGap[], viewStartUs: number, viewEndUs: nu
 }
 
 export const MAX_WINDOW_FRAMES = 64;
-// TODO(rebuild cost): buildSeries redoes the whole window per new frame. raise this once
-// the rebuild is incremental.
 export const MAX_WINDOW_NODES = 60_000;
 
 // same array back when nothing changed, so a poll that saw the same frame does not

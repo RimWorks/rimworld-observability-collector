@@ -111,6 +111,8 @@ export interface RegistrySection {
     id: number;
     name: string;
     subsystem: string | null;
+    /** declaring assembly; absent from sessions recorded before it was wired through. */
+    assembly?: string | null;
 }
 
 export interface RegistrySectionsResponse {

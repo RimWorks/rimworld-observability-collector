@@ -5,17 +5,17 @@ import type { ViewRange } from './frameView';
 export const ROW_HEIGHT = 18;
 const LABEL_PAD = 4;
 const LABEL_GAP = LABEL_PAD * 2;
-const MIN_QUAD_PX = 1;
+export const MIN_QUAD_PX = 1;
 const HOVER_LIFT = 0.15;
 const INK_THRESHOLD = 0.16;
 // below this a truncated name says nothing, so the bar reads better bare.
 const MIN_LABEL_CHARS = 10;
 const ELLIPSIS = '\u2026';
 const FOCUS_RING_PX = 2;
-const GAP_ALPHA = 0.55;
+export const GAP_ALPHA = 0.55;
 const MATCH_RING_PX = 1.5;
 // non-matches read as background noise once a search is active, without losing their shape.
-const SEARCH_DIM_ALPHA = 0.32;
+export const SEARCH_DIM_ALPHA = 0.32;
 
 const SUBSYSTEM_TOKENS = [
     '--sub-tick',
@@ -61,9 +61,23 @@ export interface DrawOptions {
     laneBands?: { rows: number }[];
     /** frame start times: each edge gets a full-height rule so frames never run together. */
     frameEdgesUs?: number[];
+    /** the gl layer owns lane bands, gap bands and quad fills; this pass then draws the rest. */
+    skipFills?: boolean;
 }
 
+const themeCache = new WeakMap<Element, { theme: DrawTheme; at: number }>();
+
+/** cached ~1s per element: reading 16 custom properties per draw forced style recalc at 30/s. */
 export function readTheme(el: Element): DrawTheme {
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    const hit = themeCache.get(el);
+    if (hit && now - hit.at <= 1000) return hit.theme;
+    const theme = readThemeUncached(el);
+    themeCache.set(el, { theme, at: now });
+    return theme;
+}
+
+function readThemeUncached(el: Element): DrawTheme {
     const read = (token: string, fallback: string): string => cssVar(el, token) || fallback;
     const hue: Record<string, string> = {};
     for (let i = 0; i < SUBSYSTEMS.length; i++) {
@@ -93,12 +107,6 @@ function parseHex(hex: string): [number, number, number] {
     return m
         ? [Number.parseInt(m[1], 16), Number.parseInt(m[2], 16), Number.parseInt(m[3], 16)]
         : [128, 128, 128];
-}
-
-function lighten(hex: string, lift: number): string {
-    const [r, g, b] = parseHex(hex);
-    const mix = (c: number): number => Math.round(c + (255 - c) * lift);
-    return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
 }
 
 function luminance(rgb: string): number {
@@ -142,13 +150,20 @@ export function hashedSectionColor(sectionId: number): string {
 
 // deeper bars sit lighter, so nesting reads without a border on every quad. nest, not the
 // row: a second band starts over at its own depth 0.
-function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
+export function quadFillRgb(q: Quad, opts: DrawOptions, lifted: boolean): [number, number, number] {
     const lift = Math.min(q.nest ?? q.depth, 5) * 0.07 + 0.12 + (lifted ? HOVER_LIFT : 0);
     const base =
         q.count > 1 && q.sectionId < 0
             ? opts.theme.collapsed
             : (opts.theme.hue[opts.subsystem(q) ?? ''] ?? hashedSectionColor(q.sectionId));
-    return lighten(base, lift);
+    const [r, g, b] = parseHex(base);
+    const mix = (c: number): number => Math.round(c + (255 - c) * lift);
+    return [mix(r), mix(g), mix(b)];
+}
+
+function quadFill(q: Quad, opts: DrawOptions, lifted: boolean): string {
+    const [r, g, b] = quadFillRgb(q, opts, lifted);
+    return `rgb(${r}, ${g}, ${b})`;
 }
 
 function inkOn(fill: string, theme: DrawTheme): string {
@@ -156,7 +171,7 @@ function inkOn(fill: string, theme: DrawTheme): string {
 }
 
 function drawGapBands(ctx: CanvasRenderingContext2D, opts: DrawOptions, pxPerUs: number): void {
-    if (!opts.gaps?.length) return;
+    if (!opts.gaps?.length || opts.skipFills) return;
     ctx.save();
     ctx.fillStyle = opts.theme.collapsed;
     ctx.globalAlpha = GAP_ALPHA;
@@ -173,7 +188,7 @@ function drawGapBands(ctx: CanvasRenderingContext2D, opts: DrawOptions, pxPerUs:
 // where one thread ends and the next begins without counting rows.
 function drawLaneBands(ctx: CanvasRenderingContext2D, opts: DrawOptions): void {
     const bands = opts.laneBands;
-    if (!bands || bands.length < 2) return;
+    if (!bands || bands.length < 2 || opts.skipFills) return;
     let row = 0;
     for (let i = 0; i < bands.length; i++) {
         const y = row * ROW_HEIGHT;
@@ -238,9 +253,13 @@ export function drawTimeline(
             (q.endUs > opts.matchRange.startUs && q.startUs < opts.matchRange.endUs);
         const isMatch = searchActive && inRange && matchIds.has(q.sectionId);
         ctx.globalAlpha = searchActive && !isMatch ? SEARCH_DIM_ALPHA : 1;
-        const fill = quadFill(q, opts, i === opts.hoverIndex || isFocused);
-        ctx.fillStyle = fill;
-        ctx.fillRect(x, y, w, ROW_HEIGHT - 1);
+        const lifted = i === opts.hoverIndex || isFocused;
+        const fill = quadFill(q, opts, lifted);
+        // the gl layer painted the flat fills; only the lifted pair still needs one here.
+        if (!opts.skipFills || lifted) {
+            ctx.fillStyle = fill;
+            ctx.fillRect(x, y, w, ROW_HEIGHT - 1);
+        }
 
         const ink = inkOn(fill, theme);
 

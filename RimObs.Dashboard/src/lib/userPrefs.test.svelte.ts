@@ -29,6 +29,7 @@ describe('UserPrefs', () => {
             closeOnDisconnect: false,
             lang: '',
             mainThreadOnly: true,
+            flameRenderer: 'gl',
         });
     });
 
@@ -46,6 +47,7 @@ describe('UserPrefs', () => {
             closeOnDisconnect: true,
             lang: 'de',
             mainThreadOnly: true,
+            flameRenderer: 'gl',
         });
     });
 
@@ -68,5 +70,14 @@ describe('UserPrefs', () => {
         prefs.reset();
         expect(prefs.closeOnDisconnect).toBe(true);
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
+});
+
+describe('flame renderer pref', () => {
+    it('defaults to gl and persists a cpu switch', () => {
+        const prefs = new UserPrefs();
+        expect(prefs.flameRenderer).toBe('gl');
+        prefs.setFlameRenderer('cpu');
+        expect(new UserPrefs().flameRenderer).toBe('cpu');
     });
 });

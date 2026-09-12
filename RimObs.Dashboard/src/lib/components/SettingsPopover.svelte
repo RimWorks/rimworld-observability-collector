@@ -696,6 +696,21 @@
             <label class="switch">
                 <input
                     type="checkbox"
+                    checked={userPrefs.flameRenderer === 'gl'}
+                    onchange={(e) =>
+                        userPrefs.setFlameRenderer(
+                            (e.currentTarget as HTMLInputElement).checked ? 'gl' : 'cpu',
+                        )}
+                    data-testid="flame-renderer-gl"
+                />
+                <Tooltip text={t('tip.settings.flameRendererGl')} align="stretch">
+                    <span class="label">{t('settings.flameRendererGl')}</span>
+                </Tooltip>
+            </label>
+
+            <label class="switch">
+                <input
+                    type="checkbox"
                     checked={userPrefs.mainThreadOnly}
                     onchange={(e) =>
                         userPrefs.setMainThreadOnly((e.currentTarget as HTMLInputElement).checked)}

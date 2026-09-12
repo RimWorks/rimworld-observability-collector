@@ -1,5 +1,15 @@
 import type { ThreadLane } from './api';
+import type { FrameAggregates } from './frameSeries';
 import { UNKNOWN_LANE, type FrameNodes, type TreeNode } from './frameTree';
+
+/** the slice of a FrameEntry the window folds read. */
+export interface AggregatedEntry {
+    agg: FrameAggregates;
+}
+
+function recentSlice<T>(entries: T[], recentFrames: number): T[] {
+    return entries.slice(Math.max(0, entries.length - recentFrames));
+}
 
 /** Mirrors RimObs.Wire.ThreadRole. */
 export const ThreadRole = {
@@ -63,16 +73,21 @@ export function orderLanes(threads: ThreadLane[]): ThreadLane[] {
         });
 }
 
+/** every lane named anywhere in the newest `recentFrames` entries. */
+export function recentLaneIds(entries: AggregatedEntry[], recentFrames: number): Set<number> {
+    const ids = new Set<number>();
+    for (const e of recentSlice(entries, recentFrames)) {
+        for (const lane of e.agg.laneStats.keys()) if (lane !== UNKNOWN_LANE) ids.add(lane);
+    }
+    return ids;
+}
+
 /**
  * A bundle ships node thread ids but no thread list, so the lanes are whatever the nodes name.
  * Lowest id wins main, which is how orderLanes ranks a live session too.
  */
-export function lanesFromNodes(nodes: TreeNode[]): ThreadLane[] {
-    const ids = new Set<number>();
-    for (const n of nodes) {
-        const id = n.laneId ?? UNKNOWN_LANE;
-        if (id !== UNKNOWN_LANE) ids.add(id);
-    }
+export function lanesFromEntries(entries: AggregatedEntry[]): ThreadLane[] {
+    const ids = recentLaneIds(entries, entries.length);
     return orderLanes([...ids].map((id) => ({ id, name: '', role: ThreadRole.Main, busy_ns: 0 })));
 }
 
@@ -92,14 +107,11 @@ export interface LaneBands {
  * One flame band per lane, stacked in the order given. A lane with nothing in the window
  * still takes a row, so the gutter label stays level with the band it names.
  */
-export function laneBands(lanes: ThreadLane[], nodes: TreeNode[], maxDepth: number): LaneBands {
-    const deepest = new Map<number, number>();
-    for (const n of nodes) {
-        const lane = n.laneId ?? UNKNOWN_LANE;
-        const depth = Math.min(n.depth, maxDepth - 1);
-        if (depth > (deepest.get(lane) ?? 0)) deepest.set(lane, depth);
-    }
-
+export function laneBands(
+    lanes: ThreadLane[],
+    deepest: Map<number, number>,
+    maxDepth: number,
+): LaneBands {
     const bands: LaneBand[] = [];
     const offsets = new Map<number, number>();
     let rows = 0;
@@ -111,6 +123,7 @@ export function laneBands(lanes: ThreadLane[], nodes: TreeNode[], maxDepth: numb
             offsets.set(UNKNOWN_LANE, rows);
             depth = Math.max(depth, deepest.get(UNKNOWN_LANE) ?? 0);
         }
+        depth = Math.min(depth, maxDepth - 1);
         const bandRows = Math.max(depth + 1, MIN_LANE_ROWS);
         bands.push({ id: lane.id, rows: bandRows });
         rows += bandRows;
@@ -138,21 +151,33 @@ export interface WindowLaneStats {
  * that decides which lanes draw, so a visible lane never reads as idle.
  */
 export function windowLaneStats(
-    entries: { nodeStart: number; nodeEnd: number }[],
-    nodes: TreeNode[],
+    entries: AggregatedEntry[],
     recentFrames: number,
     mainLaneId: number,
 ): Map<number, WindowLaneStats> {
     const stats = new Map<number, WindowLaneStats>();
-    for (let e = Math.max(0, entries.length - recentFrames); e < entries.length; e++) {
-        for (let i = entries[e].nodeStart; i < entries[e].nodeEnd; i++) {
-            const node = nodes[i];
-            const lane = node.laneId ?? mainLaneId;
-            let s = stats.get(lane);
-            if (!s) stats.set(lane, (s = { calls: 0, busyNs: 0 }));
-            s.calls++;
-            if (node.parentIndex < 0) s.busyNs += (node.endUs - node.startUs) * 1000;
+    for (const e of recentSlice(entries, recentFrames)) {
+        for (const [lane, frameStats] of e.agg.laneStats) {
+            const id = lane === UNKNOWN_LANE ? mainLaneId : lane;
+            let s = stats.get(id);
+            if (!s) stats.set(id, (s = { calls: 0, busyNs: 0 }));
+            s.calls += frameStats.calls;
+            s.busyNs += frameStats.busyNs;
         }
     }
     return stats;
+}
+
+/** deepest node per lane across the newest `recentFrames` entries. */
+export function laneDepths(
+    entries: AggregatedEntry[],
+    recentFrames = Infinity,
+): Map<number, number> {
+    const deepest = new Map<number, number>();
+    for (const e of recentSlice(entries, recentFrames)) {
+        for (const [lane, depth] of e.agg.laneDepth) {
+            if (depth > (deepest.get(lane) ?? 0)) deepest.set(lane, depth);
+        }
+    }
+    return deepest;
 }

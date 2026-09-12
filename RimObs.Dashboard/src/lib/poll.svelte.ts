@@ -9,7 +9,9 @@ export function isFrozen(search: string = globalThis.location?.search ?? ''): bo
 }
 
 export class Resource<T> {
-    data = $state<T | null>(null);
+    // raw: payloads are replaced wholesale, never mutated, and a deep proxy over a 350KB
+    // graph allocates tens of thousands of signals per apply.
+    data = $state.raw<T | null>(null);
     state = $state<LoadState>('loading');
     error = $state<string>('');
     consecutiveFailures = $state<number>(0);

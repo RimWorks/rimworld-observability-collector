@@ -36,12 +36,16 @@ export interface FrameStats {
 export interface FrameStripData {
     ordinals: number[];
     durations_us: number[];
+    /** per-frame root-scope allocated bytes; absent from pre-alloc collectors. */
+    alloc_bytes?: number[];
 }
 
 export interface FrameVitals {
     tps: number;
     fps: number;
     tick: number;
+    /** smoothed real DoSingleTick cost; null until the tick section has reported. */
+    tick_ms?: number | null;
 }
 
 export interface FrameResponse {
