@@ -6,7 +6,9 @@ namespace RimWorks.RimObs.Profile;
 internal static class SectionRegistry {
     // filter-driven auto-instrumentation registers thousands. three arrays at this size cost
     // about 550 KB, which is cheaper than refusing sections a user asked for.
-    public const int MaxSections = 32768;
+    // 65k: a full auto-instrument scan of a modded game tops 39k eligible targets, and the
+    // old 32768 cap silently refused the overflow.
+    public const int MaxSections = 65536;
 
     internal static readonly string[] s_Names = new string[MaxSections];
     internal static readonly bool[] s_Active = new bool[MaxSections];

@@ -295,7 +295,14 @@ internal static class AutoInstrumentRunner {
         long deadline = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * BudgetMillis / 1000.0);
 
         while (s_RemoveNext < s_Removing.Count) {
-            PatchRegistry.Remove(s_Removing[s_RemoveNext++]);
+            int patchId = s_Removing[s_RemoveNext++];
+            PatchRegistry.Remove(patchId);
+            // a recompose near a crash is the forensic signal for detour bugs, so every
+            // unpatch names its frame.
+            RimWorks.RimLogging.Log.DebugTo(
+                Logging.LogChannels.Sections,
+                "unpatched {PatchId} at frame {Frame}",
+                new object?[] { patchId, Observers.FrameTickCounters.FrameOrdinal });
             if (Stopwatch.GetTimestamp() >= deadline)
                 return;
         }
