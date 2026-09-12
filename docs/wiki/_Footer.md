@@ -1,1 +1,1 @@
-[Source](https://github.com/RimWorks/rimworld-observability-collector) · [Releases](https://github.com/RimWorks/rimworld-observability-collector/releases) · [Issues](https://github.com/RimWorks/rimworld-observability-collector/issues) · MIT licensed
+[Source](https://github.com/RimWorks/rimworld-observability-collector) | [Releases](https://github.com/RimWorks/rimworld-observability-collector/releases) | [Issues](https://github.com/RimWorks/rimworld-observability-collector/issues) | MIT licensed
