@@ -10,8 +10,8 @@ public sealed class FrameTickCountersTests {
         FrameTickCounters.Reset();
     }
 
-    // the gc poller wakes once a second, so it cannot name the frame a collection landed in.
-    // sampling the count every frame is the only thing that can.
+    // the count change is noticed AFTER BeginFrame bumps the ordinal, so the frame that
+    // actually stalled under the collection is the previous one.
     [Fact]
     public void Notes_the_frame_a_collection_landed_in() {
         FrameTickCounters.BeginFrame();
@@ -20,15 +20,15 @@ public sealed class FrameTickCountersTests {
         FrameTickCounters.BeginFrame();
         FrameTickCounters.NoteCollections(1);
 
-        int collected = FrameTickCounters.FrameOrdinal;
+        int stalled = FrameTickCounters.FrameOrdinal - 1;
 
         for (int i = 0; i < 60; i++) {
             FrameTickCounters.BeginFrame();
             FrameTickCounters.NoteCollections(1);
         }
 
-        FrameTickCounters.LastGcFrameOrdinal.Should().Be(collected);
-        FrameTickCounters.FrameOrdinal.Should().Be(collected + 60);
+        FrameTickCounters.LastGcFrameOrdinal.Should().Be(stalled);
+        FrameTickCounters.FrameOrdinal.Should().Be(stalled + 61);
     }
 
     [Fact]

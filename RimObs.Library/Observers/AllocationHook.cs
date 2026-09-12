@@ -30,6 +30,11 @@ internal static class AllocationHook {
     private static GcAllocationCallback? s_Callback;
     private static ObjectSizeFn? s_Size;
     private static int s_State;
+    private static readonly object s_Gate = new();
+    private static IntPtr s_Handle;
+    private static IntPtr s_CallbackPtr;
+    private static Action<IntPtr, IntPtr>? s_SetCallback;
+    private static int s_SuspendCount;
 
     public static int State => s_State;
 
@@ -42,6 +47,32 @@ internal static class AllocationHook {
     internal static void Accumulate(long size) {
         t_Bytes += size;
         t_Count++;
+    }
+
+    // enabling before the first Playing frame puts the callback live while worldgen JIT-compiles
+    // patch wrappers, and boehm's allocation lock nested under mono's JIT locks segfaults.
+    private static bool s_DeferredPending;
+
+    public static bool DeferredPending => s_DeferredPending;
+
+    /// <summary>Park the enable until the game is ticking; the frame prefix arms it.</summary>
+    public static void DeferEnable() => s_DeferredPending = true;
+
+    public static bool TryEnableDeferred() {
+        if (!s_DeferredPending)
+            return false;
+        s_DeferredPending = false;
+        if (TryEnable()) {
+            RimWorks.RimLogging.Log.InfoTo(
+                Logging.LogChannels.Bootstrap,
+                "per-section allocation tracking on via {Runtime}",
+                new object?[] { Runtime });
+            return true;
+        }
+        RimWorks.RimLogging.Log.WarnTo(
+            Logging.LogChannels.Bootstrap,
+            "per-section allocation tracking unavailable on this runtime, so the alloc columns stay empty");
+        return false;
     }
 
     /// <summary>
@@ -72,7 +103,14 @@ internal static class AllocationHook {
 
             s_Size = candidate.Size;
             s_Callback = OnAllocation;
-            candidate.SetCallback(handle, Marshal.GetFunctionPointerForDelegate(s_Callback));
+            lock (s_Gate) {
+                s_Handle = handle;
+                s_SetCallback = candidate.SetCallback;
+                s_CallbackPtr = Marshal.GetFunctionPointerForDelegate(s_Callback);
+                // a compile guard may already be open on a worker; attach on its close instead.
+                if (s_SuspendCount == 0)
+                    candidate.SetCallback(handle, s_CallbackPtr);
+            }
             Runtime = candidate.Library;
             s_State = On;
             return true;
@@ -80,6 +118,40 @@ internal static class AllocationHook {
 
         s_State = Unavailable;
         return false;
+    }
+
+    /// <summary>
+    /// Detaches the callback for the scope's lifetime, so wrapper JIT compiles never run
+    /// under a live allocation callback. Reentrant across threads via a refcount.
+    /// </summary>
+    public static IDisposable SuspendScope() {
+        lock (s_Gate) {
+            if (++s_SuspendCount == 1 && s_State == On)
+                s_SetCallback?.Invoke(s_Handle, IntPtr.Zero);
+        }
+        return new SuspendToken();
+    }
+
+    internal static int SuspendCountForTests {
+        get {
+            lock (s_Gate) {
+                return s_SuspendCount;
+            }
+        }
+    }
+
+    private sealed class SuspendToken : IDisposable {
+        private bool _disposed;
+
+        public void Dispose() {
+            if (_disposed)
+                return;
+            _disposed = true;
+            lock (s_Gate) {
+                if (--s_SuspendCount == 0 && s_State == On)
+                    s_SetCallback?.Invoke(s_Handle, s_CallbackPtr);
+            }
+        }
     }
 
     private static void OnAllocation(IntPtr prof, IntPtr obj) {

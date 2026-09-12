@@ -15,6 +15,9 @@ internal static class FrameTickPatches {
 
     public static int InstalledCount { get; private set; }
 
+    /// <summary>Set by the bootstrap; true once the game is genuinely playing a map.</summary>
+    public static Func<bool>? AllocArmGate { get; set; }
+
     public static void InstallAll() {
         IPatchBackend? backend = PatchBackends.Active;
         if (backend == null)
@@ -53,8 +56,16 @@ internal static class FrameTickPatches {
 
     // frames keep rendering while the colony is paused, ticks dont, so this is the drain site
     // that lets a patch request land on a paused game.
-    private static void FrameBeginPrefix() {
+    internal static void FrameBeginPrefix() {
         MainThreadMarker.Mark();
+        // the gate is verse-side (ProgramState.Playing): ticks fire during map generation, so
+        // a tick count can arm the hook inside the worldgen JIT storm it must wait out.
+        if (AllocationHook.DeferredPending
+            && AutoInstrumentRunner.Pending == 0
+            && AllocArmGate?.Invoke() == true) {
+            AllocationHook.TryEnableDeferred();
+        }
+        Profile.Profiler.HealPinnedAtFrameBoundary();
         FrameTickCounters.BeginFrame();
         ControlServices.Queue.Drain();
         AutoInstrumentRunner.Pump();

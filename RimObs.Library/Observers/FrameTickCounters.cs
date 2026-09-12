@@ -34,7 +34,9 @@ internal static class FrameTickCounters {
         if (collectionCount == s_LastCollectionCount)
             return;
         s_LastCollectionCount = collectionCount;
-        s_LastGcFrameOrdinal = s_FrameOrdinal;
+        // this runs after BeginFrame bumped the ordinal, and the pause happened before that
+        // bump, so the frame that actually stalled is the previous one.
+        s_LastGcFrameOrdinal = s_FrameOrdinal > 0 ? s_FrameOrdinal - 1 : 0;
     }
 
     public static int LastGcFrameOrdinal => s_LastGcFrameOrdinal;

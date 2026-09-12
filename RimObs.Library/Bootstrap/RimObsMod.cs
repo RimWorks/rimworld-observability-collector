@@ -102,7 +102,10 @@ public sealed class RimObsMod : Mod {
 
             ControlServices.StartServer(ownerId);
             WireTelemetrySink(ownerId, port);
-            EnableAllocTracking();
+            if (_settings.AllocTracking) {
+                FrameTickPatches.AllocArmGate = static () => Current.ProgramState == ProgramState.Playing;
+                AllocationHook.DeferEnable();
+            }
             PopulateOwnerRegistry();
             ProfilingXmlLoader.LoadResult declared = LoadDeclaredProfiling();
 
@@ -126,25 +129,6 @@ public sealed class RimObsMod : Mod {
         catch (Exception ex) {
             Log.ErrorTo(LogChannels.Bootstrap, ex, "bootstrap failed");
         }
-    }
-
-    // one way on purpose: mono raises gc_allocation for the rest of the process once this is
-    // enabled, and clearing the callback still costs about 13ns per allocation. off means never on.
-    private void EnableAllocTracking() {
-        if (!_settings.AllocTracking)
-            return;
-        if (AllocationHook.TryEnable()) {
-            Log.InfoTo(
-                LogChannels.Bootstrap,
-                "per-section allocation tracking on via {Runtime}",
-                new object?[] { AllocationHook.Runtime }
-            );
-            return;
-        }
-        Log.WarnTo(
-            LogChannels.Bootstrap,
-            "per-section allocation tracking unavailable on this runtime, so the alloc columns stay empty"
-        );
     }
 
     public override string SettingsCategory() => "RimObs";

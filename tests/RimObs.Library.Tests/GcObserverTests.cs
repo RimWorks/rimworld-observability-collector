@@ -108,7 +108,9 @@ public sealed class GcObserverTests {
 
         GC.Collect(generation: 0, mode: GCCollectionMode.Forced, blocking: true);
         FrameTickCounters.NoteCollections(GC.CollectionCount(0));
-        int landedOn = FrameTickCounters.FrameOrdinal;
+        // the change is noticed after BeginFrame bumped the ordinal; the stalled frame is
+        // the previous one.
+        int landedOn = FrameTickCounters.FrameOrdinal - 1;
 
         for (int i = 0; i < 40; i++)
             FrameTickCounters.BeginFrame();
@@ -117,6 +119,6 @@ public sealed class GcObserverTests {
 
         detected.Should().BeTrue();
         sample.FrameOrdinal.Should().Be(landedOn);
-        FrameTickCounters.FrameOrdinal.Should().Be(landedOn + 40);
+        FrameTickCounters.FrameOrdinal.Should().Be(landedOn + 41);
     }
 }
