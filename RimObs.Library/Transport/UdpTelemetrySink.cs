@@ -23,6 +23,10 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     private const int DrainIntervalMs = 10;
     private const int MetaInitialBurstTicks = 100;
     private const int MetaHeartbeatTicks = 500;
+    // the collector seals a frame once 16 newer ordinals land and drops everything older, so a
+    // sample this far behind cannot land in any open frame. 300 is ~20x that window, which is
+    // conservative enough that only samples the collector would certainly drop get cut here.
+    private const int LateFrameCutoff = 300;
 
     private readonly UdpClient _client;
     private readonly IPEndPoint _endpoint;
@@ -322,15 +326,21 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             AllocBytes = _batch.AllocBytes,
             ThreadIds = _batch.ThreadIds,
         };
+        // a sample stuck in a lane this long is already past every open frame; dropping it here
+        // costs a compare, sending it costs a datagram the collector throws away.
+        int minFrameOrdinal = FrameTickCounters.FrameOrdinal - LateFrameCutoff;
+        if (minFrameOrdinal < 0)
+            minFrameOrdinal = 0;
         while (true) {
-            int n = _ring.Drain(_batch, BatchSize);
+            int n = _ring.Drain(_batch, BatchSize, minFrameOrdinal);
             if (n == 0)
                 return;
 
             StageThreadRegistrations(_batch.ThreadIds, n);
             FlushThreadRegistrations();
 
-            SendBatch(BatchType.Sections, WireCodec.Serialize(batch, n));
+            ArraySegment<byte> payload = WireCodec.SerializePooled(batch, n);
+            SendPayload(BatchType.Sections, payload.Array!, payload.Count);
             Interlocked.Add(ref _sent, n);
         }
     }
@@ -458,17 +468,15 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         SendBatch(type, payload);
     }
 
-    private void SendBatch(BatchType type, byte[] payload) {
-        TelemetryBatch envelope = new() {
-            SchemaVersion = SchemaVersion.Current,
-            Sequence = ++_sequence,
-            OwnerId = _ownerId,
-            BatchType = type,
-            Payload = payload,
-        };
-        byte[] bytes = WireCodec.Serialize(envelope);
-        _client.Send(bytes, bytes.Length, _endpoint);
-        Interlocked.Add(ref _bytesSent, bytes.Length);
+    private void SendBatch(BatchType type, byte[] payload) => SendPayload(type, payload, payload.Length);
+
+    // the envelope goes into a pooled buffer and straight out the socket: no TelemetryBatch, no
+    // copy of the payload, no copy of the datagram.
+    private void SendPayload(BatchType type, byte[] payload, int payloadLength) {
+        ArraySegment<byte> datagram = WireCodec.SerializeEnvelopePooled(
+            SchemaVersion.Current, ++_sequence, _ownerId, type, payload, payloadLength);
+        _client.Send(datagram.Array!, datagram.Count, _endpoint);
+        Interlocked.Add(ref _bytesSent, datagram.Count);
     }
 
     private static T[] Slice<T>(T[] src, int n) {

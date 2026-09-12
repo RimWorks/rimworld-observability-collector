@@ -14,10 +14,43 @@ public static class WireCodec {
     [ThreadStatic]
     private static WireBufferWriter? t_Writer;
 
+    // the envelope wraps a payload that is still sitting in t_Writer, so it needs its own.
+    [ThreadStatic]
+    private static WireBufferWriter? t_EnvelopeWriter;
+
     private static WireBufferWriter Rented() {
         WireBufferWriter writer = t_Writer ??= new WireBufferWriter(64 * 1024);
         writer.Reset();
         return writer;
+    }
+
+    /// <summary>
+    /// Serializes the first <paramref name="count"/> samples into a pooled buffer. Byte-identical
+    /// to <see cref="Serialize(SectionBatch, int)"/>, without the copy out. The segment is valid
+    /// until this thread serializes another payload.
+    /// </summary>
+    public static ArraySegment<byte> SerializePooled(SectionBatch value, int count) {
+        WireBufferWriter writer = Rented();
+        WriteSectionBatch(writer, value, count);
+        return new ArraySegment<byte>(writer.Buffer, 0, writer.Written);
+    }
+
+    /// <summary>
+    /// Serializes a telemetry envelope around the first <paramref name="payloadLength"/> bytes of
+    /// <paramref name="payload"/>, into a pooled buffer separate from the payload's. Byte-identical
+    /// to serializing a <see cref="TelemetryBatch"/>, and it allocates neither the envelope nor the
+    /// datagram. Valid until this thread serializes another envelope.
+    /// </summary>
+    public static ArraySegment<byte> SerializeEnvelopePooled(int schemaVersion, ulong sequence, string ownerId, BatchType batchType, byte[] payload, int payloadLength) {
+        WireBufferWriter writer = t_EnvelopeWriter ??= new WireBufferWriter(64 * 1024);
+        writer.Reset();
+        writer.WriteArrayHeader(5);
+        writer.WriteInt32(schemaVersion);
+        writer.WriteUInt64(sequence);
+        writer.WriteString(ownerId);
+        writer.WriteUInt8((byte)batchType);
+        writer.WriteBinary(payload, payloadLength);
+        return new ArraySegment<byte>(writer.Buffer, 0, writer.Written);
     }
 
     public static byte[] Serialize<T>(T value) where T : class {
@@ -146,16 +179,7 @@ public static class WireCodec {
     /// </summary>
     public static byte[] Serialize(SectionBatch value, int count) {
         WireBufferWriter writer = Rented();
-        writer.WriteArrayHeader(9);
-        WriteInt32Array(writer, value.SectionIds, count);
-        WriteInt64Array(writer, value.ElapsedTicks, count);
-        WriteInt64Array(writer, value.StartTimestamps, count);
-        WriteInt32Array(writer, value.ParentIds, count);
-        WriteInt32Array(writer, value.FrameOrdinals, count);
-        WriteInt32Array(writer, value.NodeIds, count);
-        WriteInt32Array(writer, value.ParentNodeIds, count);
-        WriteInt64Array(writer, value.AllocBytes, count);
-        WriteInt32Array(writer, value.ThreadIds, count);
+        WriteSectionBatch(writer, value, count);
         return writer.ToArray();
     }
 
@@ -680,6 +704,19 @@ public static class WireCodec {
         writer.WriteString(d.Signature);
         WriteStringArray(writer, d.ParamTypeFullNames);
         writer.WriteString(d.AssemblyName);
+    }
+
+    private static void WriteSectionBatch(WireBufferWriter writer, SectionBatch value, int count) {
+        writer.WriteArrayHeader(9);
+        WriteInt32Array(writer, value.SectionIds, count);
+        WriteInt64Array(writer, value.ElapsedTicks, count);
+        WriteInt64Array(writer, value.StartTimestamps, count);
+        WriteInt32Array(writer, value.ParentIds, count);
+        WriteInt32Array(writer, value.FrameOrdinals, count);
+        WriteInt32Array(writer, value.NodeIds, count);
+        WriteInt32Array(writer, value.ParentNodeIds, count);
+        WriteInt64Array(writer, value.AllocBytes, count);
+        WriteInt32Array(writer, value.ThreadIds, count);
     }
 
     private static void WriteInt32Array(WireBufferWriter writer, int[] values) =>

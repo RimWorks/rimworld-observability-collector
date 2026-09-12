@@ -23,6 +23,11 @@ internal sealed class WireBufferWriter {
         _written = 0;
     }
 
+    /// <summary>Backing store. Only the first <see cref="Written"/> bytes are payload.</summary>
+    public byte[] Buffer => _buffer;
+
+    public int Written => _written;
+
     public byte[] ToArray() {
         byte[] result = new byte[_written];
         Array.Copy(_buffer, 0, result, 0, _written);
@@ -111,8 +116,9 @@ internal sealed class WireBufferWriter {
             WriteRawByte(0xc0);
             return;
         }
-        byte[] bytes = Encoding.UTF8.GetBytes(value);
-        int len = bytes.Length;
+        // counted then encoded straight into the buffer: GetBytes(string) would allocate an
+        // intermediate array on every datagram the sender writes.
+        int len = Encoding.UTF8.GetByteCount(value);
         if (len <= 31) {
             WriteRawByte((byte)(0xa0 | len));
         }
@@ -128,15 +134,21 @@ internal sealed class WireBufferWriter {
             WriteRawByte(0xdb);
             WriteUInt32BE((uint)len);
         }
-        WriteRawBytes(bytes, 0, len);
+        EnsureCapacity(len);
+        _written += Encoding.UTF8.GetBytes(value, 0, value.Length, _buffer, _written);
     }
 
     public void WriteBinary(byte[]? value) {
+        WriteBinary(value, value?.Length ?? 0);
+    }
+
+    /// <summary>Writes the first <paramref name="count"/> bytes, so a pooled buffer needs no trim.</summary>
+    public void WriteBinary(byte[]? value, int count) {
         if (value == null) {
             WriteRawByte(0xc0);
             return;
         }
-        int len = value.Length;
+        int len = count;
         if (len <= byte.MaxValue) {
             WriteRawByte(0xc4);
             WriteRawByte((byte)len);

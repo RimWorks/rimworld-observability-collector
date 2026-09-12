@@ -66,14 +66,28 @@ internal sealed class SampleRingBuffer {
         return true;
     }
 
-    public int Drain(SampleBatch batch, int maxCount) {
+    public int Drain(SampleBatch batch, int maxCount) => Drain(batch, maxCount, 0);
+
+    /// <summary>
+    /// Copies out up to <paramref name="maxCount"/> published samples. A sample whose frame
+    /// ordinal is below <paramref name="minFrameOrdinal"/> is consumed and counted as dropped
+    /// instead: the collector has already sealed that frame, so sending it only burns a socket.
+    /// </summary>
+    public int Drain(SampleBatch batch, int maxCount, int minFrameOrdinal) {
         int n = 0;
-        long expected = _read + 1;
+        int stale = 0;
+        long start = _read + 1;
+        long expected = start;
         int cap = Math.Min(maxCount, batch.Capacity);
         while (n < cap) {
             int idx = (int)((expected - 1) & _mask);
             if (Volatile.Read(ref _slots[idx].Sequence) != expected)
                 break;
+            expected++;
+            if (_slots[idx].FrameOrdinal < minFrameOrdinal) {
+                stale++;
+                continue;
+            }
             batch.SectionIds[n] = _slots[idx].SectionId;
             batch.ParentIds[n] = _slots[idx].ParentId;
             batch.StartTimestamps[n] = _slots[idx].StartTimestamp;
@@ -84,9 +98,10 @@ internal sealed class SampleRingBuffer {
             batch.AllocBytes[n] = _slots[idx].AllocBytes;
             batch.ThreadIds[n] = _slots[idx].ThreadId;
             n++;
-            expected++;
         }
-        if (n > 0)
+        if (stale > 0)
+            Interlocked.Add(ref _dropped, stale);
+        if (expected > start)
             Volatile.Write(ref _read, expected - 1);
         return n;
     }
@@ -125,10 +140,12 @@ internal sealed class SampleRingSet {
         public Lane(SampleRingBuffer ring, Thread owner) {
             _ring = ring;
             Owner = owner;
+            OwnerThreadId = owner.ManagedThreadId;
         }
 
         public SampleRingBuffer Ring => Volatile.Read(ref _ring);
         public Thread Owner { get; }
+        public int OwnerThreadId { get; }
 
         public void Swap(SampleRingBuffer ring) => Volatile.Write(ref _ring, ring);
     }
@@ -208,22 +225,38 @@ internal sealed class SampleRingSet {
         t_LaneOwner = owner;
     }
 
+    public int Drain(SampleBatch batch, int maxCount) => Drain(batch, maxCount, 0);
+
     /// <summary>
-    /// Drains the next non-empty lane, round-robin, so a hot lane cannot starve the others.
+    /// Drains the main-thread lane first, then the rest round-robin, so a hot lane cannot starve
+    /// the others and the busiest lane never overflows while a quiet one is being served.
     /// Returns 0 only when every lane is empty. Drops a drained lane whose owner has exited.
+    /// Samples older than <paramref name="minFrameOrdinal"/> are discarded on the way out.
     /// </summary>
-    public int Drain(SampleBatch batch, int maxCount) {
+    public int Drain(SampleBatch batch, int maxCount, int minFrameOrdinal) {
         Lane[] lanes = Volatile.Read(ref _lanes);
+        int main = MainThreadMarker.MainThreadId;
+        if (main != 0) {
+            for (int i = 0; i < lanes.Length; i++) {
+                if (lanes[i].OwnerThreadId != main)
+                    continue;
+                int first = lanes[i].Ring.Drain(batch, maxCount, minFrameOrdinal);
+                if (first > 0)
+                    return first;
+                break;
+            }
+        }
+
         for (int i = 0; i < lanes.Length; i++) {
             int idx = (_cursor + i) % lanes.Length;
             Lane lane = lanes[idx];
-            int n = lane.Ring.Drain(batch, maxCount);
+            int n = lane.Ring.Drain(batch, maxCount, minFrameOrdinal);
             if (n > 0) {
                 _cursor = (idx + 1) % lanes.Length;
                 return n;
             }
             if (!lane.Owner.IsAlive) {
-                int last = Reap(lane, batch, maxCount);
+                int last = Reap(lane, batch, maxCount, minFrameOrdinal);
                 if (last > 0) {
                     _cursor = (idx + 1) % lanes.Length;
                     return last;
@@ -244,7 +277,7 @@ internal sealed class SampleRingSet {
         if (old.Capacity == want)
             return;
 
-        lane.Swap(new SampleRingBuffer(want, lane.Owner.ManagedThreadId));
+        lane.Swap(new SampleRingBuffer(want, lane.OwnerThreadId));
         // a sample the owner published into the old ring during the swap is gone, so count it
         Interlocked.Add(ref _reapedDropped, old.Dropped + old.DiscardAll());
     }
@@ -255,7 +288,7 @@ internal sealed class SampleRingSet {
     public string NameFor(int threadId) {
         Lane[] lanes = Volatile.Read(ref _lanes);
         for (int i = 0; i < lanes.Length; i++) {
-            if (lanes[i].Owner.ManagedThreadId == threadId)
+            if (lanes[i].OwnerThreadId == threadId)
                 return lanes[i].Owner.Name ?? string.Empty;
         }
         return string.Empty;
@@ -279,8 +312,8 @@ internal sealed class SampleRingSet {
     /// Drains a dead thread's lane one last time, since the owner can publish between the empty
     /// drain and the IsAlive check. Removes it only once it hands over nothing, so NameFor still resolves.
     /// </summary>
-    private int Reap(Lane lane, SampleBatch batch, int maxCount) {
-        int taken = lane.Ring.Drain(batch, maxCount);
+    private int Reap(Lane lane, SampleBatch batch, int maxCount, int minFrameOrdinal) {
+        int taken = lane.Ring.Drain(batch, maxCount, minFrameOrdinal);
         if (taken > 0)
             return taken;
 
@@ -297,7 +330,7 @@ internal sealed class SampleRingSet {
         }
         while (Interlocked.CompareExchange(ref _lanes, shrunk, old) != old);
         Interlocked.Add(ref _reapedDropped, lane.Ring.Dropped + lane.Ring.DiscardAll());
-        LaneReaped?.Invoke(lane.Owner.ManagedThreadId);
+        LaneReaped?.Invoke(lane.OwnerThreadId);
         return 0;
     }
 }

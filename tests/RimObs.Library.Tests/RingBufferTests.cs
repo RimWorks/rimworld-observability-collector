@@ -395,12 +395,132 @@ public sealed class RingBufferTests {
         set.SetLaneCapacity(int.MaxValue).Should().Be(SampleRingSet.MaxLaneCapacity);
     }
 
+    // the main lane fills in ~40ms under load while worker lanes trickle; serving registration
+    // order lets the busy lane overflow while a quiet one is drained first.
+    [Fact]
+    public void Drain_serves_the_main_lane_before_the_worker_lanes() {
+        SampleRingSet set = new(256);
+        try {
+            Thread worker = new(() => {
+                for (int i = 0; i < 2; i++)
+                    set.TryWrite(900 + i, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+            });
+            worker.Start();
+            worker.Join();
+
+            // the worker lane registered first, so round-robin alone would drain it first
+            MainThreadMarker.Mark();
+            for (int i = 0; i < 200; i++)
+                set.TryWrite(i, -1, 0, -1, 0, 0, 1).Should().BeTrue();
+
+            SampleBatch batch = new SampleBatch(256);
+            int n = set.Drain(batch, 256);
+
+            n.Should().Be(200);
+            batch.SectionIds[0].Should().Be(0);
+            batch.ThreadIds[0].Should().Be(Environment.CurrentManagedThreadId);
+        }
+        finally {
+            MainThreadMarker.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void An_empty_main_lane_falls_through_to_the_workers() {
+        SampleRingSet set = new(256);
+        try {
+            MainThreadMarker.Mark();
+            Thread worker = new(() => set.TryWrite(42, -1, 0, -1, 0, 0, 1).Should().BeTrue());
+            worker.Start();
+            worker.Join();
+
+            SampleBatch batch = new SampleBatch(16);
+            set.Drain(batch, 16).Should().Be(1);
+            batch.SectionIds[0].Should().Be(42);
+        }
+        finally {
+            MainThreadMarker.ResetForTests();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void A_main_lane_first_drain_allocates_nothing() {
+        SampleRingSet set = new(1024);
+        SampleBatch batch = new SampleBatch(256);
+        try {
+            MainThreadMarker.Mark();
+            Thread worker = new(() => set.TryWrite(1, -1, 0, -1, 0, 0, 1));
+            worker.Start();
+            worker.Join();
+            for (int i = 0; i < 64; i++)
+                set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+            while (set.Drain(batch, 256) > 0) { }
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int round = 0; round < 200; round++) {
+                for (int i = 0; i < 64; i++)
+                    set.TryWrite(i, -1, 0, -1, 0, 0, 1);
+                while (set.Drain(batch, 256) > 0) { }
+            }
+            long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            delta.Should().Be(0);
+        }
+        finally {
+            MainThreadMarker.ResetForTests();
+        }
+    }
+
+    // 77.8M samples reached the collector too late to land in any open frame. the drain drops
+    // what the collector would certainly drop, and counts it.
+    [Fact]
+    public void A_drain_cutoff_discards_samples_older_than_the_window() {
+        SampleRingBuffer ring = new(16);
+        ring.TryWrite(1, -1, 0, -1, 0L, 0L, 100).Should().BeTrue();
+        ring.TryWrite(2, -1, 0, -1, 0L, 0L, 700).Should().BeTrue();
+
+        SampleBatch batch = new SampleBatch(16);
+        int n = ring.Drain(batch, 16, 400);
+
+        n.Should().Be(1);
+        batch.SectionIds[0].Should().Be(2);
+        ring.Dropped.Should().Be(1);
+        ring.Drain(batch, 16, 400).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(400, 1)]
+    [InlineData(399, 0)]
+    public void The_drain_cutoff_keeps_the_boundary_ordinal(int frameOrdinal, int expected) {
+        SampleRingBuffer ring = new(16);
+        ring.TryWrite(1, -1, 0, -1, 0L, 0L, frameOrdinal).Should().BeTrue();
+
+        SampleBatch batch = new SampleBatch(16);
+        ring.Drain(batch, 16, 400).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_cutoff_drain_walks_past_a_stale_run_in_one_pass() {
+        SampleRingBuffer ring = new(64);
+        for (int i = 0; i < 40; i++)
+            ring.TryWrite(i, -1, 0, -1, 0L, 0L, 1).Should().BeTrue();
+        ring.TryWrite(99, -1, 0, -1, 0L, 0L, 500).Should().BeTrue();
+
+        SampleBatch batch = new SampleBatch(64);
+        int n = ring.Drain(batch, 64, 400);
+
+        n.Should().Be(1);
+        batch.SectionIds[0].Should().Be(99);
+        ring.Dropped.Should().Be(40);
+    }
+
     private static int Reap(SampleRingSet set, SampleBatch batch, int maxCount) {
         Type type = typeof(SampleRingSet);
         object lanes = type.GetField("_lanes", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(set)!;
         object lane = ((Array)lanes).GetValue(0)!;
         MethodInfo reap = type.GetMethod("Reap", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        return (int)reap.Invoke(set, new[] { lane, batch, (object)maxCount })!;
+        return (int)reap.Invoke(set, new[] { lane, batch, (object)maxCount, (object)0 })!;
     }
 
     [Fact]

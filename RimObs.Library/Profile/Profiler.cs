@@ -151,12 +151,22 @@ public static class Profiler {
             return;
         }
 
+        // an inactive section still pushes a sentinel frame. skipping the push entirely lets
+        // its Exit eat an Overflow credit some deeper real frame is owed, and the judge can
+        // flip a section mid-scope, so enter and exit must always pair on the stack.
+        if (!Enabled
+            || (uint)sectionId >= (uint)SectionRegistry.MaxSections
+            || !SectionRegistry.s_Active[sectionId]) {
+            state.Sections[depth] = sectionId;
+            state.Tokens[depth] = DisabledToken;
+            state.Depth = depth + 1;
+            return;
+        }
+
         state.Sections[depth] = sectionId;
-        bool measured = Enabled
-            && (uint)sectionId < (uint)SectionRegistry.MaxSections
-            && SectionRegistry.s_Active[sectionId]
-            && depth < s_MaxDepth;
-        if (measured) {
+        // past the soft cap the frame is still pushed: the same id can sit right below it, and a
+        // skipped push there would let this Exit pop the measured frame instead.
+        if (depth < s_MaxDepth) {
             int nodeId = (state.NextNodeId + 1) & NodeIdCounterMask;
             state.NextNodeId = nodeId;
             state.Nodes[depth] = state.ThreadBlock | nodeId;
