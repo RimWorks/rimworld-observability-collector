@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using RimWorks.RimObs.Collector.Aggregation;
 using FluentAssertions;
@@ -21,6 +22,120 @@ public sealed class FrameRingTests {
     // advances it past the quiet period.
     private static FrameRing RingWithWindow(int capacity, int window) =>
         new(capacity) { OpenFrameWindow = window, Clock = new ManualClock() };
+
+    private sealed record Sample(int Ordinal, int SectionId, int ParentId, int NodeId, int ParentNodeId, long Start, long Elapsed, long Alloc, int ThreadId, bool MainLane);
+
+    private static void AddOneByOne(FrameRing ring, Sample[] samples) {
+        foreach (Sample s in samples)
+            ring.Add(s.Ordinal, s.SectionId, s.ParentId, s.NodeId, s.ParentNodeId, s.Start, s.Elapsed, s.Alloc, s.ThreadId, s.MainLane);
+    }
+
+    private static void AddAsBatch(FrameRing ring, Sample[] samples) {
+        ring.AddBatch(
+            [.. samples.Select(s => s.Ordinal)],
+            [.. samples.Select(s => s.SectionId)],
+            [.. samples.Select(s => s.ParentId)],
+            [.. samples.Select(s => s.NodeId)],
+            [.. samples.Select(s => s.ParentNodeId)],
+            [.. samples.Select(s => s.Start)],
+            [.. samples.Select(s => s.Elapsed)],
+            [.. samples.Select(s => s.Alloc)],
+            [.. samples.Select(s => s.ThreadId)],
+            [.. samples.Select(s => s.MainLane)],
+            samples.Length);
+    }
+
+    // spans the seal boundary and a pre-frame sample, so the comparison covers the branches
+    // that made the per-sample lock worth taking in the first place.
+    private static Sample[] MixedStream() {
+        List<Sample> samples = [new Sample(0, 1, -1, 1, -1, 0L, 1L, 0L, 4, true)];
+        for (int ordinal = 1; ordinal <= 30; ordinal++) {
+            samples.Add(new Sample(ordinal, 1, -1, ordinal * 10, -1, ordinal * 100L, 50L, 8L, 4, true));
+            samples.Add(new Sample(ordinal, 2, 1, (ordinal * 10) + 1, ordinal * 10, (ordinal * 100L) + 10L, 20L, 4L, 9, false));
+        }
+
+        // lands well under the watermark by now, so it counts as late
+        samples.Add(new Sample(2, 3, -1, 999, -1, 200L, 5L, 0L, 4, true));
+        return [.. samples];
+    }
+
+    [Fact]
+    public void AddBatch_matches_sample_at_a_time_adds() {
+        Sample[] stream = MixedStream();
+        FrameRing oneByOne = RingWithWindow(64, 4);
+        FrameRing batched = RingWithWindow(64, 4);
+
+        AddOneByOne(oneByOne, stream);
+        AddAsBatch(batched, stream);
+
+        batched.Count.Should().Be(oneByOne.Count);
+        batched.LateSamples.Should().Be(oneByOne.LateSamples);
+        batched.PreFrameSamples.Should().Be(oneByOne.PreFrameSamples);
+        batched.Snapshot().Should().BeEquivalentTo(oneByOne.Snapshot(), o => o.WithStrictOrdering());
+        batched.ComputeStats().Should().BeEquivalentTo(oneByOne.ComputeStats());
+    }
+
+    [Fact]
+    public void AddBatch_seals_the_same_frames_the_per_sample_path_does() {
+        Sample[] stream = MixedStream();
+        FrameRing oneByOne = RingWithWindow(64, 4);
+        FrameRing batched = RingWithWindow(64, 4);
+
+        AddOneByOne(oneByOne, stream);
+        AddAsBatch(batched, stream);
+
+        // a late sample is one the seal watermark already passed, so both must reject it
+        oneByOne.LateSamples.Should().BeGreaterThan(0);
+        batched.FindByOrdinal(2).Should().BeEquivalentTo(oneByOne.FindByOrdinal(2));
+        batched.Latest().Should().BeEquivalentTo(oneByOne.Latest());
+    }
+
+    [Fact]
+    public void AddBatch_fires_the_seal_callback_once_for_the_batch() {
+        FrameRing ring = RingWithWindow(64, 4);
+        int fired = 0;
+        ring.FrameSealed = () => fired++;
+
+        AddAsBatch(ring, MixedStream());
+
+        fired.Should().Be(1);
+    }
+
+    // a v8 payload carries no thread ids and no alloc bytes; the short arrays must default
+    // rather than throw.
+    [Fact]
+    public void AddBatch_defaults_the_columns_a_short_payload_left_out() {
+        FrameRing ring = RingWithWindow(64, 4);
+
+        ring.AddBatch(
+            [1, 1],
+            [10, 11],
+            [],
+            [],
+            [],
+            [100L, 110L],
+            [5L, 6L],
+            [],
+            [],
+            [true, true],
+            2);
+        ring.Flush();
+
+        FrameSnapshot frame = ring.FindByOrdinal(1)!;
+        frame.SectionIds.Should().Equal(10, 11);
+        frame.ParentIds.Should().Equal(-1, -1);
+        frame.NodeAllocBytes.Should().Equal(0L, 0L);
+        frame.ThreadIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddBatch_ignores_a_count_of_zero() {
+        FrameRing ring = RingWithWindow(64, 4);
+
+        ring.AddBatch([], [], [], [], [], [], [], [], [], [], 0);
+
+        ring.Count.Should().Be(0);
+    }
 
     // a lane can drain a whole window late, so every frame inside the window is still filling.
     // serving one freezes a truncated frame on a dashboard that never backfills an ordinal.

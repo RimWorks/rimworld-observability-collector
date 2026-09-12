@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using RimWorks.RimObs.Collector.Storage;
@@ -252,13 +253,12 @@ public sealed class SessionAggregator {
     public void OnSectionBatch(SectionBatch batch) {
         int n = Math.Min(batch.SectionIds.Length, Math.Min(batch.ElapsedTicks.Length, batch.StartTimestamps.Length));
         int parentLen = batch.ParentIds.Length;
-        int ordinalLen = batch.FrameOrdinals.Length;
-        int nodeIdLen = batch.NodeIds.Length;
-        int parentNodeIdLen = batch.ParentNodeIds.Length;
         int allocLen = batch.AllocBytes.Length;
         int threadLen = batch.ThreadIds.Length;
         int mainLane = Threads.MainLaneId();
         long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        // the frame ring took one lock per sample; stage the anchor flags and hand it the batch.
+        bool[] anchors = ArrayPool<bool>.Shared.Rent(n);
         for (int i = 0; i < n; i++) {
             int id = batch.SectionIds[i];
             long elapsed = batch.ElapsedTicks[i];
@@ -275,7 +275,6 @@ public sealed class SessionAggregator {
             if (id == _tickSectionId && _tickSectionId != NoSection)
                 UpdateTickEma(elapsed);
             int parentId = i < parentLen ? batch.ParentIds[i] : CallTreeBuilder.NoParent;
-            int parentNode = i < parentNodeIdLen ? batch.ParentNodeIds[i] : CallTreeBuilder.NoParent;
             // a nested child is already inside its parent's elapsed, so only roots add busy time.
             if (i < threadLen && parentId == CallTreeBuilder.NoParent)
                 Threads.AddBusy(batch.ThreadIds[i], elapsed);
@@ -285,15 +284,26 @@ public sealed class SessionAggregator {
             Interlocked.Increment(ref edge.CallCount);
             Interlocked.Add(ref edge.TotalElapsedTicks, elapsed);
             Interlocked.Add(ref edge.TotalAllocBytes, allocBytes);
-            int nodeId = i < nodeIdLen ? batch.NodeIds[i] : CallTreeBuilder.NoParent;
             int laneId = i < threadLen ? batch.ThreadIds[i] : 0;
             // a v8 batch or an unannounced main both count as main, so nothing hides for lack
             // of thread data; only a sample from a KNOWN non-main lane is a worker's.
             bool fromMain = laneId == 0 || mainLane == 0 || laneId == mainLane;
             // once the frame root is known, only Root_Play.Update itself anchors a frame.
-            bool anchor = _frameRootSectionId != NoSection ? id == _frameRootSectionId : fromMain;
-            _frames.Add(i < ordinalLen ? batch.FrameOrdinals[i] : 0, id, parentId, nodeId, parentNode, start, elapsed, allocBytes, laneId, anchor);
+            anchors[i] = _frameRootSectionId != NoSection ? id == _frameRootSectionId : fromMain;
         }
+        _frames.AddBatch(
+            batch.FrameOrdinals,
+            batch.SectionIds,
+            batch.ParentIds,
+            batch.NodeIds,
+            batch.ParentNodeIds,
+            batch.StartTimestamps,
+            batch.ElapsedTicks,
+            batch.AllocBytes,
+            batch.ThreadIds,
+            anchors,
+            n);
+        ArrayPool<bool>.Shared.Return(anchors);
         Interlocked.Add(ref _totalSamples, n);
         SectionBatchObserver?.Invoke(batch);
     }

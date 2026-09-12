@@ -145,39 +145,85 @@ public sealed class FrameRing {
     public Action? FrameSealed { get; set; }
 
     public void Add(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes = 0L, int threadId = 0, bool mainLane = true) {
+        bool sealedAdvanced;
+        lock (_gate) {
+            sealedAdvanced = AddLocked(frameOrdinal, sectionId, parentId, nodeId, parentNodeId, startTicks, elapsedTicks, allocBytes, threadId, mainLane);
+        }
+        if (sealedAdvanced)
+            FrameSealed?.Invoke();
+    }
+
+    /// <summary>
+    /// Appends a whole decoded batch under one gate acquisition instead of one per sample. Any
+    /// array shorter than <paramref name="count"/> falls back to its default, the same way the
+    /// per-sample path does, so a v8 payload still lands. <see cref="FrameSealed"/> fires once
+    /// for the batch rather than once per advancing seal.
+    /// </summary>
+    public void AddBatch(
+        int[] frameOrdinals,
+        int[] sectionIds,
+        int[] parentIds,
+        int[] nodeIds,
+        int[] parentNodeIds,
+        long[] startTicks,
+        long[] elapsedTicks,
+        long[] allocBytes,
+        int[] threadIds,
+        bool[] mainLane,
+        int count) {
+        if (count <= 0)
+            return;
         bool sealedAdvanced = false;
         lock (_gate) {
-            if (frameOrdinal <= 0) {
-                _preFrameSamples++;
-                return;
-            }
-            if (frameOrdinal <= _sealedThrough) {
-                _lateSamples++;
-                return;
-            }
-            if (!_open.TryGetValue(frameOrdinal, out OpenFrame? open))
-                _open[frameOrdinal] = open = new OpenFrame();
-            open.HasMain |= mainLane;
-            open.SectionIds.Add(sectionId);
-            open.ParentIds.Add(parentId);
-            open.NodeIds.Add(nodeId);
-            open.ParentNodeIds.Add(parentNodeId);
-            open.StartTicks.Add(startTicks);
-            open.ElapsedTicks.Add(elapsedTicks);
-            open.AllocBytes.Add(allocBytes);
-            open.ThreadIds.Add(threadId);
-            _lastSampleStamp = Clock.GetTimestamp();
-            if (threadId != 0)
-                open.HasThreadIds = true;
-            if (frameOrdinal > _newestOrdinal) {
-                _newestOrdinal = frameOrdinal;
-                int before = _sealedThrough;
-                SealThrough(_newestOrdinal - Math.Max(_window, _fpsFloor));
-                sealedAdvanced = _sealedThrough != before;
+            for (int i = 0; i < count; i++) {
+                sealedAdvanced |= AddLocked(
+                    i < frameOrdinals.Length ? frameOrdinals[i] : 0,
+                    sectionIds[i],
+                    i < parentIds.Length ? parentIds[i] : CallTreeBuilder.NoParent,
+                    i < nodeIds.Length ? nodeIds[i] : CallTreeBuilder.NoParent,
+                    i < parentNodeIds.Length ? parentNodeIds[i] : CallTreeBuilder.NoParent,
+                    startTicks[i],
+                    elapsedTicks[i],
+                    i < allocBytes.Length ? allocBytes[i] : 0L,
+                    i < threadIds.Length ? threadIds[i] : 0,
+                    mainLane[i]);
             }
         }
         if (sealedAdvanced)
             FrameSealed?.Invoke();
+    }
+
+    // returns whether the seal watermark moved. caller holds _gate.
+    private bool AddLocked(int frameOrdinal, int sectionId, int parentId, int nodeId, int parentNodeId, long startTicks, long elapsedTicks, long allocBytes, int threadId, bool mainLane) {
+        if (frameOrdinal <= 0) {
+            _preFrameSamples++;
+            return false;
+        }
+        if (frameOrdinal <= _sealedThrough) {
+            _lateSamples++;
+            return false;
+        }
+        if (!_open.TryGetValue(frameOrdinal, out OpenFrame? open))
+            _open[frameOrdinal] = open = new OpenFrame();
+        open.HasMain |= mainLane;
+        open.SectionIds.Add(sectionId);
+        open.ParentIds.Add(parentId);
+        open.NodeIds.Add(nodeId);
+        open.ParentNodeIds.Add(parentNodeId);
+        open.StartTicks.Add(startTicks);
+        open.ElapsedTicks.Add(elapsedTicks);
+        open.AllocBytes.Add(allocBytes);
+        open.ThreadIds.Add(threadId);
+        _lastSampleStamp = Clock.GetTimestamp();
+        if (threadId != 0)
+            open.HasThreadIds = true;
+        if (frameOrdinal <= _newestOrdinal)
+            return false;
+
+        _newestOrdinal = frameOrdinal;
+        int before = _sealedThrough;
+        SealThrough(_newestOrdinal - Math.Max(_window, _fpsFloor));
+        return _sealedThrough != before;
     }
 
     /// <summary>Seals every open frame, for teardown. The only reader-facing way to move the watermark.</summary>
