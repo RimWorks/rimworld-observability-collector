@@ -89,8 +89,9 @@ public sealed class ConcordBackendTests : IDisposable {
     private void ApplyAutoFilter(string filters) {
         PatchBackends.Register(_backend, PatchBackends.ConcordPriority);
         PatchBackends.SelectBest(scan: false);
+        // muting off: these prove patching mechanics, and pending sections hold their samples.
         AutoInstrumentRunner.ApplyFilters(
-            filters, ignore: null, autoMute: true, "test.owner", [typeof(AutoTargets).Assembly]);
+            filters, ignore: null, autoMute: false, "test.owner", [typeof(AutoTargets).Assembly]);
     }
 
     [Fact]
@@ -316,6 +317,45 @@ public sealed class ConcordBackendTests : IDisposable {
         for (int i = 0; i < count; i++)
             methods[i] = built.GetMethod($"Target{i}")!;
         return methods;
+    }
+
+    // regression: concord's At.Finally misses yield-return exit paths, so an iterator MoveNext
+    // leaked a profiler frame per yield and pinned the thread. those bodies take the transpiler.
+    [Fact]
+    public void IteratorMoveNextStaysBalancedAcrossYields() {
+        SectionCatalog.RegisterCorePack();
+        MethodInfo moveNext = IteratorMoveNextTarget();
+        SectionCatalog.RegisterDirect("test.concord_iterator", moveNext);
+        _backend.Patch(moveNext);
+        SectionHandle after = SectionRegistry.Register("test.concord_after_iterator");
+
+        int sum = 0;
+        foreach (int value in IteratorFixture.Numbers())
+            sum += value;
+        sum.Should().Be(6);
+
+        _sink.Samples.Clear();
+        long token = Profiler.Start(after);
+        Profiler.Stop(after, token);
+        // an unbalanced iterator would leave leaked frames and misparent or swallow this.
+        _sink.Samples.Should().ContainSingle(s => s.SectionId == after.Id && s.ParentId == Profiler.NoParent);
+    }
+
+    private static MethodInfo IteratorMoveNextTarget() {
+        foreach (Type nested in typeof(IteratorFixture).GetNestedTypes(BindingFlags.NonPublic)) {
+            MethodInfo? moveNext = nested.GetMethod("MoveNext", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (moveNext != null)
+                return moveNext;
+        }
+        throw new InvalidOperationException("iterator state machine not found");
+    }
+
+    private static class IteratorFixture {
+        public static System.Collections.Generic.IEnumerable<int> Numbers() {
+            yield return 1;
+            yield return 2;
+            yield return 3;
+        }
     }
 
     // regression: CONC123. an async target's body compiles into a generated MoveNext, and

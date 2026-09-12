@@ -30,7 +30,7 @@
         <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.*" ExcludeAssets="runtime" PrivateAssets="all"/>
         <!-- TODO(concord-pin): float again once EndExceptionBlock placement is a documented
              contract, or Concord reaches 1.0. see MethodTransplanter.EmitEpilogue. -->
-        <PackageReference Include="Concord.Ref" Version="0.16.*" ExcludeAssets="runtime" PrivateAssets="all"/>
+        <PackageReference Include="Concord.Ref" Version="0.19.*" ExcludeAssets="runtime" PrivateAssets="all"/>
         <PackageReference Include="RimWorks.RimLogging" Version="2.*" ExcludeAssets="runtime" PrivateAssets="all"/>
     </ItemGroup>
 
