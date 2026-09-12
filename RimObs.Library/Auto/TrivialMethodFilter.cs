@@ -25,6 +25,10 @@ internal static class TrivialMethodFilter {
             return "open generic";
         if ((method.Attributes & MethodAttributes.PinvokeImpl) != 0)
             return "p/invoke";
+        // Unity Burst trampolines ($BurstDirectCall) and similar mangled shims: unpatchable
+        // generic callsites, and the real work lives in the method they forward to.
+        if (method.DeclaringType?.Name.IndexOf('$') >= 0)
+            return "compiler shim";
 
         MethodImplAttributes impl = method.GetMethodImplementationFlags();
         if ((impl & MethodImplAttributes.InternalCall) != 0)

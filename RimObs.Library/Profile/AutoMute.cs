@@ -30,6 +30,8 @@ internal static class AutoMute {
     private static bool[]? s_Auto;
     // still awaiting the one-shot below-measurement-cost judgment.
     private static bool[]? s_Pending;
+    private static int[]? s_CandidateIds;
+    private static long[]? s_CandidateKeys;
     private static int s_Muted;
     private static int s_Judged;
     private static long s_Budget;
@@ -37,6 +39,9 @@ internal static class AutoMute {
     public static int MutedCount => s_Muted;
 
     public static int JudgedCount => s_Judged;
+
+    /// <summary>Forced verdicts below this many calls are noise; the section just unhides.</summary>
+    public const int ForcedJudgeCallFloor = 8;
 
     /// <summary>How often the budget judge runs, in frames. ~1s at 60fps, so the tick tax of
     /// freshly patched chatter is clipped fast during the instrumentation ramp.</summary>
@@ -79,22 +84,51 @@ internal static class AutoMute {
 
         long perCallTicks = Math.Max(1L, Stopwatch.Frequency * ScopeOverheadNanos / 1_000_000_000L);
         long budgetTicks = Stopwatch.Frequency * BudgetUsPerFrame * framesElapsed / 1_000_000L;
+        // force-judge stragglers still short of the one-shot sample size. below the call floor
+        // the evidence is noise: clear pending so the section reports, and let the one-shot
+        // decide later at the full sample size.
+        bool[]? pendingFlags = s_Pending;
+        if (pendingFlags is not null) {
+            for (int id = 0; id < calls.Length; id++) {
+                if (!pendingFlags[id] || calls[id] == 0)
+                    continue;
+                if (calls[id] < ForcedJudgeCallFloor) {
+                    pendingFlags[id] = false;
+                    continue;
+                }
+                pendingFlags[id] = false;
+                s_Judged++;
+                if (Enabled && self[id] <= s_Budget * calls[id] / SampleCount) {
+                    SectionRegistry.MuteAuto(id);
+                    s_Muted++;
+                }
+            }
+        }
+
         long totalTicks = 0;
-        List<int> candidates = new List<int>();
+        // preallocated at Arm: this runs every window on the sender thread, and a fresh list
+        // plus a closure sort was a once-a-second Boehm collection trigger.
+        int[] candidates = s_CandidateIds!;
+        long[] keys = s_CandidateKeys!;
+        int candidateCount = 0;
         for (int id = 0; id < calls.Length; id++) {
             if (calls[id] == 0 || !SectionRegistry.IsActive(id))
                 continue;
             totalTicks += calls[id] * perCallTicks;
-            if (auto[id])
-                candidates.Add(id);
+            if (auto[id]) {
+                candidates[candidateCount] = id;
+                keys[candidateCount] = self[id] / calls[id];
+                candidateCount++;
+            }
         }
 
         if (totalTicks > budgetTicks) {
             // cheapest mean self time first: those measure the least work per unit of tax.
-            candidates.Sort((a, b) => (self[a] / calls[a]).CompareTo(self[b] / calls[b]));
-            foreach (int id in candidates) {
+            Array.Sort(keys, candidates, 0, candidateCount);
+            for (int i = 0; i < candidateCount; i++) {
                 if (totalTicks <= budgetTicks)
                     break;
+                int id = candidates[i];
                 SectionRegistry.MuteAuto(id);
                 s_Muted++;
                 totalTicks -= calls[id] * perCallTicks;
@@ -107,6 +141,17 @@ internal static class AutoMute {
     private static void ResetWindow(int[] calls, long[] self) {
         Array.Clear(calls, 0, calls.Length);
         Array.Clear(self, 0, self.Length);
+    }
+
+    /// <summary>Sections awaiting judgment send nothing: the judge reads its own accumulators,
+    /// so pre-judgment samples were pure flood. Hot path: one array read.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsPending(int sectionId) {
+        // muting off means judgment never comes, so nothing may be held back.
+        if (!Enabled)
+            return false;
+        bool[]? pending = s_Pending;
+        return pending is not null && (uint)sectionId < (uint)pending.Length && pending[sectionId];
     }
 
     /// <summary>Self ticks accumulated so far. The fold in Profiler.StopById is not observable otherwise.</summary>
@@ -126,6 +171,8 @@ internal static class AutoMute {
         s_SelfTicks = new long[SectionRegistry.MaxSections];
         s_Auto = new bool[SectionRegistry.MaxSections];
         s_Pending = new bool[SectionRegistry.MaxSections];
+        s_CandidateIds = new int[SectionRegistry.MaxSections];
+        s_CandidateKeys = new long[SectionRegistry.MaxSections];
         s_Budget = Stopwatch.Frequency * ScopeOverheadNanos * SampleCount / 1_000_000_000L;
         Armed = true;
     }
@@ -170,6 +217,8 @@ internal static class AutoMute {
         s_SelfTicks = null;
         s_Auto = null;
         s_Pending = null;
+        s_CandidateIds = null;
+        s_CandidateKeys = null;
         s_Muted = 0;
         s_Judged = 0;
         s_Budget = 0;

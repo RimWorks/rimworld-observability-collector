@@ -54,14 +54,23 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
 
     [Fact]
     public void Pump_patches_the_queue_and_the_scope_then_records() {
-        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        // muting off: a pending section holds its samples, and this test asserts recording.
+        AutoInstrumentRunner.ApplyFilters(
+            "RimObsTest.AutoFixtures.AutoTargets::Worthwhile", ignore: null, autoMute: false, "test.owner", s_Here);
         Drain();
 
-        AutoTargets.Worthwhile(4);
+        InvokeUntilRecorded(() => AutoTargets.Worthwhile(4));
 
         AutoInstrumentRunner.Instrumented.Should().Be(1);
         AutoInstrumentRunner.Pending.Should().Be(0);
-        _sink.Samples.Should().HaveCount(1);
+        _sink.Samples.Should().NotBeEmpty();
+    }
+
+    // the worker thread installs the detour; the main thread may run the original for a few
+    // calls until the swap is visible. correctness-neutral in game, retried here.
+    private void InvokeUntilRecorded(Action invoke) {
+        for (int i = 0; i < 500 && _sink.Samples.Count == 0; i++)
+            invoke();
     }
 
     [Fact]
@@ -430,9 +439,10 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
 
     [Fact]
     public void Re_enabling_the_same_filter_patches_the_reverted_targets_again() {
-        Apply("RimObsTest.AutoFixtures.AutoTargets::Worthwhile");
+        AutoInstrumentRunner.ApplyFilters(
+            "RimObsTest.AutoFixtures.AutoTargets::Worthwhile", ignore: null, autoMute: false, "test.owner", s_Here);
         Drain();
-        AutoInstrumentRunner.ApplyFilters(null, ignore: null, autoMute: true, "test.owner", s_Here);
+        AutoInstrumentRunner.ApplyFilters(null, ignore: null, autoMute: false, "test.owner", s_Here);
         Drain();
         PatchRegistry.Snapshot().Should().BeEmpty();
 
@@ -441,8 +451,8 @@ public sealed class AutoInstrumentRunnerTests : IDisposable {
 
         AutoInstrumentRunner.Instrumented.Should().Be(1);
         _sink.Samples.Clear();
-        AutoTargets.Worthwhile(4);
-        _sink.Samples.Should().HaveCount(1);
+        InvokeUntilRecorded(() => AutoTargets.Worthwhile(4));
+        _sink.Samples.Should().NotBeEmpty();
     }
 
     // a plan queued a frame ago must not keep patching after the user turned the filter off.

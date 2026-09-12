@@ -344,8 +344,12 @@ internal static class AutoInstrumentRunner {
                 method, result.PatchId, result.SectionId,
                 result.Status == PatchStatus.Active, wasInCatalog, generation));
         }
-        catch (System.Exception) {
-            // one unpatchable target must not stop the run. the count is the user-facing signal.
+        catch (System.Exception ex) {
+            // one unpatchable target must not stop the run; the reason names the backend bug.
+            RimWorks.RimLogging.Log.WarnTo(
+                Logging.LogChannels.Sections,
+                "auto-instrument refused {Method}: {Reason}",
+                new object?[] { $"{method.DeclaringType?.FullName}::{method.Name}", ex.Message });
             s_Results.Enqueue(new WorkResult(method, 0, -1, Active: false, WasInCatalog: false, generation));
         }
     }

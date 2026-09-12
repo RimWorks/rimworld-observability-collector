@@ -114,15 +114,15 @@ public sealed class AutoMuteTests : IDisposable {
     }
 
     [Fact]
-    public void Budget_judge_leaves_everything_alone_while_the_tax_fits() {
+    public void Budget_judge_leaves_a_worthwhile_section_alone_while_the_tax_fits() {
         AutoMute.BudgetUsPerFrame = 1000;
-        AutoMute.Watch(_cheap.Id);
-        // just under the one-shot sample size, so only the budget judge is on trial here.
-        Observe(_cheap.Id, 1, AutoMute.SampleCount - 1);
+        AutoMute.Watch(_costly.Id);
+        // expensive per call so the force-judge keeps it, few calls so the tax fits.
+        Observe(_costly.Id, TicksPerUs * 500, AutoMute.SampleCount - 1);
 
         AutoMute.JudgeBudget(framesElapsed: 100);
 
-        SectionRegistry.IsActive(_cheap.Id).Should().BeTrue();
+        SectionRegistry.IsActive(_costly.Id).Should().BeTrue();
     }
 
     [Fact]
@@ -173,6 +173,85 @@ public sealed class AutoMuteTests : IDisposable {
         SectionRegistry.ApplyDisabledSet([]);
 
         SectionRegistry.IsActive(_cheap.Id).Should().BeTrue();
+    }
+
+    private sealed class CountingSink : ISampleSink {
+        public int Count;
+
+        public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, long allocBytes) {
+            Count++;
+        }
+    }
+
+    // pre-judgment samples were 65k x 64 calls of pure flood; the judge never needed them.
+    [Fact]
+    public void A_pending_section_sends_nothing_until_it_survives_judgment() {
+        CountingSink sink = new();
+        Profiler.SetSink(sink);
+        try {
+            AutoMute.Watch(_costly.Id);
+            // prime the thread state; a bare StopById never creates it and the fold needs it.
+            Profiler.EnterById(_costly.Id);
+            Profiler.ExitById(_costly.Id);
+            // a synthetic old token makes every call read as expensive real work.
+            long back = AutoMute.BudgetTicks * 10;
+
+            for (int i = 0; i < AutoMute.SampleCount / 2; i++)
+                Profiler.StopById(_costly.Id, System.Diagnostics.Stopwatch.GetTimestamp() - back);
+            int preJudgment = sink.Count;
+
+            AutoMute.JudgeBudget(framesElapsed: 100);
+            Profiler.StopById(_costly.Id, System.Diagnostics.Stopwatch.GetTimestamp() - back);
+
+            preJudgment.Should().Be(0, "pending sections must not reach the sink");
+            sink.Count.Should().BeGreaterThan(0, "a surviving section reports after judgment");
+        }
+        finally {
+            Profiler.SetSink(null);
+        }
+    }
+
+    [Fact]
+    public void A_straggler_is_force_judged_at_the_window_with_what_accrued() {
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 0, AutoMute.ForcedJudgeCallFloor + 2);
+
+        AutoMute.JudgeBudget(framesElapsed: 100);
+
+        AutoMute.IsPending(_cheap.Id).Should().BeFalse();
+        SectionRegistry.IsActive(_cheap.Id).Should().BeFalse("zero-cost calls past the floor prorate under the budget");
+    }
+
+    // one or two accrued calls prove nothing; the section unhides and the one-shot decides later.
+    [Fact]
+    public void Below_the_call_floor_a_straggler_unhides_without_a_verdict() {
+        AutoMute.Watch(_cheap.Id);
+        Observe(_cheap.Id, 0, AutoMute.ForcedJudgeCallFloor - 1);
+
+        AutoMute.JudgeBudget(framesElapsed: 100);
+
+        AutoMute.IsPending(_cheap.Id).Should().BeFalse();
+        SectionRegistry.IsActive(_cheap.Id).Should().BeTrue();
+    }
+
+    // the judge runs every window on the sender thread; a fresh list + closure sort there was
+    // a once-a-second gc trigger under boehm.
+    [Fact]
+    public void Budget_judge_allocates_nothing_per_pass() {
+        AutoMute.BudgetUsPerFrame = 1;
+        AutoMute.Watch(_cheap.Id);
+        AutoMute.Watch(_costly.Id);
+        Observe(_cheap.Id, 1, 32);
+        Observe(_costly.Id, TicksPerUs * 500, 10);
+        AutoMute.JudgeBudget(framesElapsed: 100);
+
+        Observe(_costly.Id, TicksPerUs * 500, 10);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+            AutoMute.JudgeBudget(framesElapsed: 100);
+        long after = GC.GetAllocatedBytesForCurrentThread();
+
+        (after - before).Should().Be(0);
     }
 
     [Fact]

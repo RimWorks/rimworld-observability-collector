@@ -39,7 +39,9 @@ public static class Profiler {
         public readonly int[] Nodes = new int[MaxStackDepth];
         public readonly long[] Allocs = new long[MaxStackDepth];
         public readonly long[] ChildTicks = new long[MaxStackDepth];
+        public readonly long[] Tokens = new long[MaxStackDepth];
         public int Depth;
+        public int Overflow;
         public int ThreadBlock;
         public int NextNodeId;
     }
@@ -127,8 +129,115 @@ public static class Profiler {
             FoldSelfTime(state, sectionId, depth, elapsed);
 
         ISampleSink? sink = Sink;
-        if (sink != null)
+        // pending sections judge from AutoMute's own accumulators; their samples were flood.
+        if (sink != null && !AutoMute.IsPending(sectionId))
             sink.RecordSection(sectionId, parentId, nodeId, parentNodeId, token, elapsed, allocBytes);
+    }
+
+    public static int MaxStackDepthForTests => MaxStackDepth;
+
+    /// <summary>
+    /// Head-injection entry: the start token lives in thread state because a head and a
+    /// finally injection cannot share an IL local the way the transpiler pair does.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void EnterById(int sectionId) {
+        ThreadState state = t_State ?? InitThreadState();
+        int depth = state.Depth;
+        if (depth >= MaxStackDepth) {
+            if (state.Overflow == 0)
+                ReportPinnedStack(state);
+            state.Overflow++;
+            return;
+        }
+
+        state.Sections[depth] = sectionId;
+        bool measured = Enabled
+            && (uint)sectionId < (uint)SectionRegistry.MaxSections
+            && SectionRegistry.s_Active[sectionId]
+            && depth < s_MaxDepth;
+        if (measured) {
+            int nodeId = (state.NextNodeId + 1) & NodeIdCounterMask;
+            state.NextNodeId = nodeId;
+            state.Nodes[depth] = state.ThreadBlock | nodeId;
+            state.Allocs[depth] = AllocationHook.t_Bytes;
+            state.Tokens[depth] = SpinClock.Timestamp();
+        }
+        else {
+            state.Tokens[depth] = DisabledToken;
+        }
+        state.Depth = depth + 1;
+    }
+
+    /// <summary>
+    /// Frame-boundary self-heal. Real depth at a frame start is 1-2; a stack at the hard cap
+    /// is leaked frames, and without this one leak silences the thread for the session.
+    /// </summary>
+    public static void HealPinnedAtFrameBoundary() {
+        ThreadState? state = t_State;
+        if (state is null || state.Depth < MaxStackDepth)
+            return;
+        state.Depth = 0;
+        state.Overflow = 0;
+        RimWorks.RimLogging.Log.ErrorTo(
+            Logging.LogChannels.Sections,
+            "profiler stack healed at frame boundary; an enter/exit pair is leaking",
+            null);
+    }
+
+    // fires once per thread, off the recording path: a pinned stack means an enter leaked
+    // somewhere, and the repeated ids on it name the section whose exit never ran.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ReportPinnedStack(ThreadState state) {
+        var counts = new Dictionary<int, int>();
+        for (int i = 0; i < MaxStackDepth; i++) {
+            counts.TryGetValue(state.Sections[i], out int n);
+            counts[state.Sections[i]] = n + 1;
+        }
+        var top = new List<string>();
+        foreach (KeyValuePair<int, int> pair in counts) {
+            if (pair.Value >= 4)
+                top.Add($"{SectionRegistry.GetName(pair.Key)} x{pair.Value}");
+        }
+        RimWorks.RimLogging.Log.ErrorTo(
+            Logging.LogChannels.Sections,
+            "profiler depth pinned on thread {Thread}: {Stack}",
+            new object?[] { Thread.CurrentThread.Name ?? Environment.CurrentManagedThreadId.ToString(), string.Join(", ", top) });
+    }
+
+    /// <summary>Finally-injection exit. Pops only its own frame, so a missed Enter is survivable.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ExitById(int sectionId) {
+        ThreadState? state = t_State;
+        if (state is null)
+            return;
+        if (state.Overflow > 0) {
+            state.Overflow--;
+            return;
+        }
+        int depth = state.Depth;
+        if (depth == 0 || state.Sections[depth - 1] != sectionId)
+            return;
+
+        depth--;
+        state.Depth = depth;
+        long token = state.Tokens[depth];
+        if (token == DisabledToken)
+            return;
+
+        long elapsed = SpinClock.Timestamp() - token;
+        if (elapsed < 0)
+            elapsed = 0;
+        int parentId = depth > 0 ? state.Sections[depth - 1] : NoParent;
+        int parentNodeId = depth > 0 ? state.Nodes[depth - 1] : NoParent;
+        long allocBytes = AllocationHook.t_Bytes - state.Allocs[depth];
+
+        if (AutoMute.Armed)
+            FoldSelfTime(state, sectionId, depth, elapsed);
+
+        ISampleSink? sink = Sink;
+        if (sink != null && !AutoMute.IsPending(sectionId))
+            sink.RecordSection(sectionId, parentId, state.Nodes[depth], parentNodeId, token, elapsed, allocBytes);
     }
 
     // self time needs the children's total, which only auto-mute wants. arming is one-way, so
