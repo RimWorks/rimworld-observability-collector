@@ -224,11 +224,9 @@
                     ? -10
                     : e.key === 'PageDown'
                       ? 10
-                      : e.key === 'Home'
-                        ? -bars.length
-                        : e.key === 'End'
-                          ? bars.length
-                          : 0;
+                      : e.key === 'End'
+                        ? bars.length
+                        : 0;
         if (step === 0) return;
         e.preventDefault();
         const next = stepOrdinal(bars, selectedOrdinal, step);

@@ -274,12 +274,17 @@ describe('FrameStrip keyboard selection', () => {
         expect(onSelect).toHaveBeenLastCalledWith(0);
     });
 
-    it('sends Home to the oldest frame and End to the newest', async () => {
+    // the page transport owns Home, so the strip must not select on it or preventDefault.
+    it('leaves Home to the transport', async () => {
         const { canvas, onSelect } = strip(5);
-        await fireEvent.keyDown(canvas, { key: 'Home' });
-        expect(onSelect).toHaveBeenCalledWith(0);
+        expect(await fireEvent.keyDown(canvas, { key: 'Home' })).toBe(true);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('jumps to the newest frame on End', async () => {
+        const { canvas, onSelect } = strip(5);
         await fireEvent.keyDown(canvas, { key: 'End' });
-        expect(onSelect).toHaveBeenLastCalledWith(9);
+        expect(onSelect).toHaveBeenCalledWith(9);
     });
 
     it('ignores keys it does not handle', async () => {
