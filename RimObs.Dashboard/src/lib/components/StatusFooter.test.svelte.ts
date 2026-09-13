@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import StatusFooter from './StatusFooter.svelte';
 import { t } from '../i18n';
@@ -78,6 +78,20 @@ describe('StatusFooter', () => {
 
         rerender({ ...BASE, deltaUs: null, deltaText: '' });
         expect(screen.queryByTestId('footer-delta')).toBeNull();
+    });
+
+    // mod authors paste these numbers into Discord, so every cell hands over its own label too.
+    it('copies a footer cell as label and value on click', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        render(StatusFooter, BASE);
+
+        const ring = screen.getByTestId('footer-ring');
+        await fireEvent.click(ring);
+
+        expect(writeText).toHaveBeenCalledWith(`${t('flamegraph.ringsize')} 2,000/5,000`);
+        await expect.poll(() => ring.className).toContain('copied');
+        expect(ring).toHaveAttribute('title', t('copy.copied'));
     });
 
     it('gives each readout a descriptive tooltip', async () => {

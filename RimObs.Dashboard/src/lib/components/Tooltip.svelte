@@ -71,6 +71,8 @@
     onmouseleave={hide}
     onfocus={show}
     onblur={hide}
+    onfocusin={show}
+    onfocusout={hide}
     aria-describedby={open ? id : undefined}
     >{@render children()}{#if open}<span class="tt-bubble" bind:this={bubbleEl} role="tooltip" {id}
             >{#if content}{@render content()}{:else}{text}{/if}</span

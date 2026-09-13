@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import Tooltip from './Tooltip.svelte';
+    import { copyable } from '../copyable';
     import { count } from '../format';
     import { t } from '../i18n';
 
@@ -49,44 +50,45 @@
 </script>
 
 <p class="status mono" data-testid="status-footer">
-    <Tooltip text={t('tip.footer.ring')}>
-        <span data-testid="footer-ring">
+    <Tooltip text={t('tip.footer.ring')} tabindex={-1}>
+        <span data-testid="footer-ring" use:copyable>
             {t('flamegraph.ringsize')}
             <b>{count(ringHeld)}{ringCapacity !== null ? `/${count(ringCapacity)}` : ''}</b>
         </span>
     </Tooltip>
     |
-    <Tooltip text={t('tip.footer.memory')}>
-        <span data-testid="footer-memory">
+    <Tooltip text={t('tip.footer.memory')} tabindex={-1}>
+        <span data-testid="footer-memory" use:copyable>
             {t('footer.memory')} <b>{t('footer.memory.unavailable')}</b>
         </span>
     </Tooltip>
     |
-    <Tooltip text={t('tip.footer.dashFps')}>
-        <span data-testid="footer-dash-fps">
+    <Tooltip text={t('tip.footer.dashFps')} tabindex={-1}>
+        <span data-testid="footer-dash-fps" use:copyable>
             {t('footer.dashFps')} <b>{dashFps === null ? '-' : dashFps}</b>
         </span>
     </Tooltip>
     {#if overheadText}
         |
-        <Tooltip text={t('flamegraph.overhead.hint')}>
-            <span data-testid="footer-overhead">{overheadText}</span>
+        <Tooltip text={t('flamegraph.overhead.hint')} tabindex={-1}>
+            <span data-testid="footer-overhead" use:copyable>{overheadText}</span>
         </Tooltip>
     {/if}
     {#if timerResLine}
         |
-        <Tooltip text={t('tip.footer.timerres')}>
-            <span data-testid="footer-timerres">{timerResLine}</span>
+        <Tooltip text={t('tip.footer.timerres')} tabindex={-1}>
+            <span data-testid="footer-timerres" use:copyable>{timerResLine}</span>
         </Tooltip>
     {/if}
     {#if deltaUs !== null}
         |
-        <Tooltip text={t('tip.footer.delta')}>
+        <Tooltip text={t('tip.footer.delta')} tabindex={-1}>
             <span
                 class="delta"
                 class:warn={deltaSeverity === 1}
                 class:cool={deltaSeverity === -1}
-                data-testid="footer-delta">&Delta; {deltaText}</span
+                data-testid="footer-delta"
+                use:copyable>&Delta; {deltaText}</span
             >
         </Tooltip>
     {/if}

@@ -207,9 +207,22 @@ button:disabled {
     button,
     a[href],
     select,
-    [role='button'] {
+    /* copy cells sit in fixed-height chrome rows, so 44px would break --chrome-h */
+    [role='button']:not(.copyable) {
         min-height: 44px;
     }
+}
+
+.copyable {
+    cursor: copy;
+    border-radius: var(--r-sm);
+}
+.copyable:hover {
+    color: var(--text);
+}
+.copyable.copied,
+.copyable.copied b {
+    color: var(--good);
 }
 
 input[type='checkbox'],
