@@ -1937,6 +1937,21 @@ describe('Flamegraph frame history selection', () => {
         await waitFor(() => expect(stageBusy()).toBe(false));
     });
 
+    // a dragged range used to snap back to live with no word, same as a single pin once did.
+    it('names the ordinal in a notice when the pinned range is evicted', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const gate = gateRangeFetch();
+
+        await dragRange();
+        await waitFor(() => expect(stageBusy()).toBe(true));
+
+        gate.finish('fail');
+
+        expect(await screen.findByTestId('pin-evicted')).toHaveTextContent('4319');
+        await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
+    });
+
     // jsdom does no layout, so the drawer's max()/calc() cannot be resolved here. what is
     // testable is the input it needs: the measured stage height reaching the shared var.
     it('publishes the measured stage height for the drawer to size against', async () => {

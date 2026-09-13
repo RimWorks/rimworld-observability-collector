@@ -266,7 +266,10 @@
             timeline?.refit();
         } catch {
             // the ring evicted the whole range between the drag and the fetch.
-            if (pinnedRange?.from === fromOrdinal && pinnedRange?.to === toOrdinal) resume();
+            if (pinnedRange?.from === fromOrdinal && pinnedRange?.to === toOrdinal) {
+                resume();
+                noticeEvicted(fromOrdinal);
+            }
         } finally {
             rangeInFlight = false;
         }
@@ -407,10 +410,14 @@
             pinnedOrdinal = null;
             pinnedRes = null;
             pinnedWindow = [];
-            evictedPin = ordinal;
-            clearTimeout(evictedTimer);
-            evictedTimer = setTimeout(() => (evictedPin = null), 6000);
+            noticeEvicted(ordinal);
         }
+    }
+
+    function noticeEvicted(ordinal: number): void {
+        evictedPin = ordinal;
+        clearTimeout(evictedTimer);
+        evictedTimer = setTimeout(() => (evictedPin = null), 6000);
     }
 
     function step(delta: number): void {
