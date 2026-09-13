@@ -37,6 +37,7 @@ export function copyable(node: HTMLElement): { destroy(): void } {
     function onKey(e: KeyboardEvent): void {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
+        e.stopPropagation();
         copy();
     }
 

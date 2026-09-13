@@ -73,6 +73,19 @@ describe('copyable', () => {
         expect(writeText).toHaveBeenLastCalledWith('ring 2,000');
     });
 
+    it('keeps space off the document, so the transport does not also toggle pause', async () => {
+        const transport = vi.fn();
+        document.addEventListener('keydown', transport);
+        const node = cell('p99 <b>12.690 ms</b>');
+
+        node.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        await vi.runAllTimersAsync();
+
+        document.removeEventListener('keydown', transport);
+        expect(writeText).toHaveBeenCalledTimes(1);
+        expect(transport).not.toHaveBeenCalled();
+    });
+
     it('ignores keys that are not the button keys', async () => {
         const node = cell('ring <b>2,000</b>');
         node.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
