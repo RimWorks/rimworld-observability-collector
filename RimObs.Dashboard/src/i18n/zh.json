@@ -187,6 +187,7 @@
     "session.past": "历史会话",
     "flamegraph.newSession": "新建会话",
     "tip.flamegraph.newSession": "在运行中的游戏里开始一个新会话，把长时间游玩切分为可命名、可对比的多段。进入游戏时会自动开始新会话。",
+    "common.close": "关闭",
     "common.cancel": "取消",
     "session.restart.explain": "一个会话对应一次游戏启动，因此开始新会话会重启 RimWorld。你输入的名称会被保留并赋予下一个会话。",
     "session.restart.save": "先保存殖民地",

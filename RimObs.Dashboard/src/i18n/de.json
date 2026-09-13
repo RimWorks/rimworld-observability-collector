@@ -187,6 +187,7 @@
     "session.past": "Frühere Sitzungen",
     "flamegraph.newSession": "Neue Sitzung",
     "tip.flamegraph.newSession": "Startet im laufenden Spiel eine neue Sitzung, damit sich ein langes Spiel in benennbare und vergleichbare Laeufe teilt. Beim Betreten eines Spiels geschieht das automatisch.",
+    "common.close": "Schliessen",
     "common.cancel": "Abbrechen",
     "session.restart.explain": "Eine Sitzung ist ein Spielstart, daher startet eine neue Sitzung RimWorld neu. Der eingegebene Name wird gespeichert und der naechsten Sitzung gegeben.",
     "session.restart.save": "Kolonie zuerst speichern",

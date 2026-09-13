@@ -31,15 +31,12 @@
         liveVitals.frameMedianUs !== null ? liveVitals.frameMedianUs / 1000 : null,
     );
 
-    // one copy of the bindings, read by both the tooltip and the ? overlay.
+    // one copy of the bindings, read by the ? overlay.
     const KEY_GROUPS = [
         { id: 'transport', key: 'flamegraph.keys.transport' },
         { id: 'canvas', key: 'flamegraph.keys' },
         { id: 'search', key: 'flamegraph.keys.search' },
     ];
-    let keysText = $derived(
-        `${KEY_GROUPS.map((g) => t(g.key)).join(' ')} ${t('flamegraph.keys.hint')}`,
-    );
 
     let keysOpen = $state(false);
     let keysEl = $state<HTMLDialogElement | null>(null);
@@ -76,15 +73,16 @@
         <div class="glyph"><Logo size={24} /></div>
         <h1>RimObs</h1>
         <p class="what">{t('nav.flamegraph.what')}</p>
-        <Tooltip text={keysText} placement="bottom">
-            <span
+        <Tooltip text={t('flamegraph.keys.hint')} placement="bottom" tabindex={-1}>
+            <button
                 class="help"
-                role="img"
+                type="button"
                 aria-label={t('flamegraph.keys.title')}
+                onclick={() => (keysOpen = true)}
                 data-testid="keys-help"
             >
                 <Icon name="info" size={13} />
-            </span>
+            </button>
         </Tooltip>
     </div>
 
@@ -152,13 +150,21 @@
         aria-label={t('flamegraph.keys.title')}
         data-testid="keys-dialog"
     >
-        <h2>{t('flamegraph.keys.title')}</h2>
+        <div class="head">
+            <h2>{t('flamegraph.keys.title')}</h2>
+            <button
+                type="button"
+                class="close"
+                aria-label={t('common.close')}
+                onclick={() => (keysOpen = false)}
+                data-testid="keys-close">&times;</button
+            >
+        </div>
         <ul>
             {#each KEY_GROUPS as group (group.id)}
                 <li data-testid="keys-{group.id}">{t(group.key)}</li>
             {/each}
         </ul>
-        <p class="hint">{t('flamegraph.keys.hint')}</p>
     </dialog>
 {/if}
 
@@ -288,6 +294,10 @@
         display: grid;
         place-items: center;
         flex: none;
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
         color: var(--text-faint);
     }
     .help:hover {
@@ -306,11 +316,31 @@
     .keys::backdrop {
         background: rgb(0 0 0 / 55%);
     }
+    .keys .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s-3);
+        margin-bottom: var(--s-3);
+    }
     .keys h2 {
-        margin: 0 0 var(--s-3);
+        margin: 0;
         font-family: var(--font-display);
         font-size: 1.05rem;
         letter-spacing: 0.03em;
+    }
+    .keys .close {
+        font: inherit;
+        font-size: 1.1rem;
+        line-height: 1;
+        color: var(--text-dim);
+        background: none;
+        border: 0;
+        padding: 2px 6px;
+        cursor: pointer;
+    }
+    .keys .close:hover {
+        color: var(--text);
     }
     .keys ul {
         display: flex;
@@ -322,11 +352,6 @@
         font-size: 0.82rem;
         line-height: 1.45;
         color: var(--text-dim);
-    }
-    .hint {
-        margin: var(--s-4) 0 0;
-        font-size: 0.76rem;
-        color: var(--text-faint);
     }
     .rule {
         width: 1px;

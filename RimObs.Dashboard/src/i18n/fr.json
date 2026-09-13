@@ -187,6 +187,7 @@
     "session.past": "Sessions passees",
     "flamegraph.newSession": "Nouvelle session",
     "tip.flamegraph.newSession": "Demarre une nouvelle session dans la partie en cours, pour decouper une longue partie en runs que vous pouvez nommer et comparer. Entrer dans une partie le fait tout seul.",
+    "common.close": "Fermer",
     "common.cancel": "Annuler",
     "session.restart.explain": "Une session est un lancement du jeu, donc en demarrer une nouvelle redemarre RimWorld. Le nom saisi est conserve et donne a la session suivante.",
     "session.restart.save": "Sauvegarder la colonie d'abord",

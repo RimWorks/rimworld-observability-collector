@@ -187,6 +187,7 @@
     "session.past": "Sesiones anteriores",
     "flamegraph.newSession": "Nueva sesion",
     "tip.flamegraph.newSession": "Inicia una sesion nueva en la partida en curso, para dividir un juego largo en tramos que puedes nombrar y comparar. Entrar en una partida lo hace solo.",
+    "common.close": "Cerrar",
     "common.cancel": "Cancelar",
     "session.restart.explain": "Una sesion es un arranque del juego, asi que iniciar una nueva reinicia RimWorld. El nombre que escribas se guarda y se aplica a la siguiente sesion.",
     "session.restart.save": "Guardar la colonia primero",

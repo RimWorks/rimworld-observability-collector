@@ -132,15 +132,34 @@ describe('TopBar keyboard help', () => {
         expect(screen.getByLabelText(t('flamegraph.keys.title'))).toBeTruthy();
     });
 
-    it('carries both the navigation and transport keys', async () => {
+    // the tooltip teaches the ? key and nothing else; the bindings live in the overlay.
+    it('keeps the tooltip to the one-line hint', async () => {
         render(TopBar, { status: status() });
         const trigger = screen.getByTestId('keys-help');
 
         await fireEvent.focus(trigger.closest('[tabindex]') ?? trigger);
 
         const tip = await screen.findByRole('tooltip');
-        expect(tip.textContent).toContain(t('flamegraph.keys'));
-        expect(tip.textContent).toContain(t('flamegraph.keys.transport'));
+        expect(tip.textContent).toBe(t('flamegraph.keys.hint'));
+    });
+
+    // hover-only help is unreachable by keyboard or touch, so the icon is a real button.
+    it('opens the overlay when the icon is clicked', async () => {
+        render(TopBar, { status: status() });
+
+        await fireEvent.click(screen.getByTestId('keys-help'));
+
+        expect(screen.getByTestId('keys-dialog')).toBeTruthy();
+    });
+
+    // a touch user has no Escape key, so the overlay needs a control they can tap.
+    it('closes the overlay from the close button', async () => {
+        render(TopBar, { status: status() });
+        await fireEvent.click(screen.getByTestId('keys-help'));
+
+        await fireEvent.click(screen.getByTestId('keys-close'));
+
+        expect(screen.queryByTestId('keys-dialog')).toBeNull();
     });
 
     it('opens the shortcuts overlay on ? and closes it on Escape', async () => {

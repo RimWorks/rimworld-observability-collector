@@ -247,6 +247,7 @@
     "session.past": "Past sessions",
     "flamegraph.newSession": "New session",
     "tip.flamegraph.newSession": "Starts a fresh session in the running game, so a long play splits into runs you can name and compare. Entering a game does this on its own.",
+    "common.close": "Close",
     "common.cancel": "Cancel",
     "session.restart.explain": "A session is one launch of the game, so starting a new one restarts RimWorld. The name you type is kept and given to the session that comes up next.",
     "session.restart.save": "Save the colony first",
