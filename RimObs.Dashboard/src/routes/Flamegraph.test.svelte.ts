@@ -1296,6 +1296,34 @@ describe('Flamegraph page', () => {
         expect(screen.queryByTestId('pin-evicted')).toBeNull();
     });
 
+    // an evicted pin used to clear the pin but leave paused on, so the badge and the frozen
+    // strip said held while the flame followed live.
+    it('goes back to live for real when the pinned frame is evicted', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        const live = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url.includes('/api/v1/frames?'))
+                return jsonResponse({ ...FRAMES_BODY, frames: [] });
+            return live(input, init);
+        }) as unknown as typeof fetch;
+
+        await fireEvent.click(screen.getByTestId('step-older'));
+        expect(await screen.findByTestId('pin-evicted')).toBeInTheDocument();
+
+        await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
+
+        globalThis.fetch = live;
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
+            strip: { ordinals: [9998, 9999], durations_us: [1000, 2000] },
+        });
+        await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+    });
+
     // a 500 or a restarted collector is a hiccup, not an eviction. unpinning on it throws
     // the user off the frame they stopped on and lies about why.
     it('keeps the pin and stays quiet when the range fetch fails', async () => {
@@ -1914,16 +1942,27 @@ describe('Flamegraph frame history selection', () => {
         await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
     });
 
+    type RangeOutcome = 'ok' | 'fail' | 'evicted';
+
+    // FrameRing.Range clips an evicted `from` to the oldest frame it still holds, so a range
+    // that fell out of the ring comes back 200 with only ordinals past the drag.
+    const evictedRangeBody = () => ({
+        ...FRAMES_BODY,
+        frames: [shiftFrame(FRAMES_BODY.frame, 9001, 200000)],
+    });
+
     // holds the range fetch open so the busy state can be observed mid-flight
-    function gateRangeFetch(): { finish: (how: 'ok' | 'fail') => void } {
+    function gateRangeFetch(): { finish: (how: RangeOutcome) => void } {
         const inner = globalThis.fetch;
-        let unlock: (how: 'ok' | 'fail') => void = () => {};
-        const gate = new Promise<'ok' | 'fail'>((resolve) => (unlock = resolve));
+        let unlock: (how: RangeOutcome) => void = () => {};
+        const gate = new Promise<RangeOutcome>((resolve) => (unlock = resolve));
         globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
             requestUrl(input).includes('/api/v1/frames?')
-                ? gate.then((how) =>
-                      how === 'fail' ? Promise.reject(new Error('gone')) : inner(input, init),
-                  )
+                ? gate.then((how) => {
+                      if (how === 'fail') return Promise.reject(new Error('gone'));
+                      if (how === 'evicted') return jsonResponse(evictedRangeBody());
+                      return inner(input, init);
+                  })
                 : inner(input, init)) as typeof fetch;
         return { finish: unlock };
     }
@@ -1966,10 +2005,25 @@ describe('Flamegraph frame history selection', () => {
         await dragRange();
         await waitFor(() => expect(stageBusy()).toBe(true));
 
-        gate.finish('fail');
+        gate.finish('evicted');
 
         expect(await screen.findByTestId('pin-evicted')).toHaveTextContent('4319');
         await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
+    });
+
+    it('keeps the pin and says nothing when the range request fails', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const gate = gateRangeFetch();
+
+        await dragRange();
+        await waitFor(() => expect(stageBusy()).toBe(true));
+
+        gate.finish('fail');
+
+        await waitFor(() => expect(stageBusy()).toBe(false));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+        expect(screen.getByTestId('strip-range')).toBeInTheDocument();
     });
 
     // jsdom does no layout, so the drawer's max()/calc() cannot be resolved here. what is

@@ -405,9 +405,7 @@
             const at = range.frames.find((f) => f.capture_ordinal === ordinal);
             if (!at) {
                 // the ring evicted it between the click and the fetch. fall back to live.
-                pinnedOrdinal = null;
-                pinnedRes = null;
-                pinnedWindow = [];
+                resume();
                 noticeEvicted(ordinal);
                 return;
             }
