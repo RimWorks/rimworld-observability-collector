@@ -89,6 +89,9 @@
         { key: 'p99_us', label: 'flamegraph.p99' },
     ] as const;
 
+    // heuristic: boehm pauses scale with allocation rate, and 1 GB/m is where they get ugly.
+    const ALLOC_WARN_BPM = 1024 ** 3;
+
     const LIVE = 'live';
     const NO_DROPS = { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 };
 
@@ -209,8 +212,10 @@
     }
 
     // one range download at a time: a wide drag is megabytes, and the pin refresh used to
-    // stack a second copy on top of a fetch still in flight.
-    let rangeInFlight = false;
+    // stack a second copy on top of a fetch still in flight. state so the stage can dim.
+    let rangeInFlight = $state(false);
+    // the stage shrinks to its lanes, so the drawer reads this to claim whatever is left.
+    let stageH = $state(0);
     // the duration floor each pinned frame was fetched at, for zoom-in refinement.
     const pinnedLod = new Map<number, number>();
 
@@ -954,7 +959,7 @@
 
 <svelte:window onkeydown={handleWindowKey} />
 
-<div class="profiler">
+<div class="profiler" style="--stage-h: {stageH}px" data-testid="profiler">
     <div class="bar">
         {#if live}
             <button type="button" onclick={togglePause} data-testid="pause">
@@ -1026,7 +1031,11 @@
             </Tooltip>
             {#if peakAllocRate > 0}
                 |
-                <span class="mono" data-testid="alloc-rate"
+                <span
+                    class="mono"
+                    class:lossy={peakAllocRate > ALLOC_WARN_BPM}
+                    data-testid="alloc-rate"
+                    title={t('flamegraph.allocRate.hint')}
                     >{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
                 >
             {/if}
@@ -1079,10 +1088,11 @@
                     }}
                     data-testid="reset-view">{t('flamegraph.resetView')}</button
                 >
+                <span class="sep" aria-hidden="true"></span>
                 <Tooltip text={t('tip.flamegraph.newSession')}>
                     <button
                         type="button"
-                        class="clearring"
+                        class="clearring destructive"
                         onclick={() => (askingNewSession = true)}
                         disabled={startingSession}
                         data-testid="new-session">{t('flamegraph.newSession')}</button
@@ -1091,7 +1101,7 @@
                 <Tooltip text={t('tip.flamegraph.clearRing')}>
                     <button
                         type="button"
-                        class="clearring"
+                        class="clearring destructive"
                         class:armed={confirmingClear}
                         onclick={askClearRing}
                         onblur={() => (confirmingClear = false)}
@@ -1282,7 +1292,14 @@
             {searchStatusText}
         </div>
 
-        <div class="stage" class:split={treeOpen}>
+        <div
+            class="stage"
+            class:split={treeOpen}
+            class:busy={rangeInFlight}
+            aria-busy={rangeInFlight}
+            bind:clientHeight={stageH}
+            data-testid="stage"
+        >
             <div class="gutter">
                 <div class="lane gc">GC &mdash;</div>
                 {#each visibleLanes as lane, i (lane.id)}
@@ -1443,7 +1460,10 @@
     }
     .bar > button.icon {
         font-family: var(--font-mono);
-        padding: 3px 7px;
+        /* stepping frames is the most-hammered control here, so it gets a 28px target */
+        padding: 4px 8px;
+        min-width: 28px;
+        min-height: 28px;
     }
     .bar > button:hover {
         border-color: var(--border-strong);
@@ -1533,6 +1553,7 @@
     .modes {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--s-2);
         padding: 6px 12px;
         border-bottom: 1px solid var(--border-soft);
@@ -1540,8 +1561,14 @@
     .rightpair {
         display: inline-flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--s-2);
         margin-left: auto;
+    }
+    .sep {
+        width: 1px;
+        height: 18px;
+        background: var(--border);
     }
     .clearring {
         font: inherit;
@@ -1563,6 +1590,24 @@
     }
     .clearring:disabled {
         color: var(--text-ghost);
+        cursor: default;
+    }
+    .destructive {
+        color: var(--bad);
+        border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
+    }
+    .destructive:hover:not(:disabled) {
+        color: var(--bad);
+        background: color-mix(in srgb, var(--bad) 14%, var(--bg-surface));
+        border-color: var(--bad);
+    }
+    .destructive.armed {
+        color: var(--text);
+        background: var(--bad-deep);
+        border-color: var(--bad-deep);
+    }
+    .destructive:disabled {
+        color: color-mix(in srgb, var(--bad) 50%, var(--bg-surface));
         cursor: default;
     }
     .seg {
@@ -1797,7 +1842,8 @@
         grid-template-columns: var(--gut) 1fr;
         background: var(--bg-void);
         border-bottom: 1px solid var(--border);
-        /* the flame owns whatever the chrome leaves; the drawer takes its cut in split mode */
+        /* with no drawer open the stage owns the page; in split mode it hugs its lanes
+           so the drawer can claim the slack */
         height: calc(100vh - var(--chrome-h));
         min-height: 160px;
         overflow: auto;
@@ -1807,8 +1853,13 @@
     .stage::-webkit-scrollbar {
         display: none;
     }
+    .stage.busy {
+        opacity: 0.6;
+        cursor: progress;
+    }
     .stage.split {
-        height: calc(100vh - var(--drawer-h) - var(--chrome-h));
+        height: auto;
+        max-height: calc(100vh - var(--drawer-h) - var(--chrome-h));
     }
     .gutter {
         border-right: 1px solid var(--border);

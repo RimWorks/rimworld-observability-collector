@@ -117,7 +117,9 @@ describe('ComparisonPanel', () => {
 
         await fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
         await waitFor(() =>
-            expect(screen.queryByText(/a delta shows what changed, not why/i)).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText(/a delta shows what changed, not why/i),
+            ).not.toBeInTheDocument(),
         );
     });
 

@@ -196,6 +196,32 @@ describe('FrameTimeline', () => {
         expect(host.scrollTop).toBe(420);
     });
 
+    // no ancestor overflows here, so a diagonal drag must pan horizontally and nothing else.
+    it('pans nothing vertically when the content fits', async () => {
+        const { container } = render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = document.querySelector('canvas')!;
+        canvas.setPointerCapture = () => {};
+        const ancestors: HTMLElement[] = [];
+        for (let at = canvas.parentElement; at; at = at.parentElement) ancestors.push(at);
+
+        // a fitted view sits flush against the bounds, so zoom in first or the pan clamps away.
+        await fireEvent.keyDown(canvas, { key: '+' });
+        await waitForFrame();
+        const zoomed = vi.mocked(drawTimeline).mock.calls.at(-1)![2].view.startUs;
+
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 2, clientX: 150, clientY: 300, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointermove', { clientX: 250, clientY: 380, bubbles: true }),
+        );
+
+        await waitForFrame();
+        expect(vi.mocked(drawTimeline).mock.calls.at(-1)![2].view.startUs).toBeLessThan(zoomed);
+        for (const at of ancestors) expect(at.scrollTop).toBe(0);
+        expect(container.scrollTop).toBe(0);
+    });
+
     // right-drag pans now, so the canvas suppresses the browser menu and a right release
     // must never fire the click-to-zoom gesture.
     it('right-click opens no menu and zooms nothing', async () => {

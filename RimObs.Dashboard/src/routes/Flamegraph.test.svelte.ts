@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import Flamegraph from './Flamegraph.svelte';
@@ -229,6 +230,18 @@ const IMPORT_BODY = {
     contents: ['manifest.json', 'frames.json', 'hotspots.json'],
 };
 
+const SUMMARIES_BODY = {
+    schema_version: 1,
+    stopwatch_frequency: 1_000_000,
+    frame_count: 1,
+    ordinals: [4321],
+    start_us: [0],
+    duration_us: [9000],
+    node_counts: [3],
+    section_durations: {},
+    dropped: { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 },
+};
+
 // String() on a Request gives "[object Request]", not the url the test wants to match.
 function requestUrl(input: RequestInfo | URL): string {
     if (typeof input === 'string') return input;
@@ -254,6 +267,7 @@ function mockFetch(
         else if (url.includes('/sessions/current/hotspots')) body = HOTSPOTS_BODY;
         else if (url.includes('/sessions/current/patches')) body = PATCHES_BODY;
         else if (url.includes('/instrumentation/patches')) body = INSTRUMENTATION_BODY;
+        else if (url.includes('/frames/summaries')) body = SUMMARIES_BODY;
         else if (url.includes('/timeseries')) body = TIMESERIES_BODY;
         else if (url.includes('/file/frames.json')) body = BUNDLE_FRAMES_BODY;
         else if (url.includes('/file/hotspots.json')) body = BUNDLE_HOTSPOTS_BODY;
@@ -535,6 +549,46 @@ describe('Flamegraph page', () => {
         await vi.advanceTimersByTimeAsync(1000);
 
         expect(screen.queryByTestId('lossy-badge')).toBeNull();
+    });
+
+    // boehm stops the world to collect, so a high allocation rate is the headline finding and
+    // has to stop reading like every other muted stat.
+    it('warns on the peak alloc cell only above the threshold', async () => {
+        const gcBody = (rate: number) => ({
+            schema_version: 6,
+            total_events: 1,
+            events: [
+                {
+                    generation: 0,
+                    pause_type: 0,
+                    heap_before: 200,
+                    heap_after: 100,
+                    duration_micros: 900,
+                    ticks: 1,
+                    allocation_rate_bpm: rate,
+                    frame_ordinal: 4321,
+                },
+            ],
+        });
+        const mockGc = (rate: number) => {
+            mockFetch();
+            const base = globalThis.fetch;
+            globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+                if (!requestUrl(input).includes('/gc')) return base(input, init);
+                return jsonResponse(gcBody(rate));
+            }) as unknown as typeof fetch;
+        };
+
+        mockGc(512 * 1024 * 1024);
+        const below = render(Flamegraph);
+        await waitFor(() =>
+            expect(screen.getByTestId('alloc-rate').className).not.toContain('lossy'),
+        );
+        below.unmount();
+
+        mockGc(2 * 1024 * 1024 * 1024);
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('alloc-rate').className).toContain('lossy'));
     });
 
     it('polls once per frame', async () => {
@@ -1784,6 +1838,74 @@ describe('Flamegraph frame history selection', () => {
         await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
         await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
     });
+
+    // holds the range fetch open so the busy state can be observed mid-flight
+    function gateRangeFetch(): { finish: (how: 'ok' | 'fail') => void } {
+        const inner = globalThis.fetch;
+        let unlock: (how: 'ok' | 'fail') => void = () => {};
+        const gate = new Promise<'ok' | 'fail'>((resolve) => (unlock = resolve));
+        globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+            requestUrl(input).includes('/api/v1/frames?')
+                ? gate.then((how) =>
+                      how === 'fail' ? Promise.reject(new Error('gone')) : inner(input, init),
+                  )
+                : inner(input, init)) as typeof fetch;
+        return { finish: unlock };
+    }
+
+    const stageBusy = () =>
+        screen.getByTestId('stage').classList.contains('busy') &&
+        screen.getByTestId('stage').getAttribute('aria-busy') === 'true';
+
+    it('marks the stage busy while the range fetch is in flight', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const gate = gateRangeFetch();
+
+        await dragRange();
+
+        await waitFor(() => expect(stageBusy()).toBe(true));
+        gate.finish('ok');
+        await waitFor(() => expect(stageBusy()).toBe(false));
+    });
+
+    it('clears the busy stage when the range fetch fails', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const gate = gateRangeFetch();
+
+        await dragRange();
+        await waitFor(() => expect(stageBusy()).toBe(true));
+
+        gate.finish('fail');
+
+        await waitFor(() => expect(stageBusy()).toBe(false));
+    });
+
+    // jsdom does no layout, so the drawer's max()/calc() cannot be resolved here. what is
+    // testable is the input it needs: the measured stage height reaching the shared var.
+    it('publishes the measured stage height for the drawer to size against', async () => {
+        const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+        Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+            configurable: true,
+            get(this: HTMLElement) {
+                return this.dataset.testid === 'stage' ? 240 : 0;
+            },
+        });
+        try {
+            render(Flamegraph);
+            await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+            await waitFor(() =>
+                expect(screen.getByTestId('profiler').style.getPropertyValue('--stage-h')).toBe(
+                    '240px',
+                ),
+            );
+        } finally {
+            if (real) Object.defineProperty(HTMLElement.prototype, 'clientHeight', real);
+            else Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
+        }
+    });
 });
 
 // the ring is the only copy of what you just captured, and this button sits next to
@@ -1828,6 +1950,33 @@ describe('Flamegraph clear history confirm', () => {
         await fireEvent.blur(btn);
 
         expect(btn.textContent).toContain('Clear history');
+    });
+});
+
+// six lookalike buttons put Clear history one slot from Export. the row keeps the exports
+// one click away and marks the two destructive ones.
+describe('Flamegraph action row', () => {
+    for (const id of ['export-frame', 'export-ring', 'export-timeline'] as const) {
+        it(`runs ${id} from one click`, async () => {
+            const make = vi.fn(() => 'blob:x');
+            URL.createObjectURL = make as unknown as typeof URL.createObjectURL;
+            URL.revokeObjectURL = vi.fn();
+            render(Flamegraph);
+            await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+            await fireEvent.click(screen.getByTestId(id));
+
+            await waitFor(() => expect(make).toHaveBeenCalled());
+        });
+    }
+
+    it('marks new session and clear history as destructive, and reset view not', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        expect(screen.getByTestId('new-session').className).toContain('destructive');
+        expect(screen.getByTestId('clear-ring').className).toContain('destructive');
+        expect(screen.getByTestId('reset-view').className).not.toContain('destructive');
     });
 });
 
@@ -2106,6 +2255,50 @@ describe('Flamegraph flame bands', () => {
                 [10, 0],
                 [30, 1],
             ]),
+        );
+    });
+});
+
+// the step arrows are clicked more than anything else on the page, so a padding tweak
+// must not shrink them back under 28px
+describe('Flamegraph step arrow hit area', () => {
+    it('keeps the icon buttons at 28px', () => {
+        const css = readFileSync('src/routes/Flamegraph.svelte', 'utf-8').split('<style>')[1];
+        const rule = /\.bar > button\.icon\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+        expect(rule).toContain('min-width: 28px');
+        expect(rule).toContain('min-height: 28px');
+    });
+});
+
+// capping the stage to its lanes with no drawer open left ~800px of dead page at 1440p,
+// so the cap is split-mode only
+describe('Flamegraph stage sizing', () => {
+    const stageCss = () =>
+        readFileSync('src/routes/Flamegraph.svelte', 'utf-8').split('<style>')[1];
+
+    it('fills the page below the chrome when no drawer tab is open', () => {
+        const rule = /\.stage\s*\{([^}]*)\}/.exec(stageCss())?.[1] ?? '';
+
+        expect(rule).toContain('height: calc(100vh - var(--chrome-h))');
+        expect(rule).not.toContain('max-height');
+    });
+
+    it('hugs its lanes under the split cap when a drawer tab is open', () => {
+        const rule = /\.stage\.split\s*\{([^}]*)\}/.exec(stageCss())?.[1] ?? '';
+
+        expect(rule).toContain('height: auto');
+        expect(rule).toContain('max-height: calc(100vh - var(--drawer-h) - var(--chrome-h))');
+    });
+
+    it('lets the drawer claim the slack a short stage leaves', () => {
+        const css = readFileSync('src/lib/components/CallTreePanel.svelte', 'utf-8').split(
+            '<style>',
+        )[1];
+        const rule = /\.drawer\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+        expect(rule).toContain(
+            'height: max(var(--drawer-h), calc(100vh - var(--chrome-h) - var(--stage-h, 100vh)))',
         );
     });
 });

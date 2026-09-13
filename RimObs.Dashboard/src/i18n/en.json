@@ -207,6 +207,7 @@
     "tree.soon": "Not collected yet. This tab turns on once its collector ships.",
     "flamegraph.tickBudget": "tick",
     "flamegraph.allocRate": "peak alloc",
+    "flamegraph.allocRate.hint": "The highest allocation rate seen this session. RimWorld's Boehm GC stops the world to collect, and those pauses grow with the allocation rate, so a high number here is usually the cause of frame spikes.",
     "flamegraph.budget": "budget",
     "flamegraph.ringsize": "ring",
     "settings.ringCapacity": "Frame buffer",

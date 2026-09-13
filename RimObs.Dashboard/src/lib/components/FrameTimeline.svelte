@@ -778,8 +778,7 @@
     {/if}
     <p class="meta">
         <span data-testid="frame-range" class="mono">{rangeText}</span>
-        <span data-testid="frame-span" class="mono"
-            >{tn('flamegraph.overFrames', shownFrames)}</span
+        <span data-testid="frame-span" class="mono">{tn('flamegraph.overFrames', shownFrames)}</span
         >
     </p>
     <div class="sr-only" role="status" aria-live="polite">{liveText}</div>

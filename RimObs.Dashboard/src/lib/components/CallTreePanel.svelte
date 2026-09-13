@@ -45,11 +45,9 @@
         scope?: 'frame' | 'session';
         /** per-section percentiles over the whole session; empty in frame scope */
         percentiles?: Map<number, { p50Us: number; p95Us: number; p99Us: number }>;
-        /** panels that live in the footer but whose state belongs to the route */
         instrumentation?: Snippet;
         comparison?: Snippet;
         threads?: Snippet;
-        /** other mods patching each section's target method, keyed by section name */
         patchOwners?: Map<string, string[]>;
         /** the route shrinks the flame stage to match, so the drawer never covers it */
         open?: boolean;
@@ -67,8 +65,7 @@
 
     let expanded = $state(new SvelteSet<string>());
 
-    // the per-second trend the Hotspots page used to own. session scope only: it is a session
-    // ring, and it says nothing about the single frame on screen.
+    // session scope only: its a session ring, says nothing about the frame on screen
     let trendSectionId = $state<number | null>(null);
     let trend = $state<SectionTimeseriesResponse | null>(null);
     let trendLoading = $state(false);
@@ -114,15 +111,12 @@
         { id: 'alloc', label: 'tree.tab.alloc' },
         { id: 'vram', label: 'tree.tab.vram' },
     ] as const;
-    // these two used to be their own <details> further down the page. they are panels, not views
-    // of the frame, so they sit apart from the frame tabs rather than beside them.
     const SIDE_TABS = [
         { id: 'instrumentation', label: 'nav.instrumentation' },
         { id: 'comparison', label: 'comparison.title' },
         { id: 'threads', label: 'threads.title' },
     ] as const;
     type TabId = (typeof TABS)[number]['id'] | (typeof SIDE_TABS)[number]['id'];
-    // the drawer is shut on load and never restores a tab, so the flame owns the viewport first
     let activeTab = $state<TabId | null>(null);
     $effect(() => {
         open = activeTab !== null;
@@ -139,8 +133,7 @@
         }),
     );
 
-    // a bar click opens the tree down to that node, which is the half of the link Neo calls
-    // ExpandCallTreeToNode.
+    // the ExpandCallTreeToNode half of the flame-to-tree link
     $effect(() => {
         if (selectedNode < 0 || inverted) return;
         for (const key of keysToNode(nodes, selectedNode).slice(0, -1)) expanded.add(key);
@@ -155,7 +148,6 @@
         else expanded.add(row.key);
     }
 
-    // the alloc tab is the same tree, ordered by bytes. one table, one code path.
     function selectTab(id: TabId): void {
         if (activeTab === id) {
             activeTab = null;
@@ -496,7 +488,8 @@
         box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
     }
     .drawer {
-        height: var(--drawer-h);
+        /* --stage-h is measured by the page that owns the stage */
+        height: max(var(--drawer-h), calc(100vh - var(--chrome-h) - var(--stage-h, 100vh)));
         overflow: auto;
         border-bottom: 1px solid var(--border);
     }

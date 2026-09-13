@@ -82,7 +82,7 @@
     --drawer-h: 45vh;
     /* topbar, strip, transport bar, tab bar and status strip: everything the stage shares
        the viewport with when the drawer is open */
-    --chrome-h: 320px;
+    --chrome-h: 322px;
 
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
     --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);
