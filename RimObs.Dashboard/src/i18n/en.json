@@ -182,6 +182,8 @@
     "flamegraph.newer": "Newer frame",
     "flamegraph.newest": "Jump to newest",
     "flamegraph.keys.transport": "Space pauses, PageUp and PageDown step frames, Home jumps to the newest.",
+    "flamegraph.keys.search": "Slash or Ctrl+F jumps to search, Escape clears it.",
+    "flamegraph.keys.hint": "Press ? to open this list, Escape to close.",
     "tree.scope": "Scope",
     "tree.scope.frame": "This frame",
     "tree.scope.session": "Session",

@@ -30,17 +30,53 @@
     let frameMs = $derived(
         liveVitals.frameMedianUs !== null ? liveVitals.frameMedianUs / 1000 : null,
     );
+
+    // one copy of the bindings, read by both the tooltip and the ? overlay.
+    const KEY_GROUPS = [
+        { id: 'transport', key: 'flamegraph.keys.transport' },
+        { id: 'canvas', key: 'flamegraph.keys' },
+        { id: 'search', key: 'flamegraph.keys.search' },
+    ];
+    let keysText = $derived(
+        `${KEY_GROUPS.map((g) => t(g.key)).join(' ')} ${t('flamegraph.keys.hint')}`,
+    );
+
+    let keysOpen = $state(false);
+    let keysEl = $state<HTMLDialogElement | null>(null);
+
+    // jsdom 25 has no showModal; the optional call keeps the overlay testable there.
+    $effect(() => {
+        if (keysOpen) keysEl?.showModal?.();
+    });
+
+    function keydown(e: KeyboardEvent): void {
+        const el = e.target as HTMLElement | null;
+        if (
+            el &&
+            (el.tagName === 'INPUT' ||
+                el.tagName === 'SELECT' ||
+                el.tagName === 'TEXTAREA' ||
+                el.isContentEditable)
+        )
+            return;
+        if (e.key === '?') {
+            e.preventDefault();
+            keysOpen = !keysOpen;
+        } else if (e.key === 'Escape' && keysOpen) {
+            e.preventDefault();
+            keysOpen = false;
+        }
+    }
 </script>
+
+<svelte:window onkeydown={keydown} />
 
 <header class="topbar">
     <div class="crumbs">
         <div class="glyph"><Logo size={24} /></div>
         <h1>RimObs</h1>
         <p class="what">{t('nav.flamegraph.what')}</p>
-        <Tooltip
-            text={`${t('flamegraph.keys')} ${t('flamegraph.keys.transport')}`}
-            placement="bottom"
-        >
+        <Tooltip text={keysText} placement="bottom">
             <span
                 class="help"
                 role="img"
@@ -107,6 +143,24 @@
         <SettingsPopover {status} />
     </div>
 </header>
+
+{#if keysOpen}
+    <dialog
+        class="keys"
+        bind:this={keysEl}
+        onclose={() => (keysOpen = false)}
+        aria-label={t('flamegraph.keys.title')}
+        data-testid="keys-dialog"
+    >
+        <h2>{t('flamegraph.keys.title')}</h2>
+        <ul>
+            {#each KEY_GROUPS as group (group.id)}
+                <li data-testid="keys-{group.id}">{t(group.key)}</li>
+            {/each}
+        </ul>
+        <p class="hint">{t('flamegraph.keys.hint')}</p>
+    </dialog>
+{/if}
 
 <style>
     .topbar {
@@ -238,6 +292,41 @@
     }
     .help:hover {
         color: var(--text-dim);
+    }
+    .keys {
+        width: min(30rem, calc(100vw - 2rem));
+        margin: auto;
+        padding: var(--s-5);
+        color: var(--text);
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        box-shadow: 0 18px 48px rgb(0 0 0 / 55%);
+    }
+    .keys::backdrop {
+        background: rgb(0 0 0 / 55%);
+    }
+    .keys h2 {
+        margin: 0 0 var(--s-3);
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        letter-spacing: 0.03em;
+    }
+    .keys ul {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-2);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: var(--text-dim);
+    }
+    .hint {
+        margin: var(--s-4) 0 0;
+        font-size: 0.76rem;
+        color: var(--text-faint);
     }
     .rule {
         width: 1px;

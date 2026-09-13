@@ -142,6 +142,41 @@ describe('TopBar keyboard help', () => {
         expect(tip.textContent).toContain(t('flamegraph.keys'));
         expect(tip.textContent).toContain(t('flamegraph.keys.transport'));
     });
+
+    it('opens the shortcuts overlay on ? and closes it on Escape', async () => {
+        render(TopBar, { status: status() });
+        expect(screen.queryByTestId('keys-dialog')).toBeNull();
+
+        await fireEvent.keyDown(globalThis.window, { key: '?' });
+        expect(screen.getByTestId('keys-dialog')).toBeTruthy();
+
+        await fireEvent.keyDown(globalThis.window, { key: 'Escape' });
+        expect(screen.queryByTestId('keys-dialog')).toBeNull();
+    });
+
+    it('lists the transport, canvas and search groups in the overlay', async () => {
+        render(TopBar, { status: status() });
+        await fireEvent.keyDown(globalThis.window, { key: '?' });
+
+        expect(screen.getByTestId('keys-transport').textContent).toBe(
+            t('flamegraph.keys.transport'),
+        );
+        expect(screen.getByTestId('keys-canvas').textContent).toBe(t('flamegraph.keys'));
+        expect(screen.getByTestId('keys-search').textContent).toBe(t('flamegraph.keys.search'));
+    });
+
+    // ? is shift+/ and / focuses the flamegraph search, so typing it in a field must not steal it.
+    it('ignores ? typed inside an input', async () => {
+        render(TopBar, { status: status() });
+        const input = document.createElement('input');
+        document.body.appendChild(input);
+
+        await fireEvent.keyDown(input, { key: '?', bubbles: true });
+
+        expect(screen.queryByTestId('keys-dialog')).toBeNull();
+        input.remove();
+    });
+
     it('shows patch progress while the worker drains and hides it when done', () => {
         const auto = {
             matched: 40,
