@@ -1296,6 +1296,26 @@ describe('Flamegraph page', () => {
         expect(screen.queryByTestId('pin-evicted')).toBeNull();
     });
 
+    // a 500 or a restarted collector is a hiccup, not an eviction. unpinning on it throws
+    // the user off the frame they stopped on and lies about why.
+    it('keeps the pin and stays quiet when the range fetch fails', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        const live = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url.includes('/api/v1/frames?'))
+                return Promise.resolve(new Response('boom', { status: 500 }));
+            return live(input, init);
+        }) as unknown as typeof fetch;
+
+        await fireEvent.click(screen.getByTestId('step-older'));
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+    });
+
     it('jumping to newest clears the pause and returns to the live frame', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());

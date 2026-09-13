@@ -401,16 +401,19 @@
             const range = await api.frameRange(ordinal - MAX_WINDOW_FRAMES + 1);
             if (pinnedOrdinal !== ordinal) return;
             const at = range.frames.find((f) => f.capture_ordinal === ordinal);
-            if (!at) throw new Error('evicted');
+            if (!at) {
+                // the ring evicted it between the click and the fetch. fall back to live.
+                pinnedOrdinal = null;
+                pinnedRes = null;
+                pinnedWindow = [];
+                noticeEvicted(ordinal);
+                return;
+            }
             pinnedWindow = range.frames.filter((f) => f.capture_ordinal <= ordinal);
             pinnedRes = { ...range, frame: at };
         } catch {
-            if (pinnedOrdinal !== ordinal) return;
-            // the ring evicted it between the click and the fetch. fall back to live.
-            pinnedOrdinal = null;
-            pinnedRes = null;
-            pinnedWindow = [];
-            noticeEvicted(ordinal);
+            // a failed request is a hiccup, not an eviction. hold the pin and let the
+            // refresh effect try again.
         }
     }
 
