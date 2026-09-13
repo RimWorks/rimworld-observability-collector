@@ -67,6 +67,7 @@
         framePollMs,
     } from '../lib/frameCost';
     import { t } from '../lib/i18n';
+    import { HASHED_COLORS, SUBSYSTEMS, SUBSYSTEM_TOKENS } from '../lib/frameDraw';
     import {
         laneBands,
         laneDepths,
@@ -140,6 +141,17 @@
     const NO_STRIP: FrameStripData = { ordinals: [], durations_us: [], alloc_bytes: [] };
     // the baseline is a median over 128 frames, so it says nothing about a session total.
     const NO_BASELINE = new Map<number, number>();
+
+    const LEGEND = [
+        ...SUBSYSTEMS.map((name, i) => ({ name, swatch: `var(${SUBSYSTEM_TOKENS[i]})` })),
+        { name: 'none', swatch: 'var(--sub-none)' },
+        // an untagged section hashes to its own color, so its swatch shows three of them
+        // rather than pretending the palette is one hue.
+        {
+            name: 'untagged',
+            swatch: `linear-gradient(90deg, ${HASHED_COLORS[0]} 0 33%, ${HASHED_COLORS[1]} 33% 66%, ${HASHED_COLORS[2]} 66%)`,
+        },
+    ];
 
     let live = $derived(source === LIVE);
     let pinned = $derived(live && pinnedOrdinal !== null);
@@ -1135,6 +1147,15 @@
         />
     {/if}
 
+    <ul class="legend" data-testid="subsystem-legend">
+        {#each LEGEND as entry (entry.name)}
+            <li data-testid="legend-{entry.name}">
+                <i class="swatch" style="background: {entry.swatch}"></i>
+                {t(`flamegraph.legend.${entry.name}`)}
+            </li>
+        {/each}
+    </ul>
+
     {#if !live && importedFrames && importedFrames.frames.length > 0}
         <label class="scrub">
             <span class="dim">
@@ -1835,6 +1856,32 @@
     .cell + .cell::before {
         content: ' | ';
         color: var(--text-ghost);
+    }
+
+    /* fixed height because --chrome-h sums the chrome rows by hand */
+    .legend {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: var(--s-3);
+        height: 22px;
+        margin: 0;
+        padding: 0 12px;
+        list-style: none;
+        overflow: hidden;
+        font-size: var(--f-tiny);
+        color: var(--text-faint);
+    }
+    .legend li {
+        display: flex;
+        align-items: center;
+        gap: var(--s-1);
+        white-space: nowrap;
+    }
+    .legend .swatch {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
     }
 
     .stage {

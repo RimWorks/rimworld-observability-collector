@@ -2302,3 +2302,45 @@ describe('Flamegraph stage sizing', () => {
         );
     });
 });
+
+// nothing else in the ui names the subsystem hues, and a hashed bar must not read as one
+describe('Flamegraph subsystem legend', () => {
+    it('names every subsystem token plus the untagged case', async () => {
+        render(Flamegraph);
+
+        const entries = [...(await screen.findByTestId('subsystem-legend')).children];
+
+        expect(entries.map((li) => li.getAttribute('data-testid'))).toEqual([
+            'legend-tick',
+            'legend-ai',
+            'legend-render',
+            'legend-ui',
+            'legend-engine',
+            'legend-idle',
+            'legend-none',
+            'legend-untagged',
+        ]);
+        expect(screen.getByTestId('legend-untagged').textContent).toContain('per section');
+    });
+
+    it('paints each swatch from its token, never a baked hex', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('subsystem-legend');
+
+        const swatch = (name: string) =>
+            screen.getByTestId(`legend-${name}`).querySelector('.swatch')?.getAttribute('style');
+
+        expect(swatch('tick')).toContain('var(--sub-tick)');
+        expect(swatch('none')).toContain('var(--sub-none)');
+        // the untagged swatch is the hashed palette itself, so it is a gradient, not a token
+        expect(swatch('untagged')).toContain('linear-gradient');
+    });
+
+    it('counts the legend row into the chrome height', () => {
+        const css = readFileSync('src/routes/Flamegraph.svelte', 'utf-8').split('<style>')[1];
+        const rule = /\.legend\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+        expect(rule).toContain('height: 22px');
+        expect(readFileSync('src/lib/theme.css', 'utf-8')).toContain('--chrome-h: 344px');
+    });
+});

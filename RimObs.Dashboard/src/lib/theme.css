@@ -80,9 +80,9 @@
     /* the always-on status strip. the tab footer stacks on top of it, so both read it. */
     --status-h: 24px;
     --drawer-h: 45vh;
-    /* topbar, strip, transport bar, tab bar and status strip: everything the stage shares
-       the viewport with when the drawer is open */
-    --chrome-h: 322px;
+    /* topbar, strip, subsystem legend, transport bar, tab bar and status strip: everything
+       the stage shares the viewport with when the drawer is open */
+    --chrome-h: 344px;
 
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
     --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);

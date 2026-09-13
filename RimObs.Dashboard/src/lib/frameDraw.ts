@@ -17,7 +17,7 @@ const MATCH_RING_PX = 1.5;
 // non-matches read as background noise once a search is active, without losing their shape.
 export const SEARCH_DIM_ALPHA = 0.32;
 
-const SUBSYSTEM_TOKENS = [
+export const SUBSYSTEM_TOKENS = [
     '--sub-tick',
     '--sub-ai',
     '--sub-render',
@@ -25,7 +25,7 @@ const SUBSYSTEM_TOKENS = [
     '--sub-engine',
     '--sub-idle',
 ];
-const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui', 'engine', 'idle'];
+export const SUBSYSTEMS = ['tick', 'ai', 'render', 'ui', 'engine', 'idle'];
 
 export interface DrawTheme {
     background: string;
@@ -120,7 +120,7 @@ function luminance(rgb: string): number {
 
 // Neo's ProfilerPalette: 7 baked colors, then 6 generated at HSV(i/6, 0.35, 0.5), and a
 // section lands on one by LCG-hashing its id. keeps a section's color stable per session.
-const HASHED_COLORS = [
+export const HASHED_COLORS = [
     '#5a78c8',
     '#60a060',
     '#9664be',
