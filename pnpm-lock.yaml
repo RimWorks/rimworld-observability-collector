@@ -10,7 +10,7 @@ importers:
     devDependencies:
       '@rimworks/mod-ci':
         specifier: github:RimWorks/mod-ci#v1.1.0
-        version: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.2(semantic-release@25.0.9))
+        version: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.3(semantic-release@25.0.9))
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.0
         version: 13.0.1(semantic-release@25.0.9)
@@ -33,8 +33,8 @@ importers:
         specifier: ^1.2.7
         version: 1.2.7(semantic-release@25.0.9)
       semantic-release-steam:
-        specifier: ^2.0.0
-        version: 2.1.2(semantic-release@25.0.9)
+        specifier: ^2.1.3
+        version: 2.1.3(semantic-release@25.0.9)
 
 packages:
 
@@ -1072,8 +1072,8 @@ packages:
     peerDependencies:
       semantic-release: '>=20.1.0'
 
-  semantic-release-steam@2.1.2:
-    resolution: {integrity: sha512-06eGX0CNhx8mPCCgOIM9y4Y4JU83c9+XU9a1lIGo0sB0rgHzmX4s+pKe2INmqMYVVfT1FzAqw14AXUjyRnIwuw==}
+  semantic-release-steam@2.1.3:
+    resolution: {integrity: sha512-FWuPUGZGrVmQrN6N2k71V1COgguZe2BUGzBHjtKigYtE4pDr/QpoKtYkBHcDrBE6Ny27DsORp5mslrvZ4SX2Ew==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       semantic-release: '>=22.0.0'
@@ -1480,9 +1480,9 @@ snapshots:
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
 
-  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.2(semantic-release@25.0.9))':
+  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.3(semantic-release@25.0.9))':
     optionalDependencies:
-      semantic-release-steam: 2.1.2(semantic-release@25.0.9)
+      semantic-release-steam: 2.1.3(semantic-release@25.0.9)
 
   '@sec-ant/readable-stream@0.4.1': {}
 
@@ -2353,7 +2353,7 @@ snapshots:
       replace-in-file: 7.2.0
       semantic-release: 25.0.9
 
-  semantic-release-steam@2.1.2(semantic-release@25.0.9):
+  semantic-release-steam@2.1.3(semantic-release@25.0.9):
     dependencies:
       '@steamdown/core': 1.0.0
       semantic-release: 25.0.9
