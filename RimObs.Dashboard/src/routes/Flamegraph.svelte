@@ -254,7 +254,12 @@
                 (f) => f.capture_ordinal >= fromOrdinal && f.capture_ordinal <= toOrdinal,
             );
             const at = frames.at(-1);
-            if (!at) throw new Error('evicted');
+            if (!at) {
+                // the ring evicted the whole range between the drag and the fetch.
+                resume();
+                noticeEvicted(fromOrdinal);
+                return;
+            }
             pinnedLod.clear();
             const servedFloor = range.lod_min_dur_us ?? 0;
             for (const f of frames) pinnedLod.set(f.capture_ordinal, servedFloor);
@@ -265,11 +270,8 @@
             // the range that just arrived.
             timeline?.refit();
         } catch {
-            // the ring evicted the whole range between the drag and the fetch.
-            if (pinnedRange?.from === fromOrdinal && pinnedRange?.to === toOrdinal) {
-                resume();
-                noticeEvicted(fromOrdinal);
-            }
+            // a failed request is a hiccup, not an eviction. hold the pin and let the
+            // refresh effect try again.
         } finally {
             rangeInFlight = false;
         }
