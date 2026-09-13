@@ -49,6 +49,7 @@
     import { lodFloorUs, refinementFor } from '../lib/lod';
     import { buildFrameExport, buildTimelineExport, exportFileName } from '../lib/frameExport';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
+    import { copyable } from '../lib/copyable';
     import {
         estimateOverheadUs,
         shareOfFrame,
@@ -132,6 +133,9 @@
     let pinnedRes = $state<FrameResponse | null>(null);
     // a strip drag pins an inclusive ordinal range instead of one frame.
     let pinnedRange = $state<{ from: number; to: number } | null>(null);
+    // the ordinal of a pin the ring dropped under us, shown until dismissed or timed out.
+    let evictedPin = $state<number | null>(null);
+    let evictedTimer: ReturnType<typeof setTimeout> | undefined;
     const MAIN_FALLBACK: ThreadLane = {
         id: 0,
         name: 'MainThread',
@@ -144,7 +148,6 @@
 
     const LEGEND = [
         ...SUBSYSTEMS.map((name, i) => ({ name, swatch: `var(${SUBSYSTEM_TOKENS[i]})` })),
-        { name: 'none', swatch: 'var(--sub-none)' },
         // an untagged section hashes to its own color, so its swatch shows three of them
         // rather than pretending the palette is one hue.
         {
@@ -404,6 +407,9 @@
             pinnedOrdinal = null;
             pinnedRes = null;
             pinnedWindow = [];
+            evictedPin = ordinal;
+            clearTimeout(evictedTimer);
+            evictedTimer = setTimeout(() => (evictedPin = null), 6000);
         }
     }
 
@@ -1022,9 +1028,11 @@
         <span class="readout mono">
             {#each PERCENTILES as p (p.key)}
                 {@const v = stats?.[p.key] ?? 0}
-                {t(p.label)}
-                <b class="g{gradeFromShare(v / FRAME_BUDGET_US)}" data-testid="stat-{p.key}"
-                    >{ns(v * 1000)}</b
+                <span class="mono" use:copyable
+                    >{t(p.label)}
+                    <b class="g{gradeFromShare(v / FRAME_BUDGET_US)}" data-testid="stat-{p.key}"
+                        >{ns(v * 1000)}</b
+                    ></span
                 >
                 |
             {/each}
@@ -1048,13 +1056,29 @@
                     class:lossy={peakAllocRate > ALLOC_WARN_BPM}
                     data-testid="alloc-rate"
                     title={t('flamegraph.allocRate.hint')}
-                    >{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
+                    use:copyable>{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
                 >
             {/if}
         </span>
     </div>
 
     {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
+
+    {#if evictedPin !== null}
+        <p class="pin-evicted" role="status" data-testid="pin-evicted">
+            {t('flamegraph.pinEvicted').replace('{n}', String(evictedPin))}
+            <button
+                type="button"
+                class="dismiss"
+                aria-label={t('flamegraph.pinEvicted.dismiss')}
+                onclick={() => {
+                    clearTimeout(evictedTimer);
+                    evictedPin = null;
+                }}
+                data-testid="pin-evicted-dismiss">&times;</button
+            >
+        </p>
+    {/if}
 
     {#if live}
         <div class="modes">
@@ -1202,22 +1226,23 @@
                 >{/if}
             <span class="stats">
                 <span class="cell"
-                    ><Tooltip content={nodesTip}
-                        ><span>{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
+                    ><Tooltip content={nodesTip} tabindex={-1}
+                        ><span use:copyable
+                            >{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
                         ></Tooltip
                     ></span
-                ><span class="cell"
+                ><span class="cell" use:copyable
                     >{t('flamegraph.duration')}
                     <b
                         class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
                         data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
                     ></span
-                ><span class="cell" title={t('tip.flamegraph.lateSamples')}
+                ><span class="cell" title={t('tip.flamegraph.lateSamples')} use:copyable
                     >{t('flamegraph.dropped.late')}
                     <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
                         >{count(dropped.late_samples)}</b
                     ></span
-                ><span class="cell" title={t('tip.flamegraph.ringDrops')}
+                ><span class="cell" title={t('tip.flamegraph.ringDrops')} use:copyable
                     >{t('flamegraph.dropped.ring')}
                     <b class:warn={dropped.library_ring_samples > 0} data-testid="drop-ring"
                         >{count(dropped.library_ring_samples)}</b
@@ -1657,6 +1682,24 @@
         font-size: var(--f-ui);
         padding: 6px 12px;
         border-bottom: 1px solid var(--border-soft);
+    }
+    .pin-evicted {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: var(--f-ui);
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .pin-evicted .dismiss {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        font-size: var(--f-ui);
+        line-height: 1;
+        padding: 0 4px;
     }
     .scrub {
         display: flex;

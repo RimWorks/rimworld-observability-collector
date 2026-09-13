@@ -436,6 +436,25 @@ describe('Flamegraph page', () => {
         expect(cells[3]).toMatch(/^Ring drops/);
     });
 
+    // these numbers get pasted into Discord, so a cell copies its own label with its value.
+    it('copies a percentile and a stat cell, tooltip cell included', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        render(Flamegraph);
+        await screen.findByTestId('frame-drops');
+
+        const p99 = screen.getByTestId('stat-p99_us').parentElement!;
+        await fireEvent.click(p99);
+        expect(writeText).toHaveBeenCalledWith('p99 99.000 ms');
+        await waitFor(() => expect(p99.className).toContain('copied'));
+
+        const nodes = screen.getByTestId('frame-drops').querySelector('.stats .tt-wrap span')!;
+        await fireEvent.click(nodes);
+        expect(writeText).toHaveBeenLastCalledWith('Nodes 2');
+        await openNodesTip();
+        expect(screen.getByTestId('drop-orphans')).toBeInTheDocument();
+    });
+
     it('explains the bare collector nouns with title text', async () => {
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
@@ -1256,6 +1275,27 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
+    // falling back to live is silent otherwise, and the user still thinks they hold the spike.
+    it('names the ordinal in a notice when the pinned frame is evicted', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        const live = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url.includes('/api/v1/frames?'))
+                return jsonResponse({ ...FRAMES_BODY, frames: [] });
+            return live(input, init);
+        }) as unknown as typeof fetch;
+
+        await fireEvent.click(screen.getByTestId('step-older'));
+
+        expect(await screen.findByTestId('pin-evicted')).toHaveTextContent('4320');
+
+        await fireEvent.click(screen.getByTestId('pin-evicted-dismiss'));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+    });
+
     it('jumping to newest clears the pause and returns to the live frame', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
@@ -1286,6 +1326,21 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
 
         await fireEvent.keyDown(window, { key: 'Home' });
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+    });
+
+    // the transport owns Home everywhere: neither the strip nor the canvas may swallow it.
+    it.each([
+        ['strip', 'slider'],
+        ['canvas', 'application'],
+    ])('Home with the %s focused still jumps to the newest frame', async (_name, role) => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+
+        await fireEvent.keyDown(screen.getByRole(role), { key: 'Home' });
         expect(screen.queryByTestId('paused-badge')).toBeNull();
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
     });
@@ -2317,7 +2372,6 @@ describe('Flamegraph subsystem legend', () => {
             'legend-ui',
             'legend-engine',
             'legend-idle',
-            'legend-none',
             'legend-untagged',
         ]);
         expect(screen.getByTestId('legend-untagged').textContent).toContain('per section');
@@ -2331,7 +2385,6 @@ describe('Flamegraph subsystem legend', () => {
             screen.getByTestId(`legend-${name}`).querySelector('.swatch')?.getAttribute('style');
 
         expect(swatch('tick')).toContain('var(--sub-tick)');
-        expect(swatch('none')).toContain('var(--sub-none)');
         // the untagged swatch is the hashed palette itself, so it is a gradient, not a token
         expect(swatch('untagged')).toContain('linear-gradient');
     });

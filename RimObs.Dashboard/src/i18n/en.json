@@ -10,6 +10,8 @@
     "common.error": "Failed to load",
     "common.retry": "Retry",
     "common.available": "available",
+    "copy.hint": "Click to copy",
+    "copy.copied": "Copied",
     "overview.tps": "TPS",
     "overview.fps": "FPS",
     "overview.batches": "Batches received",
@@ -146,7 +148,6 @@
     "flamegraph.legend.ui": "UI",
     "flamegraph.legend.engine": "Engine",
     "flamegraph.legend.idle": "Idle",
-    "flamegraph.legend.none": "Other",
     "flamegraph.legend.untagged": "Untagged (color per section)",
     "flamegraph.dropped.late": "Late samples",
     "flamegraph.dropped.preframe": "Pre-frame samples",
@@ -309,5 +310,7 @@
     "strip.allocTitle": "bytes allocated per frame",
     "settings.flameRendererGl": "GPU flame rendering",
     "tip.settings.flameRendererGl": "Draw flame fills on the GPU (WebGL). Turning it off falls back to the CPU canvas renderer.",
-    "topbar.patching": "patching"
+    "topbar.patching": "patching",
+    "flamegraph.pinEvicted": "The pinned frame left the ring (frame {n}). Back to live.",
+    "flamegraph.pinEvicted.dismiss": "Dismiss"
 }
