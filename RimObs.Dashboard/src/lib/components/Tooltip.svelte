@@ -3,13 +3,15 @@
     import { computePosition, autoUpdate, flip, shift, offset } from '@floating-ui/dom';
 
     let {
-        text,
+        text = '',
+        content,
         placement = 'top',
         tabindex = 0,
         align = 'start',
         children,
     }: {
-        text: string;
+        text?: string;
+        content?: Snippet;
         placement?: 'top' | 'bottom' | 'left' | 'right';
         tabindex?: number;
         align?: 'start' | 'end' | 'stretch';
@@ -71,7 +73,7 @@
     onblur={hide}
     aria-describedby={open ? id : undefined}
     >{@render children()}{#if open}<span class="tt-bubble" bind:this={bubbleEl} role="tooltip" {id}
-            >{text}</span
+            >{#if content}{@render content()}{:else}{text}{/if}</span
         >{/if}</span
 >
 

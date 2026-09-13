@@ -33,3 +33,11 @@ export function t(key: string, fallback?: string): string {
     const lang = getLang();
     return dictionaries[lang]?.[key] ?? dictionaries.en[key] ?? fallback ?? key;
 }
+
+/**
+ * count-aware lookup. n === 1 takes the `<key>.one` form, everything else takes `key`.
+ * {n} in the string is replaced with the count.
+ */
+export function tn(key: string, n: number): string {
+    return t(n === 1 ? `${key}.one` : key).replace('{n}', String(n));
+}

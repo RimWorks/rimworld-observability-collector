@@ -129,6 +129,7 @@
     "tip.settings.ringCapacity": "Combien d'images capturees la bande conserve. Tout le tampon est envoye a chaque sondage.",
     "flamegraph.ordinal": "Frame",
     "flamegraph.overFrames": "over {n} frames",
+    "flamegraph.overFrames.one": "over {n} frame",
     "flamegraph.timeScroll": "scroll the time axis",
     "flamegraph.duration": "Duration",
     "flamegraph.nodes": "Nodes",

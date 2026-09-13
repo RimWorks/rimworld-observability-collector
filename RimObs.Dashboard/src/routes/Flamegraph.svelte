@@ -421,7 +421,7 @@
         } else if (e.key === 'PageUp') {
             e.preventDefault();
             step(1);
-        } else if (e.key === 'Home' && e.shiftKey) {
+        } else if (e.key === 'Home') {
             e.preventDefault();
             jumpToNewest();
         }
@@ -1148,45 +1148,50 @@
         empty={frame === null}
         emptyTitle={t('flamegraph.empty')}
         emptyHint={t('flamegraph.empty.hint')}
+        onretry={() => void framesRes?.refresh()}
     >
+        {#snippet nodesTip()}
+            <span class="tipline"
+                >{t('flamegraph.dropped.orphans')}
+                <b class:warn={orphanCount > 0} data-testid="drop-orphans">{count(orphanCount)}</b
+                ></span
+            >
+            <span class="tipline"
+                >{t('flamegraph.dropped.preframe')}
+                <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
+            >
+        {/snippet}
         <p class="avg mono" data-testid="frame-drops">
+            {#if lossy}<span
+                    class="lossy"
+                    data-testid="lossy-badge"
+                    title={t('flamegraph.lossy.hint')}
+                    >{t('flamegraph.lossy')}
+                    <b data-testid="lossy-count">{count(dropTotal)}</b></span
+                >{/if}
             <span class="stats">
-                <span class="cell">{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
+                <span class="cell"
+                    ><Tooltip content={nodesTip}
+                        ><span>{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
+                        ></Tooltip
+                    ></span
                 ><span class="cell"
                     >{t('flamegraph.duration')}
                     <b
                         class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
                         data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
                     ></span
-                ><span class="cell"
-                    >{t('flamegraph.median')} <b>{ns((stats?.median_us ?? 0) * 1000)}</b></span
-                ><span class="cell"
-                    >{t('flamegraph.p99')} <b>{ns((stats?.p99_us ?? 0) * 1000)}</b></span
-                ><span class="cell"
+                ><span class="cell" title={t('tip.flamegraph.lateSamples')}
                     >{t('flamegraph.dropped.late')}
                     <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
                         >{count(dropped.late_samples)}</b
                     ></span
-                ><span class="cell"
-                    >{t('flamegraph.dropped.preframe')}
-                    <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
-                ><span class="cell"
+                ><span class="cell" title={t('tip.flamegraph.ringDrops')}
                     >{t('flamegraph.dropped.ring')}
                     <b class:warn={dropped.library_ring_samples > 0} data-testid="drop-ring"
                         >{count(dropped.library_ring_samples)}</b
                     ></span
-                ><span class="cell"
-                    >{t('flamegraph.dropped.orphans')}
-                    <b class:warn={orphanCount > 0} data-testid="drop-orphans"
-                        >{count(orphanCount)}</b
-                    ></span
-                >{#if lossy}<span
-                        class="cell lossy"
-                        data-testid="lossy-badge"
-                        title={t('flamegraph.lossy.hint')}
-                        >{t('flamegraph.lossy')}
-                        <b data-testid="lossy-count">{count(dropTotal)}</b></span
-                    >{/if}</span
+                ></span
             >
             <span class="find" data-testid="section-search">
                 <label class="lbl" for="section-search-input">{t('flamegraph.search.label')}</label>
@@ -1402,11 +1407,14 @@
         color: var(--warn);
     }
     .lossy {
+        flex: none;
         color: var(--warn);
         border: 1px solid var(--warn);
         border-radius: 3px;
         padding: 0 6px;
-        margin-left: 6px;
+    }
+    .tipline {
+        display: block;
     }
     .lossy b {
         color: var(--warn);

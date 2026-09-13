@@ -283,6 +283,12 @@ async function openFooterTab(id: 'instrumentation' | 'comparison' | 'threads') {
     await fireEvent.click(screen.getByTestId(`tab-${id}`));
 }
 
+// orphan and pre-frame counts live in the Nodes tooltip, which only renders while hovered
+async function openNodesTip() {
+    const wrap = screen.getByTestId('frame-drops').querySelector('.stats .tt-wrap');
+    await fireEvent.mouseEnter(wrap!);
+}
+
 function jsonResponse(body: unknown) {
     return Promise.resolve(
         new Response(JSON.stringify(body), {
@@ -332,8 +338,8 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
         expect(cardValue('Duration')).toContain('16.200 ms');
         expect(cardValue('Nodes')).toContain('2');
-        expect(cardValue('Median')).toContain('5.000 ms');
-        expect(cardValue('p99')).toContain('99.000 ms');
+        expect(screen.getByTestId('stat-median_us')).toHaveTextContent('5.000 ms');
+        expect(screen.getByTestId('stat-p99_us')).toHaveTextContent('99.000 ms');
     });
 
     it('renders the timeline widget', async () => {
@@ -368,10 +374,28 @@ describe('Flamegraph page', () => {
         expect(screen.queryByRole('application')).toBeNull();
     });
 
+    it('offers a retry on the error state and refetches when it is clicked', async () => {
+        mockFetch();
+        const inner = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            if (requestUrl(input).includes('/frames/latest')) {
+                return Promise.resolve(new Response('nope', { status: 500 }));
+            }
+            return inner(input, init);
+        }) as unknown as typeof fetch;
+
+        render(Flamegraph);
+        const retry = await screen.findByRole('button', { name: /retry/i });
+        const before = frameCalls();
+        await fireEvent.click(retry);
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(before));
+    });
+
     it('shows every drop counter separately, zeroes included', async () => {
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
         expect(screen.getByTestId('drop-late')).toHaveTextContent('0');
+        await openNodesTip();
         expect(screen.getByTestId('drop-preframe')).toHaveTextContent('12');
         expect(screen.getByTestId('drop-orphans')).toHaveTextContent('0');
     });
@@ -380,10 +404,29 @@ describe('Flamegraph page', () => {
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
         expect(screen.getByTestId('drop-late').parentElement).toHaveTextContent(/^Late samples/);
+        await openNodesTip();
         expect(screen.getByTestId('drop-preframe').parentElement).toHaveTextContent(
             /^Pre-frame samples/,
         );
         expect(screen.getByTestId('drop-orphans').parentElement).toHaveTextContent(/^Orphan nodes/);
+    });
+
+    it('keeps the stat row to four cells', async () => {
+        render(Flamegraph);
+        const row = await screen.findByTestId('frame-drops');
+        const cells = [...row.querySelectorAll('.stats .cell')].map((c) => c.textContent?.trim());
+        expect(cells).toHaveLength(4);
+        expect(cells[0]).toMatch(/^Nodes/);
+        expect(cells[1]).toMatch(/^Duration/);
+        expect(cells[2]).toMatch(/^Late samples/);
+        expect(cells[3]).toMatch(/^Ring drops/);
+    });
+
+    it('explains the bare collector nouns with title text', async () => {
+        render(Flamegraph);
+        await screen.findByTestId('frame-drops');
+        expect(screen.getByTestId('drop-late').parentElement).toHaveAttribute('title');
+        expect(screen.getByTestId('drop-ring').parentElement).toHaveAttribute('title');
     });
 
     it('marks late samples as a warning', async () => {
@@ -401,6 +444,7 @@ describe('Flamegraph page', () => {
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
         expect(screen.getByTestId('drop-late').className).not.toContain('warn');
+        await openNodesTip();
         expect(screen.getByTestId('drop-preframe').className).not.toContain('warn');
         expect(screen.getByTestId('drop-orphans').className).not.toContain('warn');
     });
@@ -414,7 +458,9 @@ describe('Flamegraph page', () => {
             },
         });
         render(Flamegraph);
-        const orphans = await screen.findByTestId('drop-orphans');
+        await screen.findByTestId('frame-drops');
+        await openNodesTip();
+        const orphans = screen.getByTestId('drop-orphans');
         await waitFor(() => expect(orphans).toHaveTextContent('1'));
         expect(orphans.className).toContain('warn');
     });
@@ -673,6 +719,7 @@ describe('Flamegraph page', () => {
 
         await screen.findByTestId('frame-scrub');
         expect(screen.getByTestId('drop-late')).toHaveTextContent('3');
+        await openNodesTip();
         expect(screen.getByTestId('drop-preframe')).toHaveTextContent('0');
     });
 
@@ -684,6 +731,22 @@ describe('Flamegraph page', () => {
         await screen.findByTestId('frame-scrub');
         expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
         expect(screen.getByTestId('lossy-count')).toHaveTextContent('3');
+    });
+
+    // the badge sits outside `.stats`, which clips its cells at narrow widths. a warning that
+    // disappears first is the one that mattered most.
+    it('keeps the lossy badge out of the clipping stat run, ahead of it', async () => {
+        const { getByLabelText } = render(Flamegraph);
+        await openFile(getByLabelText);
+
+        await screen.findByTestId('frame-scrub');
+        const badge = screen.getByTestId('lossy-badge');
+        const stats = screen.getByTestId('frame-drops').querySelector('.stats')!;
+        expect(stats.contains(badge)).toBe(false);
+        expect(badge.parentElement).toBe(stats.parentElement);
+        expect(
+            badge.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
     });
 
     // a bundle written before library_ring_samples existed has no such key in frames.json
@@ -1161,6 +1224,18 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
     });
 
+    // the help copy promises bare Home jumps to newest, so the handler must not need shift.
+    it('bare Home from the window jumps back to the newest frame', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+
+        await fireEvent.keyDown(window, { key: 'Home' });
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+    });
+
     // the rate picker is a <select>; Space in it must pick an option, not pause the page.
     it('ignores Space typed into a form control', async () => {
         render(Flamegraph);
@@ -1347,7 +1422,7 @@ describe('Flamegraph page', () => {
         render(Flamegraph);
         await screen.findByTestId('frame-ruler');
         await waitFor(() =>
-            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frame'),
         );
         expect(
             vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes('/api/v1/frames?')),
@@ -1366,7 +1441,7 @@ describe('Flamegraph page', () => {
 
         // the two older stub frames are still loaded, reaching back 40ms on the same axis.
         await waitFor(() =>
-            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frame'),
         );
         expect(
             vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes('/api/v1/frames?')),
@@ -1379,7 +1454,7 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('step-older'));
         await screen.findByText('4320');
         await waitFor(() =>
-            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frames'),
+            expect(screen.getByTestId('frame-span')).toHaveTextContent('over 1 frame'),
         );
     });
 

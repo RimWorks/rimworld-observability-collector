@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { t, getLang, LANGUAGES } from './i18n';
+import { t, tn, getLang, LANGUAGES } from './i18n';
 import { userPrefs } from './userPrefs.svelte';
 
 function setSearch(search: string) {
@@ -33,6 +33,28 @@ describe('t', () => {
         userPrefs.setLang('fr');
         expect(t('totally.missing', 'fallback')).toBe('fallback');
     });
+});
+
+describe('tn', () => {
+    it('uses the singular form at n = 1', () => {
+        expect(tn('flamegraph.overFrames', 1)).toBe('over 1 frame');
+    });
+
+    it('uses the plural form at n = 2', () => {
+        expect(tn('flamegraph.overFrames', 2)).toBe('over 2 frames');
+    });
+
+    it('uses the plural form at n = 0', () => {
+        expect(tn('flamegraph.overFrames', 0)).toBe('over 0 frames');
+    });
+
+    for (const lang of LANGUAGES) {
+        it(`resolves both forms for ${lang.code}`, () => {
+            userPrefs.setLang(lang.code);
+            expect(tn('flamegraph.overFrames', 1)).not.toContain('overFrames');
+            expect(tn('flamegraph.overFrames', 2)).not.toContain('overFrames');
+        });
+    }
 });
 
 describe('getLang', () => {

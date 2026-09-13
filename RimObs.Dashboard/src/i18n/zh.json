@@ -129,6 +129,7 @@
     "tip.settings.ringCapacity": "条带保留多少已捕获的帧。每次轮询都会发送整个缓冲区。",
     "flamegraph.ordinal": "Frame",
     "flamegraph.overFrames": "over {n} frames",
+    "flamegraph.overFrames.one": "over {n} frame",
     "flamegraph.timeScroll": "scroll the time axis",
     "flamegraph.duration": "Duration",
     "flamegraph.nodes": "Nodes",

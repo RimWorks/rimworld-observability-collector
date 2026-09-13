@@ -50,6 +50,21 @@ describe('Tooltip', () => {
         ]);
     });
 
+    it('renders the content snippet in the bubble when one is passed', async () => {
+        render(TooltipHost, { text: 'plain', rich: true });
+        await fireEvent.mouseEnter(screen.getByText('anchor').parentElement!);
+        const bubble = screen.getByRole('tooltip');
+        expect(bubble).toContainElement(screen.getByTestId('tt-rich'));
+        expect(bubble).not.toHaveTextContent('plain');
+    });
+
+    it('falls back to text when no content snippet is passed', async () => {
+        render(TooltipHost, { text: 'plain' });
+        await fireEvent.mouseEnter(screen.getByText('anchor').parentElement!);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('plain');
+        expect(screen.queryByTestId('tt-rich')).toBeNull();
+    });
+
     it('describes its anchor while open', async () => {
         render(TooltipHost, { text: 'why' });
         const wrap = screen.getByText('anchor').parentElement!;

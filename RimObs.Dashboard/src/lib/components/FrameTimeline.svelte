@@ -33,7 +33,7 @@
     import { shareOfFrame, shareOfBudget, percent } from '../frameCost';
     import { sectionSearch } from '../sectionSearchState.svelte';
     import { ns } from '../format';
-    import { t } from '../i18n';
+    import { t, tn } from '../i18n';
     import {
         searchCatalog,
         matchOccurrences,
@@ -779,7 +779,7 @@
     <p class="meta">
         <span data-testid="frame-range" class="mono">{rangeText}</span>
         <span data-testid="frame-span" class="mono"
-            >{t('flamegraph.overFrames').replace('{n}', String(shownFrames))}</span
+            >{tn('flamegraph.overFrames', shownFrames)}</span
         >
     </p>
     <div class="sr-only" role="status" aria-live="polite">{liveText}</div>

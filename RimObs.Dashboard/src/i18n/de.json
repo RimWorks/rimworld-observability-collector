@@ -129,6 +129,7 @@
     "tip.settings.ringCapacity": "Wie viele erfasste Frames der Streifen behaelt. Der gesamte Puffer wird bei jeder Abfrage gesendet.",
     "flamegraph.ordinal": "Frame",
     "flamegraph.overFrames": "over {n} frames",
+    "flamegraph.overFrames.one": "over {n} frame",
     "flamegraph.timeScroll": "scroll the time axis",
     "flamegraph.duration": "Duration",
     "flamegraph.nodes": "Nodes",
