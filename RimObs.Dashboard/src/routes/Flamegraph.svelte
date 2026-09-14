@@ -136,8 +136,6 @@
     // why a pin went away, shown until dismissed or timed out.
     let pinNotice = $state<string | null>(null);
     let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-    // the ordinal the last eviction notice named, so the fetch and stats paths cannot both fire.
-    let evictNoticedFor = -1;
     const MAIN_FALLBACK: ThreadLane = {
         id: 0,
         name: 'MainThread',
@@ -429,7 +427,6 @@
     }
 
     function noticePin(key: string, ordinal: number): void {
-        if (key === 'flamegraph.pinEvicted') evictNoticedFor = ordinal;
         pinNotice = t(key).replace('{n}', String(ordinal));
         clearTimeout(noticeTimer);
         noticeTimer = setTimeout(() => (pinNotice = null), 6000);
@@ -821,7 +818,6 @@
         // ordinals skip frames that carried no samples, so newest - frame_count reads high
         // and calls a held pin evicted. the collector serves the real oldest, -1 when empty.
         if (stats.oldest_ordinal <= ordinal) return;
-        if (evictNoticedFor === ordinal) return;
         resume();
         noticePin('flamegraph.pinEvicted', ordinal);
     });
