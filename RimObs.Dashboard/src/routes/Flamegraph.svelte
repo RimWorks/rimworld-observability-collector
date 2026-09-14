@@ -818,7 +818,9 @@
         const stats = framesRes?.data?.stats;
         const ordinal = pinnedRange?.from ?? pinnedOrdinal;
         if (!live || ordinal === null || !stats) return;
-        if (stats.newest_ordinal - stats.frame_count <= ordinal) return;
+        // ordinals skip frames that carried no samples, so newest - frame_count reads high
+        // and calls a held pin evicted. the collector serves the real oldest, -1 when empty.
+        if (stats.oldest_ordinal <= ordinal) return;
         if (evictNoticedFor === ordinal) return;
         resume();
         noticePin('flamegraph.pinEvicted', ordinal);

@@ -1069,7 +1069,7 @@ describe('Flamegraph page', () => {
         // the pinned ordinal is within the refresh window of the newest, so the poll refetches.
         mockFetch({
             ...FRAMES_BODY,
-            stats: { ...FRAMES_BODY.stats, newest_ordinal: 4325 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 4325, oldest_ordinal: 2247 },
         });
         await waitFor(() => expect(rangeCalls()).toBeGreaterThan(before));
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
@@ -1084,11 +1084,11 @@ describe('Flamegraph page', () => {
         await fireEvent.click(screen.getByTestId('pause'));
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
 
-        // 2000 frames held, newest 9999: the oldest still in the ring is 7999, well past 4321.
+        // newest 9999 and the collector's own oldest is 7921, well past 4321.
         mockFetch({
             ...FRAMES_BODY,
             frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
-            stats: { ...FRAMES_BODY.stats, newest_ordinal: 9999 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 9999, oldest_ordinal: 7921 },
         });
 
         const notice = await screen.findByTestId('pin-evicted');
@@ -1101,11 +1101,32 @@ describe('Flamegraph page', () => {
         mockFetch({
             ...FRAMES_BODY,
             frame: { ...FRAMES_BODY.frame, capture_ordinal: 10500 },
-            stats: { ...FRAMES_BODY.stats, newest_ordinal: 10500 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 10500, oldest_ordinal: 8422 },
         });
         const seen = frameCalls();
         await waitFor(() => expect(frameCalls()).toBeGreaterThan(seen + 1));
         expect(screen.queryByTestId('pin-evicted')).toBeNull();
+    });
+
+    // ordinals skip frames with no samples, so newest - frame_count lands above the real
+    // oldest. reading the estimate instead of oldest_ordinal evicted a pin the ring still held.
+    it('keeps a pin the collector still holds past the frame_count estimate', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        // newest - frame_count is 4400, above the pin, but the collector's oldest is 4300.
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 6400 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 6400, oldest_ordinal: 4300 },
+        });
+        const seen = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(seen + 1));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
     // Neo freezes the history with the frame and marks the gap on resume. a strip that keeps
@@ -2533,7 +2554,10 @@ describe('Flamegraph pin refresh hiccup', () => {
     // throws the user off the frame they stopped on.
     it('keeps the pin when a refresh of the held frame fails', async () => {
         // within the pin-refresh window, so the refresh actually runs.
-        mockFetch({ ...FRAMES_BODY, stats: { ...FRAMES_BODY.stats, newest_ordinal: 4321 } });
+        mockFetch({
+            ...FRAMES_BODY,
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 4321, oldest_ordinal: 2243 },
+        });
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
         await fireEvent.click(screen.getByTestId('step-older'));
