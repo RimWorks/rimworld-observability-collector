@@ -1129,6 +1129,46 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
+    // the boundary the old newest - frame_count guard got wrong: one frame past the pin is
+    // still an eviction, and it has to fire the notice.
+    it('notices a pin one frame below the oldest held', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 6321 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 6321, oldest_ordinal: 4322 },
+        });
+
+        const notice = await screen.findByTestId('pin-evicted');
+        expect(notice).toHaveTextContent(/4321/);
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+    });
+
+    // and the other side of it: the pin is exactly the oldest the collector still holds, so
+    // it stays pinned.
+    it('keeps a pin that is exactly the oldest held', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 6321 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 6321, oldest_ordinal: 4321 },
+        });
+        const seen = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(seen + 1));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+    });
+
     // Neo freezes the history with the frame and marks the gap on resume. a strip that keeps
     // filling while paused hides the fact that the run either side of the pause is not continuous.
     it('freezes the frame history while paused and resumes from live after', async () => {
