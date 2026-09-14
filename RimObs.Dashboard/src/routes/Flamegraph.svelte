@@ -136,6 +136,8 @@
     // why a pin went away, shown until dismissed or timed out.
     let pinNotice = $state<string | null>(null);
     let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+    // the ordinal the last eviction notice named, so the fetch and stats paths cannot both fire.
+    let evictNoticedFor = -1;
     const MAIN_FALLBACK: ThreadLane = {
         id: 0,
         name: 'MainThread',
@@ -427,6 +429,7 @@
     }
 
     function noticePin(key: string, ordinal: number): void {
+        if (key === 'flamegraph.pinEvicted') evictNoticedFor = ordinal;
         pinNotice = t(key).replace('{n}', String(ordinal));
         clearTimeout(noticeTimer);
         noticeTimer = setTimeout(() => (pinNotice = null), 6000);
@@ -807,6 +810,18 @@
             return;
         }
         void fetchPinned(ordinal);
+    });
+
+    // outside that window nothing refetches, so the polled stats are the only thing left that
+    // sees the ring wrap past the pin. without this it goes stale under the paused badge.
+    $effect(() => {
+        const stats = framesRes?.data?.stats;
+        const ordinal = pinnedRange?.from ?? pinnedOrdinal;
+        if (!live || ordinal === null || !stats) return;
+        if (stats.newest_ordinal - stats.frame_count <= ordinal) return;
+        if (evictNoticedFor === ordinal) return;
+        resume();
+        noticePin('flamegraph.pinEvicted', ordinal);
     });
     let bundleWindow = $derived(
         importedFrames

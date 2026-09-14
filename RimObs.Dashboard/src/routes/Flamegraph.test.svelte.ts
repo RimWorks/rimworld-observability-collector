@@ -1075,6 +1075,39 @@ describe('Flamegraph page', () => {
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
+    // past the refresh window nothing refetches the pin, so only the polled stats can tell
+    // the ring wrapped past it. without that the page sits on stale nodes under the badge.
+    it('notices a pin the ring wrapped past, with no fetch in flight', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('pause'));
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+
+        // 2000 frames held, newest 9999: the oldest still in the ring is 7999, well past 4321.
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 9999 },
+        });
+
+        const notice = await screen.findByTestId('pin-evicted');
+        expect(notice).toHaveTextContent(/4321/);
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+
+        // one notice per eviction: later polls still read as evicted, and must stay quiet.
+        await fireEvent.click(screen.getByTestId('pin-evicted-dismiss'));
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 10500 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 10500 },
+        });
+        const seen = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(seen + 1));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+    });
+
     // Neo freezes the history with the frame and marks the gap on resume. a strip that keeps
     // filling while paused hides the fact that the run either side of the pause is not continuous.
     it('freezes the frame history while paused and resumes from live after', async () => {
