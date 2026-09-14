@@ -569,12 +569,16 @@ describe('FrameTimeline', () => {
         expect(screen.getByTestId('frame-range').textContent).not.toBe(fitted);
     });
 
-    it('refits on Home as well as Escape', async () => {
+    // Escape fits; Home belongs to the page transport and must pass through untouched.
+    it('refits on Escape and leaves Home to the transport', async () => {
         render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
         const canvas = screen.getByRole('application');
         const fitted = screen.getByTestId('frame-range').textContent;
         await fireEvent.keyDown(canvas, { key: '+' });
-        await fireEvent.keyDown(canvas, { key: 'Home' });
+        const zoomed = screen.getByTestId('frame-range').textContent;
+        expect(await fireEvent.keyDown(canvas, { key: 'Home' })).toBe(true);
+        expect(screen.getByTestId('frame-range').textContent).toBe(zoomed);
+        await fireEvent.keyDown(canvas, { key: 'Escape' });
         expect(screen.getByTestId('frame-range').textContent).toBe(fitted);
     });
 
@@ -805,7 +809,6 @@ describe('FrameTimeline', () => {
             'ArrowDown',
             'Enter',
             'Escape',
-            'Home',
             '+',
             '-',
         ];

@@ -133,9 +133,9 @@
     let pinnedRes = $state<FrameResponse | null>(null);
     // a strip drag pins an inclusive ordinal range instead of one frame.
     let pinnedRange = $state<{ from: number; to: number } | null>(null);
-    // the ordinal of a pin the ring dropped under us, shown until dismissed or timed out.
-    let evictedPin = $state<number | null>(null);
-    let evictedTimer: ReturnType<typeof setTimeout> | undefined;
+    // why a pin went away, shown until dismissed or timed out.
+    let pinNotice = $state<string | null>(null);
+    let noticeTimer: ReturnType<typeof setTimeout> | undefined;
     const MAIN_FALLBACK: ThreadLane = {
         id: 0,
         name: 'MainThread',
@@ -257,7 +257,7 @@
             if (!at) {
                 // the ring evicted the whole range between the drag and the fetch.
                 resume();
-                noticeEvicted(fromOrdinal);
+                noticePin('flamegraph.pinEvicted', fromOrdinal);
                 return;
             }
             pinnedLod.clear();
@@ -270,8 +270,13 @@
             // the range that just arrived.
             timeline?.refit();
         } catch {
-            // a failed request is a hiccup, not an eviction. hold the pin and let the
-            // refresh effect try again.
+            if (pinnedRange?.from !== fromOrdinal || pinnedRange?.to !== toOrdinal) return;
+            // a refresh hiccup keeps the frames already on screen. with none of them in this
+            // range, holding would leave the paused badge over live data.
+            const shown = pinnedRes?.frame?.capture_ordinal ?? -1;
+            if (shown >= fromOrdinal && shown <= toOrdinal) return;
+            resume();
+            noticePin('flamegraph.pinFailed', fromOrdinal);
         } finally {
             rangeInFlight = false;
         }
@@ -406,21 +411,25 @@
             if (!at) {
                 // the ring evicted it between the click and the fetch. fall back to live.
                 resume();
-                noticeEvicted(ordinal);
+                noticePin('flamegraph.pinEvicted', ordinal);
                 return;
             }
             pinnedWindow = range.frames.filter((f) => f.capture_ordinal <= ordinal);
             pinnedRes = { ...range, frame: at };
         } catch {
-            // a failed request is a hiccup, not an eviction. hold the pin and let the
-            // refresh effect try again.
+            if (pinnedOrdinal !== ordinal) return;
+            // a refresh hiccup keeps the frame already on screen. with nothing pinned for this
+            // ordinal, holding would leave the paused badge over live data.
+            if (pinnedRes?.frame?.capture_ordinal === ordinal) return;
+            resume();
+            noticePin('flamegraph.pinFailed', ordinal);
         }
     }
 
-    function noticeEvicted(ordinal: number): void {
-        evictedPin = ordinal;
-        clearTimeout(evictedTimer);
-        evictedTimer = setTimeout(() => (evictedPin = null), 6000);
+    function noticePin(key: string, ordinal: number): void {
+        pinNotice = t(key).replace('{n}', String(ordinal));
+        clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(() => (pinNotice = null), 6000);
     }
 
     function step(delta: number): void {
@@ -1074,16 +1083,16 @@
 
     {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
 
-    {#if evictedPin !== null}
+    {#if pinNotice !== null}
         <p class="pin-evicted" role="status" data-testid="pin-evicted">
-            {t('flamegraph.pinEvicted').replace('{n}', String(evictedPin))}
+            {pinNotice}
             <button
                 type="button"
                 class="dismiss"
                 aria-label={t('flamegraph.pinEvicted.dismiss')}
                 onclick={() => {
-                    clearTimeout(evictedTimer);
-                    evictedPin = null;
+                    clearTimeout(noticeTimer);
+                    pinNotice = null;
                 }}
                 data-testid="pin-evicted-dismiss">&times;</button
             >

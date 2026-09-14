@@ -471,7 +471,6 @@
                 if (focusIndex >= 0) zoomToNode(series.nodes[focusIndex]);
                 break;
             case 'Escape':
-            case 'Home':
                 event.preventDefault();
                 resetView();
                 break;

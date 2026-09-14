@@ -313,5 +313,6 @@
     "tip.settings.flameRendererGl": "Draw flame fills on the GPU (WebGL). Turning it off falls back to the CPU canvas renderer.",
     "topbar.patching": "patching",
     "flamegraph.pinEvicted": "The pinned frame left the ring (frame {n}). Back to live.",
-    "flamegraph.pinEvicted.dismiss": "Dismiss"
+    "flamegraph.pinEvicted.dismiss": "Dismiss",
+    "flamegraph.pinFailed": "Could not load frame {n}. Back to live."
 }

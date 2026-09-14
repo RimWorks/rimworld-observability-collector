@@ -1324,9 +1324,9 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
     });
 
-    // a 500 or a restarted collector is a hiccup, not an eviction. unpinning on it throws
-    // the user off the frame they stopped on and lies about why.
-    it('keeps the pin and stays quiet when the range fetch fails', async () => {
+    // holding the pin here left the paused badge over the freely-updating live frame, and
+    // the pin-refresh effect never retried, so the page sat paused-looking on live data.
+    it('resumes to live with a notice when the first fetch for a pin fails', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
 
@@ -1340,8 +1340,10 @@ describe('Flamegraph page', () => {
 
         await fireEvent.click(screen.getByTestId('step-older'));
 
-        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
-        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+        expect(await screen.findByTestId('pin-evicted')).toHaveTextContent(
+            'Could not load frame 4320',
+        );
+        await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
     });
 
     it('jumping to newest clears the pause and returns to the live frame', async () => {
@@ -2011,7 +2013,9 @@ describe('Flamegraph frame history selection', () => {
         await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
     });
 
-    it('keeps the pin and says nothing when the range request fails', async () => {
+    // holding a range that never arrived left the paused badge and the selection over live
+    // frames, and nothing ever refetched it.
+    it('resumes to live with a notice when the range request fails', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
         const gate = gateRangeFetch();
@@ -2021,9 +2025,11 @@ describe('Flamegraph frame history selection', () => {
 
         gate.finish('fail');
 
-        await waitFor(() => expect(stageBusy()).toBe(false));
-        expect(screen.queryByTestId('pin-evicted')).toBeNull();
-        expect(screen.getByTestId('strip-range')).toBeInTheDocument();
+        expect(await screen.findByTestId('pin-evicted')).toHaveTextContent(
+            'Could not load frame 4319',
+        );
+        await waitFor(() => expect(screen.queryByTestId('strip-range')).toBeNull());
+        await waitFor(() => expect(screen.queryByTestId('paused-badge')).toBeNull());
     });
 
     // jsdom does no layout, so the drawer's max()/calc() cannot be resolved here. what is
@@ -2484,5 +2490,32 @@ describe('Flamegraph subsystem legend', () => {
 
         expect(rule).toContain('height: 22px');
         expect(readFileSync('src/lib/theme.css', 'utf-8')).toContain('--chrome-h: 344px');
+    });
+});
+
+// its own block: the wait for the refresh cadence is real time, and running it mid-suite
+// left later tests drawing a frame late.
+describe('Flamegraph pin refresh hiccup', () => {
+    // the other half: once a frame is held, a refresh 500 is a hiccup. dropping the pin on it
+    // throws the user off the frame they stopped on.
+    it('keeps the pin when a refresh of the held frame fails', async () => {
+        // within the pin-refresh window, so the refresh actually runs.
+        mockFetch({ ...FRAMES_BODY, stats: { ...FRAMES_BODY.stats, newest_ordinal: 4321 } });
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+
+        const live = globalThis.fetch;
+        globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url.includes('/api/v1/frames?'))
+                return Promise.resolve(new Response('boom', { status: 500 }));
+            return live(input, init);
+        }) as unknown as typeof fetch;
+        await new Promise((r) => setTimeout(r, 400));
+
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
     });
 });
