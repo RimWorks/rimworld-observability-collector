@@ -29,7 +29,6 @@ package-lock.json
 pnpm-lock.yaml
 release.config.mjs
 RimObs.slnx
-LICENSE
 README.md
 
 docs/

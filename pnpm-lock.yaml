@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@rimworks/mod-ci':
-        specifier: github:RimWorks/mod-ci#v1.1.0
-        version: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.3(semantic-release@25.0.9))
+        specifier: github:RimWorks/mod-ci#v1.10
+        version: https://codeload.github.com/RimWorks/mod-ci/tar.gz/f516504a51b1c916489710c2c95f6bbb41e8f7f1(semantic-release-steam@2.1.3(semantic-release@25.0.9))
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.0
         version: 13.0.1(semantic-release@25.0.9)
@@ -138,8 +138,8 @@ packages:
     resolution: {integrity: sha512-//0sR/cow/s4ICQaYoAobOl4aU8cjU6x/V24V7XkKotb9+O+3zySIYp146vpaobYHnxa4pZX8NkV54Z5AwbDKA==}
     engines: {node: '>=12'}
 
-  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5':
-    resolution: {gitHosted: true, integrity: sha512-5WF0y9UrshL2Ip+5cca3vKFf/4N17jsM8XAcOOso/amMKW+QIXlA22AiK3g54q3MyDAD9be56BF9iFnXR7ikHg==, tarball: https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5}
+  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/f516504a51b1c916489710c2c95f6bbb41e8f7f1':
+    resolution: {gitHosted: true, integrity: sha512-3yuewKNQfGVvDYqHFm8z5vP9FivzEf6dHbYX2jRVo0RVJjw4TxUu6o4DNzeMbcvq+297jwXKCN+z52QvSeXHgg==, tarball: https://codeload.github.com/RimWorks/mod-ci/tar.gz/f516504a51b1c916489710c2c95f6bbb41e8f7f1}
     version: 1.0.0
     engines: {node: '>=22'}
     hasBin: true
@@ -1480,7 +1480,7 @@ snapshots:
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
 
-  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/8fd4da569aa3d5e69c8d41bab30e018b0a0e02c5(semantic-release-steam@2.1.3(semantic-release@25.0.9))':
+  '@rimworks/mod-ci@https://codeload.github.com/RimWorks/mod-ci/tar.gz/f516504a51b1c916489710c2c95f6bbb41e8f7f1(semantic-release-steam@2.1.3(semantic-release@25.0.9))':
     optionalDependencies:
       semantic-release-steam: 2.1.3(semantic-release@25.0.9)
 
