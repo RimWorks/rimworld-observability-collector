@@ -22,10 +22,24 @@ export const LANGUAGES: Language[] = [
     { code: 'de', label: 'Deutsch' },
 ];
 
+// t() runs per rendered string, so parsing the query string every call is a parse and an
+// allocation on a hot path. the search rarely changes, so cache the parse keyed on it.
+let cachedSearch: string | null = null;
+let cachedLangParam: string | null = null;
+
+function langParam(): string | null {
+    const search = globalThis.location?.search ?? '';
+    if (search !== cachedSearch) {
+        cachedSearch = search;
+        cachedLangParam = new URLSearchParams(search).get('lang');
+    }
+    return cachedLangParam;
+}
+
 export function getLang(): string {
     const pref = userPrefs.lang;
     if (pref && dictionaries[pref]) return pref;
-    const param = new URLSearchParams(globalThis.location.search).get('lang');
+    const param = langParam();
     return param && dictionaries[param] ? param : 'en';
 }
 

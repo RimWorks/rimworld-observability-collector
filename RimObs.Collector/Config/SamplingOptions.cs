@@ -5,7 +5,7 @@ public sealed class SamplingOptions {
     public const int MinMaxCaptureDepth = 1;
     public const int MaxMaxCaptureDepth = 64;
 
-    public const int DefaultRingCapacity = 16384;
+    public const int DefaultRingCapacity = 65536;
     public const int MinRingCapacity = 1024;
     public const int MaxRingCapacity = 1048576;
 

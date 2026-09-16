@@ -192,18 +192,36 @@ public sealed class FrameRingTests {
     }
 
     // pause and step must ALWAYS land on a main-thread frame, so a frame that seals without
-    // its main lane is dropped and its stray worker samples count as late.
+    // its main lane is dropped, counted as orphaned rather than late.
     [Fact]
-    public void A_frame_sealing_without_its_main_lane_is_dropped_as_late() {
+    public void A_frame_sealing_without_its_main_lane_is_dropped_as_orphaned() {
         FrameRing ring = new(64) { Clock = new ManualClock(), OpenFrameWindow = 2 };
         ring.Add(1, 20, -1, 10, -1, 1000L, 200L, 0L, 7, mainLane: false);
         for (int ordinal = 2; ordinal <= 4; ordinal++)
             ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L, 0L, 1);
 
         ring.FindByOrdinal(1).Should().BeNull();
-        ring.LateSamples.Should().Be(1);
+        ring.OrphanedSamples.Should().Be(1);
+        ring.LateSamples.Should().Be(0);
         ring.Flush();
         ring.Snapshot().Select(f => f.CaptureOrdinal).Should().Equal(2, 3, 4);
+    }
+
+    // the lag stats say whether lateness is a near miss or a lane stuck whole seconds behind,
+    // which is the difference between widening the window and fixing the sender.
+    [Fact]
+    public void Late_samples_record_how_far_behind_the_seal_they_landed() {
+        FrameRing ring = RingWithWindow(64, 2);
+        for (int ordinal = 1; ordinal <= 20; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal, -1, ordinal * 1000L, 500L);
+
+        // sealed through 18 by now; these land 8 and 16 ordinals behind
+        ring.Add(10, 20, -1, 900, -1, 10_000L, 5L);
+        ring.Add(2, 20, -1, 901, -1, 2000L, 5L);
+
+        ring.LateSamples.Should().Be(2);
+        ring.LateLag.Avg.Should().Be(12.0);
+        ring.LateLag.Max.Should().Be(16);
     }
 
     // a paused game sends nothing more, so its last frame has had its drain cycle and is the
@@ -533,8 +551,9 @@ public sealed class FrameRingTests {
 
         FrameRingStats stats = ring.ComputeStats();
 
-        // frames 2 and 3 are what the ring kept; 4 is still open and previews on top.
-        stats.FrameCount.Should().Be(3);
+        // frames 2 and 3 are what the ring kept; 4 is still open, so it previews in the
+        // percentiles and ordinal bounds but stays out of the sealed FrameCount.
+        stats.FrameCount.Should().Be(2);
         stats.OldestOrdinal.Should().Be(2);
         stats.NewestOrdinal.Should().Be(4);
     }
@@ -686,6 +705,18 @@ public sealed class FrameRingTests {
     }
 
     [Fact]
+    public void Stats_count_sealed_frames_only_so_a_full_ring_never_reads_over_capacity() {
+        FrameRing ring = RingWithWindow(4, 2);
+        for (int ordinal = 1; ordinal <= 8; ordinal++)
+            ring.Add(ordinal, 10, -1, ordinal * 100, -1, ordinal * 1000L, 100L);
+
+        FrameRingStats stats = ring.ComputeStats();
+
+        stats.FrameCount.Should().Be(4);
+        ring.Snapshot().Length.Should().Be(6);
+    }
+
+    [Fact]
     public void Stats_report_ordinal_bounds_and_percentiles_over_the_ring() {
         FrameRing ring = RingWithWindow(8, 1);
         long[] durations = [100L, 900L, 200L, 300L];
@@ -694,7 +725,8 @@ public sealed class FrameRingTests {
 
         FrameRingStats stats = ring.ComputeStats();
 
-        stats.FrameCount.Should().Be(4);
+        // ordinal 4 is still open, so it counts in the percentiles but not in FrameCount
+        stats.FrameCount.Should().Be(3);
         stats.OldestOrdinal.Should().Be(1);
         stats.NewestOrdinal.Should().Be(4);
         stats.MinDurationTicks.Should().Be(100L);

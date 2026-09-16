@@ -471,7 +471,7 @@
         letter-spacing: 0.05em;
         color: var(--warn);
         border: 1px solid var(--border);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         padding: var(--s-0) var(--s-2);
         white-space: nowrap;
     }
@@ -514,7 +514,7 @@
     }
     .chip {
         font-size: 0.78rem;
-        font-family: var(--font-mono, monospace);
+        font-family: var(--font-mono);
         color: var(--text-dim);
         border: 1px solid var(--border-soft);
         border-radius: var(--r-md);

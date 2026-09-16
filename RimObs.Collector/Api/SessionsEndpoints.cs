@@ -31,6 +31,7 @@ public static class SessionsEndpoints {
         endpoints.MapGet("/api/v1/sessions/current/hotspots", GetCurrentHotspots);
         endpoints.MapGet("/api/v1/sessions/current/sections/{id:int}/timeseries", GetSectionTimeseries);
         endpoints.MapGet("/api/v1/sessions/current/gc", GetCurrentGc);
+        endpoints.MapGet("/api/v1/sessions/current/vram", GetCurrentVram);
         endpoints.MapGet("/api/v1/sessions/current/metrics", GetCurrentMetrics);
         endpoints.MapGet("/api/v1/sessions/current/patches", GetCurrentPatches);
         endpoints.MapGet("/api/v1/sessions/current/call_tree", GetCurrentCallTree);
@@ -308,6 +309,38 @@ public static class SessionsEndpoints {
                 mean_ns = b.Count == 0 ? 0 : (long)(b.TotalTicks * nsPerTick / b.Count),
                 total_ns = (long)(b.TotalTicks * nsPerTick),
             }).ToArray(),
+        });
+    }
+
+    private static IResult GetCurrentVram(SessionAggregator aggregator) {
+        (VramBatch Batch, DateTime Utc)? latest = aggregator.LatestVram;
+        if (latest is null) {
+            return Results.Ok(new {
+                schema_version = SchemaVersion.Current,
+                collected = false,
+            });
+        }
+        (VramBatch batch, DateTime utc) = latest.Value;
+        return Results.Ok(new {
+            schema_version = SchemaVersion.Current,
+            collected = true,
+            sampled_utc = utc,
+            driver_bytes = batch.DriverBytes,
+            texture_bytes = batch.TextureBytes,
+            mesh_bytes = batch.MeshBytes,
+            render_target_bytes = batch.RenderTargetBytes,
+            texture_count = batch.TextureCount,
+            mesh_count = batch.MeshCount,
+            render_target_count = batch.RenderTargetCount,
+            top = batch.TopNames.Select((name, i) => new {
+                name,
+                kind = i < batch.TopKinds.Length ? batch.TopKinds[i] : (byte)0,
+                bytes = i < batch.TopBytes.Length ? batch.TopBytes[i] : 0L,
+            }),
+            history = aggregator.VramHistory.Select(h => new {
+                utc = h.Utc,
+                driver_bytes = h.DriverBytes,
+            }),
         });
     }
 

@@ -41,6 +41,9 @@ internal sealed class SampleRingBuffer {
     public int Capacity => _slots.Length;
     public long Dropped => Interlocked.Read(ref _dropped);
 
+    /// <summary>A drop that was rescued elsewhere is not a loss; only the anchor path calls this.</summary>
+    public void Undrop() => Interlocked.Decrement(ref _dropped);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryWrite(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, int frameOrdinal, long allocBytes = 0L) {
         // one producer per ring, so the claim is plain - and it must not advance on the drop
@@ -223,6 +226,12 @@ internal sealed class SampleRingSet {
     private static void CacheLane(SampleRingSet owner, Lane lane) {
         t_Lane = lane;
         t_LaneOwner = owner;
+    }
+
+    /// <summary>Reverses the drop this thread's lane just counted; the anchor rescue owns this.</summary>
+    public void UndropCurrentLane() {
+        if (t_Lane is { } lane && ReferenceEquals(t_LaneOwner, this))
+            lane.Ring.Undrop();
     }
 
     public int Drain(SampleBatch batch, int maxCount) => Drain(batch, maxCount, 0);

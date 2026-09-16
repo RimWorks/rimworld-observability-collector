@@ -56,29 +56,55 @@ public sealed class CollectorStatus {
     public bool DashboardAvailable => CollectorRunning && Port > 0;
     public string DashboardUrl => Port > 0 ? $"http://{Host}:{Port}/" : string.Empty;
 
-    public IReadOnlyList<StatusLine> BuildLines() {
-        List<StatusLine> lines = new(12);
-
-        lines.Add(BuildCollectorLine());
-        lines.Add(BuildControlServerLine());
-        lines.Add(BuildPatchBackendLine());
-        lines.Add(BuildCoreSectionsLine());
-        lines.Add(BuildDeclaredSectionsLine());
-        lines.Add(BuildAutoSectionsLine());
-
-        lines.Add(new StatusLine("Profiler", ProfilerEnabled ? "enabled" : "disabled", ProfilerEnabled));
-        lines.Add(new StatusLine("Owners registered", OwnerCount.ToString(), OwnerCount > 0));
-        lines.Add(new StatusLine("Patch conflicts", ConflictCount.ToString(), ConflictCount == 0));
-        lines.Add(new StatusLine("GC observer", GcObserverRunning ? "running" : "stopped", GcObserverRunning));
-        lines.Add(new StatusLine("TPS/FPS observer", TpsFpsObserverRunning ? "running" : "stopped", TpsFpsObserverRunning));
-        lines.Add(new StatusLine("Allocation sampler", AllocationSamplerRunning ? "running" : "off (opt-in)", true));
-
+    /// <summary>Grouped view for the settings window; BuildLines stays as the flat view.</summary>
+    public IReadOnlyList<StatusGroup> BuildGroups() {
         string sessionDisplay = string.IsNullOrEmpty(SessionId) ? "(uninitialized)" : SessionId;
-        lines.Add(new StatusLine("Session", sessionDisplay, !string.IsNullOrEmpty(SessionId)));
-
+        List<StatusLine> collector = new(4) {
+            BuildCollectorLine(),
+            BuildControlServerLine(),
+            new StatusLine("Session", sessionDisplay, !string.IsNullOrEmpty(SessionId)),
+        };
         if (!string.IsNullOrEmpty(OwnerId))
-            lines.Add(new StatusLine("Owner id", OwnerId, true));
+            collector.Add(new StatusLine("Owner id", OwnerId, true));
 
+        List<StatusLine> patching = new(5) {
+            BuildPatchBackendLine(),
+            BuildCoreSectionsLine(),
+            BuildDeclaredSectionsLine(),
+            BuildAutoSectionsLine(),
+            new StatusLine("Patch conflicts", ConflictCount.ToString(), ConflictCount == 0),
+        };
+
+        List<StatusLine> observers = new(5) {
+            new StatusLine("Profiler", ProfilerEnabled ? "enabled" : "disabled", ProfilerEnabled),
+            new StatusLine("GC observer", GcObserverRunning ? "running" : "stopped", GcObserverRunning),
+            new StatusLine("TPS/FPS observer", TpsFpsObserverRunning ? "running" : "stopped", TpsFpsObserverRunning),
+            new StatusLine("Allocation sampler", AllocationSamplerRunning ? "running" : "off", true),
+            new StatusLine("Owners registered", OwnerCount.ToString(), OwnerCount > 0),
+        };
+
+        return [
+            new StatusGroup("Collector", collector),
+            new StatusGroup("Patching", patching),
+            new StatusGroup("Observers", observers),
+        ];
+    }
+
+    /// <summary>True when no line anywhere is unhealthy, so the window can stay quiet.</summary>
+    public bool AllHealthy() {
+        foreach (StatusGroup group in BuildGroups()) {
+            foreach (StatusLine line in group.Lines) {
+                if (!line.Healthy)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public IReadOnlyList<StatusLine> BuildLines() {
+        List<StatusLine> lines = new(14);
+        foreach (StatusGroup group in BuildGroups())
+            lines.AddRange(group.Lines);
         return lines;
     }
 
@@ -103,12 +129,13 @@ public sealed class CollectorStatus {
     }
 
     // 0/0 is the no-backend state: PatchInstaller.InstallAll bails before registering the core
-    // pack, so nothing green should suggest the sections are fine.
+    // pack, so nothing green should suggest the sections are fine. a partial install is normal
+    // now that auto-instrument covers most targets; only unresolved or failed hooks are trouble.
     private StatusLine BuildCoreSectionsLine() {
-        bool coreHealthy = CoreTotal > 0 && CoreInstalled == CoreTotal && UnresolvedCount == 0 && FailedCount == 0;
+        bool coreHealthy = CoreTotal > 0 && UnresolvedCount == 0 && FailedCount == 0;
         string coreValue = CoreTotal == 0
             ? "0/0 (not installed)"
-            : $"{CoreInstalled}/{CoreTotal} installed (unresolved={UnresolvedCount}, failed={FailedCount})";
+            : $"{CoreInstalled} installed of {CoreTotal} known (unresolved={UnresolvedCount}, failed={FailedCount})";
         return new StatusLine("Core sections", coreValue, coreHealthy);
     }
 

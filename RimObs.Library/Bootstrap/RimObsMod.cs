@@ -102,10 +102,10 @@ public sealed class RimObsMod : Mod {
 
             ControlServices.StartServer(ownerId);
             WireTelemetrySink(ownerId, port);
-            if (_settings.AllocTracking) {
-                FrameTickPatches.AllocArmGate = static () => Current.ProgramState == ProgramState.Playing;
-                AllocationHook.DeferEnable();
-            }
+            // always on (ka, 2026-09-16): the alloc column and strip are blind without it,
+            // and the deferred arming already waits out the worldgen JIT storm.
+            FrameTickPatches.AllocArmGate = static () => Current.ProgramState == ProgramState.Playing;
+            AllocationHook.DeferEnable();
             PopulateOwnerRegistry();
             ProfilingXmlLoader.LoadResult declared = LoadDeclaredProfiling();
 
@@ -213,6 +213,7 @@ public sealed class RimObsMod : Mod {
         GcObserverHost.SetSink(sink);
         AllocationSamplerHost.SetSink(sink);
         TpsFpsObserverHost.SetSink(sink);
+        VramSampler.Sink = sink;
         SessionRestarter.SetSink(sink);
         ControlServices.SetSink(sink);
         s_Sink = sink;

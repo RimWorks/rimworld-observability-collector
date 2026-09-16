@@ -5,6 +5,9 @@
     import { t } from '../i18n';
     import { userPrefs } from '../userPrefs.svelte';
     import type { SvelteSet } from 'svelte/reactivity';
+    import Tooltip from './Tooltip.svelte';
+
+    type Row = { lane: ThreadLane; share: number; drawn: boolean; pct: number };
 
     let {
         threads,
@@ -52,18 +55,29 @@
 <div class="threadfilter">
     <h3>{t('threads.title')}</h3>
     {#each rows as row (row.lane.id)}
-        <button
-            type="button"
-            class="row"
-            class:off={!row.drawn}
-            aria-pressed={row.drawn}
-            title={locked ? t('tip.threads.mainOnly') : undefined}
-            onclick={() => toggle(row.lane.id)}
-            data-testid="thread-row-{row.lane.id}"
-        >
-            <i class="dot" class:main={row.lane.role === ThreadRole.Main}></i>
-            <span class="name">{laneLabel(row.lane)}</span>
-            <span class="track" title={t('threads.busy')}>
+        {#if locked}
+            <Tooltip text={t('tip.threads.mainOnly')} align="stretch">
+                {@render laneRow(row)}
+            </Tooltip>
+        {:else}
+            {@render laneRow(row)}
+        {/if}
+    {/each}
+</div>
+
+{#snippet laneRow(row: Row)}
+    <button
+        type="button"
+        class="row"
+        class:off={!row.drawn}
+        aria-pressed={row.drawn}
+        onclick={() => toggle(row.lane.id)}
+        data-testid="thread-row-{row.lane.id}"
+    >
+        <i class="dot" class:main={row.lane.role === ThreadRole.Main}></i>
+        <span class="name">{laneLabel(row.lane)}</span>
+        <Tooltip text={t('threads.busy')} align="stretch" tabindex={-1}>
+            <span class="track">
                 <span
                     class="busy"
                     class:warm={row.share > WARM && row.share <= HOT}
@@ -72,10 +86,10 @@
                     data-testid="busy-{row.lane.id}"
                 ></span>
             </span>
-            <span class="pct mono">{row.pct}%</span>
-        </button>
-    {/each}
-</div>
+        </Tooltip>
+        <span class="pct mono">{row.pct}%</span>
+    </button>
+{/snippet}
 
 <style>
     .threadfilter {
@@ -107,13 +121,15 @@
     .row:hover {
         background: var(--bg-surface);
     }
-    /* ghosting the text keeps the bar readable; opacity would fade the track with it */
+    /* dimming the text keeps the bar readable; opacity would fade the track with it.
+       off is a toggle state, not disabled, so 1.4.3 applies: --text-faint is 6.05 on
+       --bg-surface, --text-ghost was 4.66 and drops under 4.5 on deeper surfaces. */
     .row.off {
-        color: var(--text-ghost);
+        color: var(--text-faint);
     }
     .row.off .busy,
     .row.off .dot {
-        background: var(--text-ghost);
+        background: var(--text-faint);
     }
     .dot {
         width: 8px;
@@ -130,6 +146,7 @@
         white-space: nowrap;
     }
     .track {
+        width: 100%;
         height: 8px;
         border-radius: 4px;
         background: var(--bg-surface);

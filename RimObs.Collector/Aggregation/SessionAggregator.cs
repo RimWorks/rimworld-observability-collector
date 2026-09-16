@@ -47,6 +47,9 @@ public sealed class SessionAggregator {
     private long _latestTpsFpsTick;
     private long _hasTpsFps;
     private DateTime _lastBatchUtc;
+    private long _lostDatagrams;
+    private long _backlogDrops;
+    private readonly Dictionary<string, ulong> _lastSequence = new();
 
     public SessionMeta? Meta => _meta;
     public long TotalSamples => Interlocked.Read(ref _totalSamples);
@@ -60,6 +63,21 @@ public sealed class SessionAggregator {
     public int MetricCount => _metrics.Count;
     public FrameRing Frames => _frames;
     public ThreadTable Threads { get; } = new();
+
+    /// <summary>Datagrams the kernel or wire ate, counted from gaps in each owner's sequence.</summary>
+    public long LostDatagrams => Interlocked.Read(ref _lostDatagrams);
+
+    /// <summary>Datagrams the receiver dropped because its dispatch backlog was full.</summary>
+    public long BacklogDrops => Interlocked.Read(ref _backlogDrops);
+
+    public void OnBacklogDrop() => Interlocked.Increment(ref _backlogDrops);
+
+    /// <summary>Single-threaded with dispatch; a sequence below the last one is a sender restart.</summary>
+    public void OnDatagramSequence(string owner, ulong sequence) {
+        if (_lastSequence.TryGetValue(owner, out ulong last) && sequence > last + 1)
+            Interlocked.Add(ref _lostDatagrams, (long)(sequence - last - 1));
+        _lastSequence[owner] = sequence;
+    }
 
     // the live session's label. held here as well as in SQLite so /status reflects a rename
     // immediately, rather than waiting on the next persistence flush.
@@ -119,6 +137,10 @@ public sealed class SessionAggregator {
             _frameRootSectionId = NoSection;
             // a name belongs to the session it was given to, never to the next one.
             SessionName = string.Empty;
+            // transport loss belongs to its session too, or the new one starts haunted.
+            Interlocked.Exchange(ref _lostDatagrams, 0);
+            Interlocked.Exchange(ref _backlogDrops, 0);
+            _lastSequence.Clear();
         }
 
         if (previous != meta.SessionId)
@@ -171,6 +193,37 @@ public sealed class SessionAggregator {
         }
         Volatile.Write(ref _patchConflicts, records);
         Volatile.Write(ref _patchConflictsKnown, batch.ConflictsKnown ? 1 : 0);
+    }
+
+    private VramBatch? _latestVram;
+    private DateTime _latestVramUtc;
+    private readonly List<(DateTime Utc, long DriverBytes)> _vramHistory = [];
+    private const int VramHistoryCap = 720;
+
+    public (VramBatch Batch, DateTime Utc)? LatestVram {
+        get {
+            lock (_vramHistory) {
+                return _latestVram is null ? null : (_latestVram, _latestVramUtc);
+            }
+        }
+    }
+
+    public (DateTime Utc, long DriverBytes)[] VramHistory {
+        get {
+            lock (_vramHistory) {
+                return [.. _vramHistory];
+            }
+        }
+    }
+
+    public void OnVram(VramBatch batch) {
+        lock (_vramHistory) {
+            _latestVram = batch;
+            _latestVramUtc = DateTime.UtcNow;
+            _vramHistory.Add((_latestVramUtc, batch.DriverBytes));
+            if (_vramHistory.Count > VramHistoryCap)
+                _vramHistory.RemoveAt(0);
+        }
     }
 
     public void OnTpsFps(TpsFpsBatch batch) {

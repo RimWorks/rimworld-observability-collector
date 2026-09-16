@@ -1,0 +1,104 @@
+:root {
+    --bg-void: #080a0f;
+    --bg-base: #0b0e14;
+    --bg-surface: #131925;
+    --bg-surface-2: #1a2230;
+    --bg-elev: #20293a;
+
+    /* near-neutral grays on purpose: a border is structure, not color. --border-strong
+       must clear 3:1 on --bg-elev (contrast.test.ts pins it); #6b7484 reads 3.10. */
+    --border: #2a303c;
+    --border-soft: #1e232c;
+    --border-strong: #6b7484;
+
+    --text: #d4dded;
+    --text-dim: #93a1ba;
+    --text-faint: #8a98b3;
+    /* dimmest text, for axis units and separators. clears 4.5:1 on --bg-base and --bg-surface
+       only (5.11 and 4.66); it is 4.22 on --bg-surface-2 and 3.86 on --bg-elev. */
+    --text-ghost: #75849f;
+    /* only for filled buttons, where the fill still reads. an outline button dimmed this
+       way loses its label against its own background, so those set a colour instead. */
+    --o-disabled: 0.6;
+
+    --cyan: #39c4d4;
+    --cyan-soft: #6fe0ec;
+    --cyan-fill: rgba(57, 196, 212, 0.12);
+
+    --good: #5fcf80;
+    --warn: #e8b53e;
+    --bad: #f25d63;
+    --bad-deep: #c2393e;
+
+    --grade-0: #5fcf80;
+    --grade-1: #9ed457;
+    --grade-2: #e8b53e;
+    --grade-3: #ff9d4e;
+    --grade-4: #f25d63;
+
+    /* frame quads, coloured by subsystem so the render and tick split reads at a glance */
+    --sub-tick: #39c4d4;
+    --sub-ai: #7c9cf5;
+    --sub-render: #e8b53e;
+    --sub-ui: #b184e8;
+    /* unity's own work, so engine time reads apart from rimworld's */
+    --sub-engine: #6f7f99;
+    /* the game waiting on vsync, not working. muted on purpose: a vsync-limited frame is not
+       a slow frame, and colouring the wait like cost makes every capped frame look blown. */
+    --sub-idle: #2f3a4d;
+    --sub-none: #5c6b85;
+
+    --f: 1.08;
+
+    /* system stacks on purpose: an instrument sets type in whatever the OS reads best,
+       and the embedded binary ships no font files at all. headers share the mono. */
+    --font-ui: system-ui, 'Segoe UI', Roboto, 'Open Sans', Arial, sans-serif;
+    --font-mono:
+        ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
+    --font-display: var(--font-mono);
+
+    --r-sm: 2px;
+    --r-md: 3px;
+    --r-lg: 6px;
+
+    --s-0: 0.125rem;
+    --s-1: 0.25rem;
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+
+    /* the single left rail every page aligns to, matching the profiler comp's 12px rows */
+    --rail: 12px;
+    /* label/value and form surfaces cap here so a label stays coupled to its value */
+    --measure: 900px;
+
+    --topbar-h: 58px;
+    /* the always-on status strip. the tab footer stacks on top of it, so both read it. */
+    --status-h: 24px;
+    --drawer-h: 45vh;
+    /* the chrome the stage can never measure: the topbar above it, and the clearance it
+       leaves for the fixed tab bar and status strip */
+    --chrome-fixed-h: calc(var(--topbar-h) + 64px);
+    /* fallback for --chrome-measured, used only until the chrome rows have been measured */
+    --chrome-h: 344px;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);
+
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --t-fast: 120ms;
+    --t-base: 200ms;
+}
+
+/* a custom property resolves var() where it is declared, so the chain has to be redeclared in
+   any subtree that overrides --f. .profiler is the one that does. */
+:root,
+.profiler {
+    --f-body: calc(13.5px * var(--f));
+    --f-ui: calc(12.5px * var(--f));
+    --f-small: calc(11.5px * var(--f));
+    --f-tiny: calc(10.5px * var(--f));
+}

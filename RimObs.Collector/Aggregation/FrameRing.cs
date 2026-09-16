@@ -68,6 +68,9 @@ public sealed class FrameRing {
     private int _servedOrdinal;
     private long _preFrameSamples;
     private long _lateSamples;
+    private long _orphanedSamples;
+    private long _lateLagTotal;
+    private long _lateLagMax;
     private long _lastSampleStamp;
 
     public FrameRing(int capacity = DefaultCapacity) {
@@ -141,6 +144,24 @@ public sealed class FrameRing {
         }
     }
 
+    /// <summary>Samples from sealed frames that never got a main-anchor sample of their own.</summary>
+    public long OrphanedSamples {
+        get {
+            lock (_gate) {
+                return _orphanedSamples;
+            }
+        }
+    }
+
+    /// <summary>How far behind the seal a truly late sample arrives, in ordinals.</summary>
+    public (double Avg, long Max) LateLag {
+        get {
+            lock (_gate) {
+                return (_lateSamples > 0 ? (double)_lateLagTotal / _lateSamples : 0.0, _lateLagMax);
+            }
+        }
+    }
+
     /// <summary>Fires after the lock whenever a seal advances. Must be cheap; the receive path calls it.</summary>
     public Action? FrameSealed { get; set; }
 
@@ -201,6 +222,10 @@ public sealed class FrameRing {
         }
         if (frameOrdinal <= _sealedThrough) {
             _lateSamples++;
+            long lag = _sealedThrough - frameOrdinal;
+            _lateLagTotal += lag;
+            if (lag > _lateLagMax)
+                _lateLagMax = lag;
             return false;
         }
         if (!_open.TryGetValue(frameOrdinal, out OpenFrame? open))
@@ -270,6 +295,13 @@ public sealed class FrameRing {
     public FrameSnapshot[] Snapshot() {
         lock (_gate) {
             return View();
+        }
+    }
+
+    // one lock for both, so a bundle's FrameCount can never disagree with its frames.
+    public (FrameSnapshot[] Frames, int SealedCount) SnapshotWithSealedCount() {
+        lock (_gate) {
+            return (View(), _count);
         }
     }
 
@@ -394,7 +426,19 @@ public sealed class FrameRing {
         return medians;
     }
 
-    public FrameRingStats ComputeStats() => StatsFor(Snapshot());
+    /// <summary>
+    /// Percentiles cover the open previews too, but FrameCount reports sealed frames only so
+    /// the footer never reads over the ring's capacity.
+    /// </summary>
+    public FrameRingStats ComputeStats() {
+        FrameSnapshot[] frames;
+        int sealedCount;
+        lock (_gate) {
+            frames = View();
+            sealedCount = _count;
+        }
+        return StatsFor(frames) with { FrameCount = sealedCount };
+    }
 
     // TODO(perf): sorts the whole ring per call, 2000 longs at a few hz. incremental
     // percentiles if the endpoint ever gets hot.
@@ -436,6 +480,9 @@ public sealed class FrameRing {
             _servedOrdinal = 0;
             _preFrameSamples = 0;
             _lateSamples = 0;
+            _orphanedSamples = 0;
+            _lateLagTotal = 0;
+            _lateLagMax = 0;
             _lastSampleStamp = 0;
             _open.Clear();
         }
@@ -473,9 +520,9 @@ public sealed class FrameRing {
             _open.Remove(ordinal);
             _sealedThrough = ordinal;
             // a frame whose main lane never landed is an anomaly, and navigation is anchored
-            // on main; its stray worker samples count as late rather than becoming a frame.
+            // on main; its stray worker samples are dropped, counted apart from true lateness.
             if (!open.HasMain) {
-                _lateSamples += open.SectionIds.Count;
+                _orphanedSamples += open.SectionIds.Count;
                 continue;
             }
             _buffer[_next] = open.Materialize(ordinal);

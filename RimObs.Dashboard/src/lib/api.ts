@@ -159,6 +159,28 @@ export interface GcResponse {
     events: GcEvent[];
 }
 
+export interface VramTopEntry {
+    name: string;
+    /** 0 texture, 1 mesh, 2 render target */
+    kind: number;
+    bytes: number;
+}
+
+export interface VramResponse {
+    schema_version: number;
+    collected: boolean;
+    sampled_utc?: string;
+    driver_bytes?: number;
+    texture_bytes?: number;
+    mesh_bytes?: number;
+    render_target_bytes?: number;
+    texture_count?: number;
+    mesh_count?: number;
+    render_target_count?: number;
+    top?: VramTopEntry[];
+    history?: { utc: string; driver_bytes: number }[];
+}
+
 export interface CallNode {
     id: number;
     name: string;
@@ -536,6 +558,7 @@ export const api = {
         get<SectionTimeseriesResponse>(`/api/v1/sessions/current/sections/${id}/timeseries`),
     metrics: () => get<MetricsResponse>('/api/v1/sessions/current/metrics'),
     gc: (limit = 200) => get<GcResponse>(`/api/v1/sessions/current/gc?limit=${limit}`),
+    vram: () => get<VramResponse>('/api/v1/sessions/current/vram'),
     callTree: (depth = 10, top = 16) =>
         get<CallTreeResponse>(`/api/v1/sessions/current/call_tree?depth=${depth}&top=${top}`),
     logs: (limit = 200, level?: string) => {

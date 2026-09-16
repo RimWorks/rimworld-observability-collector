@@ -112,8 +112,8 @@
                 badDeep: read('--bad-deep', '#c2393e'),
                 selected: read('--text', '#d4dded'),
                 hover: read('--text-dim', '#93a1ba'),
-                grid: read('--border-soft', '#1c2535'),
-                line: read('--border', '#28344a'),
+                grid: read('--border-soft', '#1e232c'),
+                line: read('--border', '#2a303c'),
                 cut: read('--text-faint', '#8a98b3'),
                 // distinct hue from the budget-color ramp so a GC mark never reads as "over budget".
                 gc: read('--cyan', '#39c4d4'),
@@ -125,7 +125,8 @@
         void bars;
         void mode;
         void selectedOrdinal;
-        void hoverIndex;
+        // hoverIndex is deliberately absent: paint draws no hover mark, so listing it would
+        // repaint an identical 2000-bar canvas on every mousemove.
         void cutOrdinals;
         void gcOrdinals;
         void widthPx;
@@ -134,28 +135,56 @@
         paint();
     });
 
+    // pointer handlers read these instead of measuring: the strip streams at 30/s and a
+    // getBoundingClientRect per move forces layout on every one of them.
+    let rectLeft = 0;
+    let rectWidth = 0;
+
+    // the canvas, not the wrapper: the wrapper's left border puts its origin 1px off the bars.
     function measure(): void {
-        if (!hostEl) return;
-        const box = hostEl.getBoundingClientRect();
+        if (!canvasEl) return;
+        const box = canvasEl.getBoundingClientRect();
+        rectLeft = box.left;
+        rectWidth = box.width;
         widthPx = Math.max(1, Math.round(box.width));
         heightPx = Math.max(1, Math.round(box.height) || HEIGHT_PX);
         // bars are sub-pixel at 2000 slots, so hidpi backing buys nothing but 4x the pixels.
         dpr = Math.min(globalThis.devicePixelRatio || 1, 1);
     }
 
+    // a scroll of an ancestor moves the strip with no resize event, so the cached left goes
+    // stale. only ancestors count: the flame's own scroller fires 30/s and never moves us.
+    function handleAncestorScroll(e: Event): void {
+        const target = e.target as Node | null;
+        if (canvasEl && target?.contains?.(canvasEl)) measure();
+    }
+
     onMount(() => {
         measure();
-        if (typeof ResizeObserver !== 'undefined' && hostEl) {
+        if (typeof ResizeObserver !== 'undefined' && canvasEl) {
             ro = new ResizeObserver(() => measure());
-            ro.observe(hostEl);
+            ro.observe(canvasEl);
         }
+        globalThis.addEventListener('scroll', handleAncestorScroll, {
+            capture: true,
+            passive: true,
+        });
     });
 
-    onDestroy(() => ro?.disconnect());
+    onDestroy(() => {
+        ro?.disconnect();
+        globalThis.removeEventListener('scroll', handleAncestorScroll, { capture: true });
+    });
+
+    // a pointer on a strip we never got a width for means the cache missed its layout, so pay
+    // for one rect rather than drop the input.
+    function pointerRect(): void {
+        if (rectWidth <= 0) measure();
+    }
 
     function indexFromEvent(e: MouseEvent): number {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        return barIndexAt(e.clientX - rect.left, rect.width, bars.length, slots);
+        pointerRect();
+        return barIndexAt(e.clientX - rectLeft, rectWidth, bars.length, slots);
     }
 
     let dragFrom = $state(-1);
@@ -234,9 +263,9 @@
     }
 
     function handleMove(e: MouseEvent): void {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        hoverX = e.clientX - rect.left;
-        hoverIndex = barIndexAt(hoverX, rect.width, bars.length, slots);
+        pointerRect();
+        hoverX = e.clientX - rectLeft;
+        hoverIndex = barIndexAt(hoverX, rectWidth, bars.length, slots);
     }
 
     let hovered = $derived<StripBar | null>(bars[hoverIndex] ?? null);
@@ -333,7 +362,7 @@
         justify-content: space-between;
         align-items: center;
         padding: 4px 8px;
-        font-size: var(--f-small, 11.5px);
+        font-size: var(--f-small);
         border-bottom: 1px solid var(--border-soft);
     }
     .dim {
@@ -366,7 +395,7 @@
     .axis em {
         position: absolute;
         top: 1px;
-        font: 400 calc(10px * var(--f, 1.08)) / 1 var(--font-mono);
+        font: 400 calc(10px * var(--f)) / 1 var(--font-mono);
         font-style: normal;
         white-space: nowrap;
     }
@@ -433,7 +462,7 @@
         border: 1px solid var(--border);
         border-radius: var(--r-sm);
         font-family: var(--font-mono);
-        font-size: var(--f-small, 11.5px);
+        font-size: var(--f-small);
         white-space: nowrap;
         color: var(--text);
         pointer-events: none;

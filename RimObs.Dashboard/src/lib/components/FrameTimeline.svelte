@@ -497,13 +497,38 @@
         }
     }
 
+    // pointer handlers read these instead of measuring: a hover over the flame fires at
+    // pointer rate and a getBoundingClientRect per move forces layout on every one.
+    let rectLeft = 0;
+    let rectTop = 0;
+    let rectWidth = 0;
+
+    // content above the canvas can appear or vanish with neither a resize nor a scroll, so the
+    // canvas also re-measures on pointerenter: once per entry, not once per move.
+    function measureRect(): void {
+        if (!canvasEl) return;
+        const box = canvasEl.getBoundingClientRect();
+        rectLeft = box.left;
+        rectTop = box.top;
+        rectWidth = box.width;
+    }
+
+    // a scroll of an ancestor moves the canvas with no resize event, so the cached origin goes
+    // stale. only ancestors count: our own horizontal scroller never moves us.
+    function handleAncestorScroll(e: Event): void {
+        const target = e.target as Node | null;
+        if (canvasEl && target?.contains?.(canvasEl)) measureRect();
+    }
+
     function posToView(clientX: number, clientY: number): { row: number; atUs: number } {
-        const rect = canvasEl!.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
+        // a pointer on a canvas we never measured means the cache missed its layout, so pay
+        // for one rect rather than drop the input.
+        if (rectWidth <= 0) measureRect();
+        const x = clientX - rectLeft;
+        const y = clientY - rectTop;
         const atUs =
             effectiveView.startUs +
-            (x / Math.max(rect.width, 1)) * (effectiveView.endUs - effectiveView.startUs);
+            (x / Math.max(rectWidth, 1)) * (effectiveView.endUs - effectiveView.startUs);
         return { row: Math.floor(y / ROW_HEIGHT), atUs };
     }
 
@@ -660,6 +685,10 @@
     onMount(() => {
         dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
         rafId = requestAnimationFrame(tick);
+        globalThis.addEventListener('scroll', handleAncestorScroll, {
+            capture: true,
+            passive: true,
+        });
     });
 
     // hostEl only exists once a frame has arrived, so this cannot be done on mount: the
@@ -674,9 +703,11 @@
                 widthPx = Math.max(1, Math.round(w));
                 dirty = true;
             }
+            measureRect();
         });
         observer.observe(host);
         widthPx = Math.max(1, Math.round(host.getBoundingClientRect().width) || widthPx);
+        measureRect();
         ro = observer;
 
         return () => {
@@ -688,6 +719,7 @@
     onDestroy(() => {
         if (rafId) cancelAnimationFrame(rafId);
         ro?.disconnect();
+        globalThis.removeEventListener('scroll', handleAncestorScroll, { capture: true });
     });
 </script>
 
@@ -715,6 +747,7 @@
                 onkeydown={handleKeydown}
                 oncontextmenu={handleContextMenu}
                 onwheel={handleWheel}
+                onpointerenter={measureRect}
                 onpointerdown={handlePointerDown}
                 onpointermove={handlePointerMove}
                 onpointerup={handlePointerUp}
@@ -864,7 +897,7 @@
         pointer-events: none;
         min-width: 190px;
         padding: var(--s-2) var(--s-3);
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--border);
         border-radius: var(--r-sm);
         background: var(--bg-elev);
         box-shadow: 0 6px 20px rgb(0 0 0 / 45%);

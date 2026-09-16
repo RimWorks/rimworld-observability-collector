@@ -85,6 +85,64 @@ public sealed class UdpTelemetrySinkTests : IDisposable {
         return ((IPEndPoint)probe.Client.LocalEndPoint!).Port;
     }
 
+    // regression: ring overflow ate the frame anchor, which stops last, and the collector
+    // then orphaned the whole frame as "late". rescued anchors must still reach the wire.
+    [Fact]
+    public void Root_samples_survive_a_full_ring_and_reach_the_wire() {
+        int port = GetFreePort();
+        SessionAnchor.Initialize("test-session");
+
+        using UdpClient receiver = new(new IPEndPoint(IPAddress.Loopback, port));
+        receiver.Client.ReceiveTimeout = 250;
+
+        using UdpTelemetrySink sink = new(ownerId: "test.owner", port: port);
+        sink.SetRingCapacity(256);
+        SectionHandle root = SectionRegistry.Register("Verse.Root_Play.Update");
+        sink.SetRootSectionIdForTests(root.Id);
+
+        // no sender running, so nothing drains: 256 fill the lane, 64 overflow into the
+        // anchor ring, the rest are gone on both paths.
+        for (int i = 0; i < 400; i++)
+            sink.RecordSection(root.Id, parentId: -1, nodeId: i, parentNodeId: -1, startTimestamp: i, elapsedTicks: 1L, allocBytes: 0L);
+
+        int received = 0;
+        using CancellationTokenSource stop = new();
+        Thread listener = new(() => {
+            IPEndPoint any = new(IPAddress.Any, 0);
+            while (!stop.IsCancellationRequested) {
+                try {
+                    byte[] bytes = receiver.Receive(ref any);
+                    TelemetryBatch envelope = WireCodec.Deserialize<TelemetryBatch>(bytes);
+                    if (envelope.BatchType != BatchType.Sections)
+                        continue;
+                    SectionBatch sections = WireCodec.Deserialize<SectionBatch>(envelope.Payload);
+                    for (int i = 0; i < sections.SectionIds.Length; i++) {
+                        if (sections.SectionIds[i] == root.Id)
+                            Interlocked.Increment(ref received);
+                    }
+                }
+                catch (SocketException) {
+                }
+                catch (ObjectDisposedException) {
+                    return;
+                }
+            }
+        }) {
+            IsBackground = true,
+        };
+        listener.Start();
+
+        sink.Start();
+        Thread.Sleep(400);
+        stop.Cancel();
+        listener.Join(TimeSpan.FromSeconds(2));
+
+        // 256 from the lane plus the 64 rescued; without the rescue this is 256.
+        Volatile.Read(ref received).Should().Be(320);
+        // a rescued anchor is delivered, not lost: only the 80 that fit nowhere count.
+        sink.SamplesDropped.Should().Be(80);
+    }
+
     // regression: the ring drop counter is process-lifetime, so a new in-game session used to
     // inherit the previous session's drops in its SessionMeta and exports.
     [Fact]

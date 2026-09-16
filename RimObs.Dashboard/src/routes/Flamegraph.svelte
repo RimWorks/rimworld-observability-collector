@@ -23,6 +23,7 @@
         BundleFramesResponse,
     } from '../lib/frameTree';
     import DataState from '../lib/components/DataState.svelte';
+    import Icon from '../lib/components/Icon.svelte';
     import Tooltip from '../lib/components/Tooltip.svelte';
     import FrameTimeline from '../lib/components/FrameTimeline.svelte';
     import FrameStrip from '../lib/components/FrameStrip.svelte';
@@ -49,7 +50,6 @@
     import { lodFloorUs, refinementFor } from '../lib/lod';
     import { buildFrameExport, buildTimelineExport, exportFileName } from '../lib/frameExport';
     import { ns, count, bytes, gradeFromShare, sectionLabel } from '../lib/format';
-    import { copyable } from '../lib/copyable';
     import {
         estimateOverheadUs,
         shareOfFrame,
@@ -82,6 +82,7 @@
     import { MAX_DEPTH } from '../lib/frameLayout';
     import { ROW_HEIGHT } from '../lib/frameDraw';
     import { userPrefs } from '../lib/userPrefs.svelte';
+    import { uiSignals } from '../lib/uiSignals.svelte';
 
     // the whole spread against the frame budget, coloured by how much of it each one eats
     const PERCENTILES = [
@@ -94,8 +95,31 @@
     // heuristic: boehm pauses scale with allocation rate, and 1 GB/m is where they get ugly.
     const ALLOC_WARN_BPM = 1024 ** 3;
 
+    // sqrt scale to budget + 30%: a healthy 1-10 ms colony fills the left half instead of
+    // rendering as a speck, and a tail past the max clips to the rail end.
+    const METER_MAX_US = FRAME_BUDGET_US * 1.3;
+    function meterPos(us: number): number {
+        return Math.min(100, Math.sqrt(Math.max(0, us) / METER_MAX_US) * 100);
+    }
+    // healthy is silent: grades 0-1 draw in neutral steel so color is reserved for trouble.
+    function meterHue(grade: number): string {
+        return grade <= 1 ? 'var(--border-strong)' : `var(--grade-${grade})`;
+    }
+    function meterFill(p50: number, p99: number): string {
+        const a = gradeFromShare(p50 / FRAME_BUDGET_US);
+        const b = gradeFromShare(p99 / FRAME_BUDGET_US);
+        if (meterHue(a) === meterHue(b)) return meterHue(a);
+        return `linear-gradient(90deg, ${meterHue(a)}, ${meterHue(b)})`;
+    }
+
     const LIVE = 'live';
-    const NO_DROPS = { pre_frame_samples: 0, late_samples: 0, library_ring_samples: 0 };
+    const NO_DROPS = {
+        pre_frame_samples: 0,
+        late_samples: 0,
+        orphaned_samples: 0,
+        transport_lost_batches: 0,
+        library_ring_samples: 0,
+    };
 
     // one import serves both jobs: a bundle with frames.json becomes a scrubbable source, and
     // every bundle becomes a comparison source. the collector expires the tokens after 30 min.
@@ -231,6 +255,14 @@
     let rangeInFlight = $state(false);
     // the stage shrinks to its lanes, so the drawer reads this to claim whatever is left.
     let stageH = $state(0);
+    // the chrome rows wrap on a narrow window, so measure them instead of summing by hand.
+    let chromeRowsH = $state(0);
+    let avgH = $state(0);
+    let chromeStyle = $derived(
+        chromeRowsH > 0
+            ? `--chrome-measured: calc(${chromeRowsH + avgH}px + var(--chrome-fixed-h));`
+            : '',
+    );
     // the duration floor each pinned frame was fetched at, for zoom-in refinement.
     const pinnedLod = new Map<number, number>();
 
@@ -255,7 +287,13 @@
             );
             const at = frames.at(-1);
             if (!at) {
-                // the ring evicted the whole range between the drag and the fetch.
+                // the ring evicted the whole range between the drag and the fetch. a copy
+                // already on screen stays; only an empty view falls back to live.
+                const shown = pinnedRes?.frame?.capture_ordinal ?? -1;
+                if (shown >= fromOrdinal && shown <= toOrdinal) {
+                    noticeCached(fromOrdinal);
+                    return;
+                }
                 resume();
                 noticePin('flamegraph.pinEvicted', fromOrdinal);
                 return;
@@ -391,6 +429,7 @@
         // every user-driven selection funnels through here, and live-follow never does, so
         // this is the one place a refit belongs.
         timeline?.refit();
+        cachedNoticeFor = null;
         pinnedRange = null;
         pinnedOrdinal = ordinal;
         if (ordinal === null) {
@@ -409,7 +448,12 @@
             if (pinnedOrdinal !== ordinal) return;
             const at = range.frames.find((f) => f.capture_ordinal === ordinal);
             if (!at) {
-                // the ring evicted it between the click and the fetch. fall back to live.
+                // the ring evicted it between the click and the fetch. a copy already on
+                // screen stays; only an empty view falls back to live.
+                if (pinnedRes?.frame?.capture_ordinal === ordinal) {
+                    noticeCached(ordinal);
+                    return;
+                }
                 resume();
                 noticePin('flamegraph.pinEvicted', ordinal);
                 return;
@@ -430,6 +474,14 @@
         pinNotice = t(key).replace('{n}', String(ordinal));
         clearTimeout(noticeTimer);
         noticeTimer = setTimeout(() => (pinNotice = null), 6000);
+    }
+
+    // once per pin: the stats poll re-runs the eviction check every tick.
+    let cachedNoticeFor = $state<number | null>(null);
+    function noticeCached(ordinal: number): void {
+        if (cachedNoticeFor === ordinal) return;
+        cachedNoticeFor = ordinal;
+        noticePin('flamegraph.pinCached', ordinal);
     }
 
     function step(delta: number): void {
@@ -454,6 +506,10 @@
         const el = e.target as HTMLElement | null;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'))
             return;
+        // inside an open modal the transport must not move, and Space on a focused button is
+        // the button's activation, not a pause toggle behind the scrim.
+        if (el instanceof HTMLElement && el.closest('dialog[open]') != null) return;
+        if (e.key === ' ' && el instanceof HTMLElement && el.tagName === 'BUTTON') return;
         if (e.key === ' ') {
             e.preventDefault();
             togglePause();
@@ -646,6 +702,30 @@
         const input = e.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         if (!file) return;
+        input.value = '';
+        await importBundleFile(file);
+    }
+
+    // dropping a bundle anywhere on the stage is the profiler convention; the button stays.
+    let draggingBundle = $state(false);
+    function stageDragOver(e: DragEvent): void {
+        if (!e.dataTransfer?.types.includes('Files')) return;
+        e.preventDefault();
+        draggingBundle = true;
+    }
+    function stageDrop(e: DragEvent): void {
+        e.preventDefault();
+        draggingBundle = false;
+        const file = e.dataTransfer?.files?.[0];
+        if (!file) return;
+        if (!file.name.endsWith('.zip')) {
+            importError = t('flamegraph.source.notBundle').replace('{name}', file.name);
+            return;
+        }
+        void importBundleFile(file);
+    }
+
+    async function importBundleFile(file: File) {
         importError = '';
         importing = true;
         // holds an import nobody owns yet. cleared once it lands in `imports`, so the finally
@@ -693,7 +773,6 @@
         } finally {
             if (orphan) void api.deleteImport(orphan);
             importing = false;
-            input.value = '';
         }
     }
 
@@ -813,13 +892,15 @@
     // sees the ring wrap past the pin. without this it goes stale under the paused badge.
     $effect(() => {
         const stats = framesRes?.data?.stats;
-        const ordinal = pinnedRange?.from ?? pinnedOrdinal;
-        if (!live || ordinal === null || !stats) return;
+        // a range pin holds up to pinnedOrdinal, so that is the last frame to age out.
+        const newest = pinnedOrdinal;
+        if (!live || newest === null || !stats) return;
         // ordinals skip frames that carried no samples, so newest - frame_count reads high
         // and calls a held pin evicted. the collector serves the real oldest, -1 when empty.
-        if (stats.oldest_ordinal <= ordinal) return;
-        resume();
-        noticePin('flamegraph.pinEvicted', ordinal);
+        if (stats.oldest_ordinal <= newest) return;
+        // the frame on screen is a client-side copy, so eviction does not end the pause.
+        // say so once and stay frozen; resume is the user's move.
+        noticeCached(pinnedRange?.from ?? newest);
     });
     let bundleWindow = $derived(
         importedFrames
@@ -889,12 +970,22 @@
             : -1,
     );
     let stats = $derived(live ? (liveRes?.stats ?? null) : (importedFrames?.stats ?? null));
+    let p50v = $derived(stats?.median_us ?? 0);
+    let p75v = $derived(stats?.p75_us ?? 0);
+    let p90v = $derived(stats?.p90_us ?? 0);
+    let p99v = $derived(stats?.p99_us ?? 0);
+    let clearConfirmText = $derived(
+        t('flamegraph.clearRing.confirm').replace('{n}', count(stats?.frame_count ?? 0)),
+    );
     // an older bundle can be missing a counter the current build knows about, so fill the gaps
     // rather than trust the shape: one absent key turns the total into NaN.
     let dropped = $derived({ ...NO_DROPS, ...(live ? liveRes?.dropped : importedFrames?.dropped) });
 
     let dropTotal = $derived(
-        dropped.pre_frame_samples + dropped.late_samples + dropped.library_ring_samples,
+        dropped.pre_frame_samples +
+            dropped.late_samples +
+            dropped.orphaned_samples +
+            dropped.library_ring_samples,
     );
 
     // drops that stopped an hour ago are not news, so the badge watches the last half second of
@@ -916,7 +1007,11 @@
             return;
         }
         if (!liveRes) return;
-        const fast = dropped.pre_frame_samples + dropped.late_samples;
+        const fast =
+            dropped.pre_frame_samples +
+            dropped.late_samples +
+            dropped.orphaned_samples +
+            dropped.transport_lost_batches;
         const ring = dropped.library_ring_samples;
         untrack(() => {
             dropWindow = [...dropWindow, fast].slice(-DROP_WINDOW_POLLS);
@@ -1009,225 +1104,360 @@
 
 <svelte:window onkeydown={handleWindowKey} />
 
-<div class="profiler" style="--stage-h: {stageH}px" data-testid="profiler">
-    <div class="bar">
-        {#if live}
-            <button type="button" onclick={togglePause} data-testid="pause">
-                {paused ? t('flamegraph.resume') : t('flamegraph.pause')}
-            </button>
-            <button
-                type="button"
-                class="icon"
-                onclick={() => step(-1)}
-                aria-label={t('flamegraph.older')}
-                data-testid="step-older">&#9664;</button
-            >
-        {/if}
-        <span class="ord mono"
-            >{t('flamegraph.ordinal')} <b>{frame?.capture_ordinal ?? '--'}</b></span
-        >
-        {#if live}
-            <button
-                type="button"
-                class="icon"
-                onclick={() => step(1)}
-                aria-label={t('flamegraph.newer')}
-                data-testid="step-newer">&#9654;</button
-            >
-            <button
-                type="button"
-                class="icon"
-                onclick={jumpToNewest}
-                aria-label={t('flamegraph.newest')}
-                data-testid="jump-newest">&#9654;&#9654;</button
-            >
-            {#if paused}<span class="paused" data-testid="paused-badge"
-                    >{t('flamegraph.paused')}</span
-                >{/if}
-        {/if}
-
-        <label class="picker">
-            <span class="dim">{t('flamegraph.source')}</span>
-            <select bind:value={source}>
-                <option value={LIVE}>{t('flamegraph.source.live')}</option>
-                {#each scrubbable as b (b.token)}<option value={b.token}>{b.label}</option>{/each}
-            </select>
-        </label>
-        <label class="filebtn" class:busy={importing}>
-            <input type="file" accept=".zip" onchange={openBundle} disabled={importing} />
-            {importing ? t('comparison.importing') : t('flamegraph.source.import')}
-        </label>
-        <span class="readout mono">
-            {#each PERCENTILES as p (p.key)}
-                {@const v = stats?.[p.key] ?? 0}
-                <span class="mono" use:copyable
-                    >{t(p.label)}
-                    <b class="g{gradeFromShare(v / FRAME_BUDGET_US)}" data-testid="stat-{p.key}"
-                        >{ns(v * 1000)}</b
-                    ></span
-                >
-                |
-            {/each}
-            <Tooltip text={t('tip.flamegraph.budget')}>
-                <span class="mono" data-testid="frame-budget"
-                    >{t('flamegraph.budget')} <b>{ns(FRAME_BUDGET_US * 1000)}</b></span
-                >
-            </Tooltip>
-            |
-            <Tooltip
-                text={t('tip.flamegraph.tickBudget').replace('{n}', String(speedMultiplier(tps)))}
-            >
-                <span class="mono" data-testid="tick-budget"
-                    >{t('flamegraph.tickBudget')} <b>{ns(tickBudgetUs(tps) * 1000)}</b></span
-                >
-            </Tooltip>
-            {#if peakAllocRate > 0}
-                |
-                <span
-                    class="mono"
-                    class:lossy={peakAllocRate > ALLOC_WARN_BPM}
-                    data-testid="alloc-rate"
-                    title={t('flamegraph.allocRate.hint')}
-                    use:copyable>{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
+<div class="profiler" style="--stage-h: {stageH}px; {chromeStyle}" data-testid="profiler">
+    <div class="chrome" bind:clientHeight={chromeRowsH} data-testid="chrome">
+        <div class="bar">
+            {#if live}
+                <button type="button" onclick={togglePause} data-testid="pause">
+                    {paused ? t('flamegraph.resume') : t('flamegraph.pause')}
+                </button>
+                <button
+                    type="button"
+                    class="icon"
+                    onclick={() => step(-1)}
+                    aria-label={t('flamegraph.older')}
+                    data-testid="step-older">&#9664;</button
                 >
             {/if}
-        </span>
-    </div>
-
-    {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
-
-    {#if pinNotice !== null}
-        <p class="pin-evicted" role="status" data-testid="pin-evicted">
-            {pinNotice}
-            <button
-                type="button"
-                class="dismiss"
-                aria-label={t('flamegraph.pinEvicted.dismiss')}
-                onclick={() => {
-                    clearTimeout(noticeTimer);
-                    pinNotice = null;
-                }}
-                data-testid="pin-evicted-dismiss">&times;</button
+            <span class="ord mono"
+                >{t('flamegraph.ordinal')} <b>{frame?.capture_ordinal ?? '--'}</b></span
             >
-        </p>
-    {/if}
+            {#if live}
+                <button
+                    type="button"
+                    class="icon"
+                    onclick={() => step(1)}
+                    aria-label={t('flamegraph.newer')}
+                    data-testid="step-newer">&#9654;</button
+                >
+                <button
+                    type="button"
+                    class="icon"
+                    onclick={jumpToNewest}
+                    aria-label={t('flamegraph.newest')}
+                    data-testid="jump-newest">&#9654;&#9654;</button
+                >
+                {#if paused}<span class="paused" data-testid="paused-badge"
+                        >{t('flamegraph.paused')}</span
+                    >{/if}
+            {/if}
 
-    {#if live}
-        <div class="modes">
-            <div class="seg" role="group" aria-label={t('flamegraph.mode')}>
-                <button
-                    type="button"
-                    class={stripMode === 'time' ? 'on' : 'off'}
-                    onclick={() => (stripMode = 'time')}
-                    data-testid="mode-time">{t('flamegraph.mode.time')}</button
-                >
-                <button
-                    type="button"
-                    class={stripMode === 'alloc' ? 'on' : 'off'}
-                    onclick={() => (stripMode = 'alloc')}
-                    data-testid="mode-alloc">{t('flamegraph.mode.alloc')}</button
-                >
-            </div>
-            <span class="rightpair">
-                <button
-                    type="button"
-                    class="clearring"
-                    onclick={exportFrame}
-                    data-testid="export-frame">{t('flamegraph.exportFrame')}</button
-                >
-                <button
-                    type="button"
-                    class="clearring"
-                    onclick={() => void exportRing()}
-                    data-testid="export-ring">{t('flamegraph.exportRing')}</button
-                >
-                <button
-                    type="button"
-                    class="clearring"
-                    onclick={() => void exportTimeline()}
-                    data-testid="export-timeline">{t('flamegraph.exportTimeline')}</button
-                >
-                <button
-                    type="button"
-                    class="clearring"
-                    onclick={() => {
-                        resume();
-                        timeline?.resetView();
-                    }}
-                    data-testid="reset-view">{t('flamegraph.resetView')}</button
-                >
-                <span class="sep" aria-hidden="true"></span>
-                <Tooltip text={t('tip.flamegraph.newSession')}>
-                    <button
-                        type="button"
-                        class="clearring destructive"
-                        onclick={() => (askingNewSession = true)}
-                        disabled={startingSession}
-                        data-testid="new-session">{t('flamegraph.newSession')}</button
-                    >
-                </Tooltip>
-                <Tooltip text={t('tip.flamegraph.clearRing')}>
-                    <button
-                        type="button"
-                        class="clearring destructive"
-                        class:armed={confirmingClear}
-                        onclick={askClearRing}
-                        onblur={() => (confirmingClear = false)}
-                        disabled={clearing}
-                        data-testid="clear-ring"
-                        >{confirmingClear
-                            ? t('flamegraph.clearRing.confirm').replace(
-                                  '{n}',
-                                  count(stats?.frame_count ?? 0),
-                              )
-                            : t('flamegraph.clearRing')}</button
-                    >
-                </Tooltip>
+            <label class="picker">
+                <span class="dim">{t('flamegraph.source')}</span>
+                <select bind:value={source}>
+                    <option value={LIVE}>{t('flamegraph.source.live')}</option>
+                    {#each scrubbable as b (b.token)}<option value={b.token}>{b.label}</option
+                        >{/each}
+                </select>
+            </label>
+            <label class="filebtn" class:busy={importing}>
+                <input type="file" accept=".zip" onchange={openBundle} disabled={importing} />
+                {importing ? t('comparison.importing') : t('flamegraph.source.import')}
+            </label>
+            <span class="readout mono">
+                {#snippet spreadTip()}
+                    <table class="spread-tip">
+                        <tbody>
+                            {#each PERCENTILES as p (p.key)}
+                                {@const v = stats?.[p.key] ?? 0}
+                                <tr>
+                                    <td>{t(p.label)}</td>
+                                    <td
+                                        class="g{gradeFromShare(v / FRAME_BUDGET_US)}"
+                                        data-testid="tip-{p.key}">{ns(v * 1000)}</td
+                                    >
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                    <p class="spread-foot">
+                        {t('flamegraph.tickBudget')} <b>{ns(tickBudgetUs(tps) * 1000)}</b>, {t(
+                            'flamegraph.budget',
+                        )} <b>{ns(FRAME_BUDGET_US * 1000)}</b>
+                    </p>
+                    <p class="spread-foot">
+                        {t('tip.flamegraph.tickBudget').replace(
+                            '{n}',
+                            String(speedMultiplier(tps)),
+                        )}
+                    </p>
+                    <p class="spread-foot">{t('tip.flamegraph.budget')}</p>
+                {/snippet}
+                <!-- no stats yet means no confident green zeros over an empty page -->
+                {#if stats !== null}
+                    <Tooltip text={t('tip.flamegraph.p50')} tabindex={-1}>
+                        <span class="mono"
+                            >{t('flamegraph.p50')}
+                            <b
+                                class="g{gradeFromShare(p50v / FRAME_BUDGET_US)}"
+                                data-testid="stat-median_us">{ns(p50v * 1000)}</b
+                            ></span
+                        >
+                    </Tooltip>
+                    <Tooltip text={t('tip.flamegraph.p99')} tabindex={-1}>
+                        <span class="mono"
+                            >{t('flamegraph.p99')}
+                            <b
+                                class="p99 g{gradeFromShare(p99v / FRAME_BUDGET_US)}"
+                                data-testid="stat-p99_us">{ns(p99v * 1000)}</b
+                            ></span
+                        >
+                    </Tooltip>
+                    <Tooltip content={spreadTip}>
+                        <span
+                            class="spread"
+                            role="img"
+                            aria-label={t('flamegraph.spread.aria')
+                                .replace('{p50}', ns(p50v * 1000))
+                                .replace('{p99}', ns(p99v * 1000))
+                                .replace('{budget}', ns(FRAME_BUDGET_US * 1000))}
+                            data-testid="spread-meter"
+                        >
+                            <span class="rail"></span>
+                            <span class="scale-lbl" style="left: {meterPos(tickBudgetUs(tps))}%"
+                                >{t('flamegraph.tickBudget')}</span
+                            >
+                            <span
+                                class="scale-mark"
+                                style="left: {meterPos(tickBudgetUs(tps))}%"
+                                data-testid="tick-budget"
+                            ></span>
+                            <span class="scale-lbl" style="left: {meterPos(FRAME_BUDGET_US)}%"
+                                >{t('flamegraph.budget')}</span
+                            >
+                            <span
+                                class="scale-mark budget"
+                                style="left: {meterPos(FRAME_BUDGET_US)}%"
+                                data-testid="frame-budget"
+                            ></span>
+                            <span
+                                class="band"
+                                style="left: {meterPos(p50v)}%; width: {Math.max(
+                                    0.5,
+                                    meterPos(p99v) - meterPos(p50v),
+                                )}%; background: {meterFill(p50v, p99v)}"
+                                data-testid="spread-band"
+                            ></span>
+                            <span class="band-notch" style="left: {meterPos(p75v)}%"></span>
+                            <span class="band-notch" style="left: {meterPos(p90v)}%"></span>
+                        </span>
+                    </Tooltip>
+                {/if}
+                {#if peakAllocRate > 0}
+                    <Tooltip text={t('flamegraph.allocRate.hint')}>
+                        <span
+                            class="mono"
+                            class:lossy={peakAllocRate > ALLOC_WARN_BPM}
+                            data-testid="alloc-rate"
+                            >{t('flamegraph.allocRate')} <b>{bytes(peakAllocRate)}/m</b></span
+                        >
+                    </Tooltip>
+                {/if}
             </span>
         </div>
-    {/if}
 
-    {#if live && stripBars.length > 0}
-        <FrameStrip
-            ordinals={strip.ordinals}
-            durationsUs={strip.durations_us}
-            allocBytes={strip.alloc_bytes ?? []}
-            mode={stripMode}
-            cutOrdinals={shownCuts}
-            {gcOrdinals}
-            slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
-            selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
-            selectedRange={pinnedRange}
-            onSelect={(o) => pauseAt(o)}
-            onSelectRange={pauseRange}
-        />
-    {/if}
+        {#if importError}<p class="import-error" role="alert">{importError}</p>{/if}
 
-    <ul class="legend" data-testid="subsystem-legend">
-        {#each LEGEND as entry (entry.name)}
-            <li data-testid="legend-{entry.name}">
-                <i class="swatch" style="background: {entry.swatch}"></i>
-                {t(`flamegraph.legend.${entry.name}`)}
-            </li>
-        {/each}
-    </ul>
+        {#if pinNotice !== null}
+            <p class="pin-evicted" role="status" data-testid="pin-evicted">
+                {pinNotice}
+                <button
+                    type="button"
+                    class="dismiss"
+                    aria-label={t('flamegraph.pinEvicted.dismiss')}
+                    onclick={() => {
+                        clearTimeout(noticeTimer);
+                        pinNotice = null;
+                    }}
+                    data-testid="pin-evicted-dismiss">&times;</button
+                >
+            </p>
+        {/if}
 
-    {#if !live && importedFrames && importedFrames.frames.length > 0}
-        <label class="scrub">
-            <span class="dim">
-                {t('flamegraph.frameOf')
-                    .replace('{n}', String(frameIndex + 1))
-                    .replace('{total}', String(importedFrames.frames.length))}
-            </span>
-            <input
-                type="range"
-                min="0"
-                max={importedFrames.frames.length - 1}
-                bind:value={frameIndex}
-                data-testid="frame-scrub"
+        {#if live}
+            <div class="modes">
+                <div class="seg" role="group" aria-label={t('flamegraph.mode')}>
+                    <button
+                        type="button"
+                        class={stripMode === 'time' ? 'on' : 'off'}
+                        aria-pressed={stripMode === 'time'}
+                        onclick={() => (stripMode = 'time')}
+                        data-testid="mode-time">{t('flamegraph.mode.time')}</button
+                    >
+                    <button
+                        type="button"
+                        class={stripMode === 'alloc' ? 'on' : 'off'}
+                        aria-pressed={stripMode === 'alloc'}
+                        onclick={() => (stripMode = 'alloc')}
+                        data-testid="mode-alloc">{t('flamegraph.mode.alloc')}</button
+                    >
+                </div>
+                <span class="rightpair">
+                    <Tooltip text={t('flamegraph.exportFrame')}>
+                        <button
+                            type="button"
+                            class="clearring iconbtn"
+                            aria-label={t('flamegraph.exportFrame')}
+                            onclick={exportFrame}
+                            data-testid="export-frame"><Icon name="exportFrame" size={15} /></button
+                        >
+                    </Tooltip>
+                    <Tooltip text={t('flamegraph.exportRing')}>
+                        <button
+                            type="button"
+                            class="clearring iconbtn"
+                            aria-label={t('flamegraph.exportRing')}
+                            onclick={() => void exportRing()}
+                            data-testid="export-ring"><Icon name="exportRing" size={15} /></button
+                        >
+                    </Tooltip>
+                    <Tooltip text={t('flamegraph.exportTimeline')}>
+                        <button
+                            type="button"
+                            class="clearring iconbtn"
+                            aria-label={t('flamegraph.exportTimeline')}
+                            onclick={() => void exportTimeline()}
+                            data-testid="export-timeline"
+                            ><Icon name="exportTimeline" size={15} /></button
+                        >
+                    </Tooltip>
+                    <Tooltip text={t('flamegraph.resetView')}>
+                        <button
+                            type="button"
+                            class="clearring iconbtn"
+                            aria-label={t('flamegraph.resetView')}
+                            onclick={() => {
+                                resume();
+                                timeline?.resetView();
+                            }}
+                            data-testid="reset-view"><Icon name="fit" size={15} /></button
+                        >
+                    </Tooltip>
+                    <span class="sep" aria-hidden="true"></span>
+                    <Tooltip
+                        text={t('tip.flamegraph.newSession')}
+                        childFocusable={!startingSession}
+                    >
+                        <button
+                            type="button"
+                            class="clearring destructive iconbtn"
+                            aria-label={t('flamegraph.newSession')}
+                            onclick={() => (askingNewSession = true)}
+                            disabled={startingSession}
+                            data-testid="new-session"
+                            ><Icon name="restart" size={15} /><span class="btnlabel"
+                                >{t('flamegraph.newSession')}</span
+                            ></button
+                        >
+                    </Tooltip>
+                    <Tooltip
+                        text={confirmingClear ? clearConfirmText : t('tip.flamegraph.clearRing')}
+                        childFocusable={!clearing}
+                    >
+                        <button
+                            type="button"
+                            class="clearring destructive iconbtn"
+                            class:armed={confirmingClear}
+                            aria-label={confirmingClear
+                                ? clearConfirmText
+                                : t('flamegraph.clearRing')}
+                            onclick={askClearRing}
+                            onblur={() => (confirmingClear = false)}
+                            disabled={clearing}
+                            data-testid="clear-ring"
+                            ><Icon name="trash" size={15} /><span class="btnlabel"
+                                >{confirmingClear
+                                    ? clearConfirmText
+                                    : t('flamegraph.clearRing')}</span
+                            ></button
+                        >
+                    </Tooltip>
+                    <!-- swapping aria-label on a focused button announces nothing, so the arm goes here -->
+                    <span
+                        class="sr-only"
+                        role="status"
+                        aria-live="polite"
+                        data-testid="clear-ring-status"
+                        >{confirmingClear ? clearConfirmText : ''}</span
+                    >
+                </span>
+            </div>
+        {/if}
+
+        {#if live && stripBars.length > 0}
+            <FrameStrip
+                ordinals={strip.ordinals}
+                durationsUs={strip.durations_us}
+                allocBytes={strip.alloc_bytes ?? []}
+                mode={stripMode}
+                cutOrdinals={shownCuts}
+                {gcOrdinals}
+                slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
+                selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
+                selectedRange={pinnedRange}
+                onSelect={(o) => pauseAt(o)}
+                onSelectRange={pauseRange}
             />
-        </label>
-    {/if}
+        {/if}
+
+        {#if !live && importedFrames && importedFrames.frames.length > 0}
+            <label class="scrub">
+                <span class="dim">
+                    {t('flamegraph.frameOf')
+                        .replace('{n}', String(frameIndex + 1))
+                        .replace('{total}', String(importedFrames.frames.length))}
+                </span>
+                <input
+                    type="range"
+                    min="0"
+                    max={importedFrames.frames.length - 1}
+                    bind:value={frameIndex}
+                    data-testid="frame-scrub"
+                />
+            </label>
+        {/if}
+    </div>
+
+    {#snippet nodesTip()}
+        <span class="tipline"
+            >{t('flamegraph.dropped.orphans')}
+            <b class:warn={orphanCount > 0} data-testid="drop-orphans">{count(orphanCount)}</b
+            ></span
+        >
+    {/snippet}
+
+    {#snippet captureTip()}
+        <p class="tiplead">{t('flamegraph.lossy.hint')}</p>
+        <span class="tipline"
+            >{t('flamegraph.dropped.late')}
+            <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
+                >{count(dropped.late_samples)}</b
+            ></span
+        >
+        <span class="tipline"
+            >{t('flamegraph.dropped.orphaned')}
+            <b class:warn={dropped.orphaned_samples > 0} data-testid="drop-orphaned"
+                >{count(dropped.orphaned_samples)}</b
+            ></span
+        >
+        <span class="tipline"
+            >{t('flamegraph.dropped.transport')}
+            <b class:warn={dropped.transport_lost_batches > 0} data-testid="drop-transport"
+                >{count(dropped.transport_lost_batches)}</b
+            ></span
+        >
+        <span class="tipline"
+            >{t('flamegraph.dropped.ring')}
+            <b class:warn={dropped.library_ring_samples > 0} data-testid="drop-ring"
+                >{count(dropped.library_ring_samples)}</b
+            ></span
+        >
+        <span class="tipline"
+            >{t('flamegraph.dropped.preframe')}
+            <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
+        >
+        <p class="tiphint">{t('flamegraph.captureHealth.remedy')}</p>
+    {/snippet}
 
     <DataState
         state={live ? (framesRes?.state ?? 'loading') : 'ok'}
@@ -1237,47 +1467,30 @@
         emptyHint={t('flamegraph.empty.hint')}
         onretry={() => void framesRes?.refresh()}
     >
-        {#snippet nodesTip()}
-            <span class="tipline"
-                >{t('flamegraph.dropped.orphans')}
-                <b class:warn={orphanCount > 0} data-testid="drop-orphans">{count(orphanCount)}</b
-                ></span
-            >
-            <span class="tipline"
-                >{t('flamegraph.dropped.preframe')}
-                <b data-testid="drop-preframe">{count(dropped.pre_frame_samples)}</b></span
-            >
-        {/snippet}
-        <p class="avg mono" data-testid="frame-drops">
-            {#if lossy}<span
-                    class="lossy"
-                    data-testid="lossy-badge"
-                    title={t('flamegraph.lossy.hint')}
-                    >{t('flamegraph.lossy')}
-                    <b data-testid="lossy-count">{count(dropTotal)}</b></span
-                >{/if}
+        <p class="avg mono" bind:clientHeight={avgH} data-testid="frame-drops">
+            {#if lossy}
+                <Tooltip content={captureTip} tabindex={-1}>
+                    <button
+                        type="button"
+                        class="lossy chip"
+                        data-testid="lossy-badge"
+                        onclick={() => (uiSignals.settingsOpen = true)}
+                        >{t('flamegraph.lossy')}
+                        <b data-testid="lossy-count">{count(dropTotal)}</b></button
+                    >
+                </Tooltip>
+            {/if}
             <span class="stats">
                 <span class="cell"
                     ><Tooltip content={nodesTip} tabindex={-1}
-                        ><span use:copyable
-                            >{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
+                        ><span>{t('flamegraph.nodes')} <b>{frame?.node_count ?? 0}</b></span
                         ></Tooltip
                     ></span
-                ><span class="cell" use:copyable
+                ><span class="cell"
                     >{t('flamegraph.duration')}
                     <b
                         class:warn={budgetSeverity(frame?.duration_us ?? 0) === 1}
                         data-testid="frame-duration">{ns((frame?.duration_us ?? 0) * 1000)}</b
-                    ></span
-                ><span class="cell" title={t('tip.flamegraph.lateSamples')} use:copyable
-                    >{t('flamegraph.dropped.late')}
-                    <b class:warn={dropped.late_samples > 0} data-testid="drop-late"
-                        >{count(dropped.late_samples)}</b
-                    ></span
-                ><span class="cell" title={t('tip.flamegraph.ringDrops')} use:copyable
-                    >{t('flamegraph.dropped.ring')}
-                    <b class:warn={dropped.library_ring_samples > 0} data-testid="drop-ring"
-                        >{count(dropped.library_ring_samples)}</b
                     ></span
                 ></span
             >
@@ -1298,67 +1511,72 @@
                         data-testid="section-search-input"
                     />
                 </span>
-                <span class="seg" role="group" aria-label={t('flamegraph.search.scopeLabel')}>
+                <!-- scope, filter, tally and steppers only mean something mid-search -->
+                {#if sectionSearch.query.trim() !== ''}
+                    <span class="seg" role="group" aria-label={t('flamegraph.search.scopeLabel')}>
+                        <button
+                            type="button"
+                            aria-pressed={sectionSearch.scope === 'frame'}
+                            onclick={() => (sectionSearch.scope = 'frame')}
+                            data-testid="section-search-scope-frame"
+                            >{t('flamegraph.search.thisFrame')}</button
+                        ><button
+                            type="button"
+                            aria-pressed={sectionSearch.scope === 'window'}
+                            onclick={() => (sectionSearch.scope = 'window')}
+                            data-testid="section-search-scope-window"
+                            >{t('flamegraph.search.allFrames')}</button
+                        >
+                    </span>
+                    <label class="check">
+                        <input
+                            type="checkbox"
+                            bind:checked={sectionSearch.filterMode}
+                            data-testid="section-search-filter"
+                        />
+                        {t('flamegraph.search.hideNonMatches')}
+                    </label>
+                    <span class="tally">
+                        <span class="cell"
+                            ><b class:none={sectionSearch.nodeCount === 0}
+                                >{sectionSearch.nodeCount}</b
+                            >
+                            {searchScopeText}</span
+                        ><span
+                            class="cell dim"
+                            class:empty={sectionSearch.unsampledCount === 0}
+                            data-testid="section-search-unsampled"
+                            >{t('flamegraph.search.notSampled').replace(
+                                '{n}',
+                                String(sectionSearch.unsampledCount),
+                            )}</span
+                        >
+                    </span>
                     <button
                         type="button"
-                        aria-pressed={sectionSearch.scope === 'frame'}
-                        onclick={() => (sectionSearch.scope = 'frame')}
-                        data-testid="section-search-scope-frame"
-                        >{t('flamegraph.search.thisFrame')}</button
-                    ><button
+                        class="step"
+                        onclick={() => stepToMatch(-1)}
+                        disabled={sectionSearch.occurrenceCount === 0}
+                        aria-label={t('flamegraph.search.prev')}
+                        data-testid="section-search-prev"
+                    >
+                        <svg viewBox="0 0 12 12" aria-hidden="true"
+                            ><path d="M7.5 2.5 4 6l3.5 3.5" /></svg
+                        >
+                    </button>
+                    <button
                         type="button"
-                        aria-pressed={sectionSearch.scope === 'window'}
-                        onclick={() => (sectionSearch.scope = 'window')}
-                        data-testid="section-search-scope-window"
-                        >{t('flamegraph.search.allFrames')}</button
+                        class="step"
+                        onclick={() => stepToMatch(1)}
+                        disabled={sectionSearch.occurrenceCount === 0}
+                        aria-label={t('flamegraph.search.next')}
+                        data-testid="section-search-next"
                     >
-                </span>
-                <label class="check">
-                    <input
-                        type="checkbox"
-                        bind:checked={sectionSearch.filterMode}
-                        data-testid="section-search-filter"
-                    />
-                    {t('flamegraph.search.hideNonMatches')}
-                </label>
-                <span class="tally">
-                    <span class="cell"
-                        ><b class:none={sectionSearch.nodeCount === 0}>{sectionSearch.nodeCount}</b>
-                        {searchScopeText}</span
-                    ><span
-                        class="cell dim"
-                        class:empty={sectionSearch.unsampledCount === 0}
-                        data-testid="section-search-unsampled"
-                        >{t('flamegraph.search.notSampled').replace(
-                            '{n}',
-                            String(sectionSearch.unsampledCount),
-                        )}</span
-                    >
-                </span>
-                <button
-                    type="button"
-                    class="step"
-                    onclick={() => stepToMatch(-1)}
-                    disabled={sectionSearch.occurrenceCount === 0}
-                    aria-label={t('flamegraph.search.prev')}
-                    data-testid="section-search-prev"
-                >
-                    <svg viewBox="0 0 12 12" aria-hidden="true"
-                        ><path d="M7.5 2.5 4 6l3.5 3.5" /></svg
-                    >
-                </button>
-                <button
-                    type="button"
-                    class="step"
-                    onclick={() => stepToMatch(1)}
-                    disabled={sectionSearch.occurrenceCount === 0}
-                    aria-label={t('flamegraph.search.next')}
-                    data-testid="section-search-next"
-                >
-                    <svg viewBox="0 0 12 12" aria-hidden="true"
-                        ><path d="M4.5 2.5 8 6l-3.5 3.5" /></svg
-                    >
-                </button>
+                        <svg viewBox="0 0 12 12" aria-hidden="true"
+                            ><path d="M4.5 2.5 8 6l-3.5 3.5" /></svg
+                        >
+                    </button>
+                {/if}
             </span>
         </p>
         <div
@@ -1370,14 +1588,37 @@
             {searchStatusText}
         </div>
 
+        <ul class="legend" data-testid="subsystem-legend">
+            {#each LEGEND as entry (entry.name)}
+                <li data-testid="legend-{entry.name}">
+                    <i class="swatch" style="background: {entry.swatch}"></i>
+                    {t(`flamegraph.legend.${entry.name}`)}
+                </li>
+            {/each}
+        </ul>
+
         <div
             class="stage"
             class:split={treeOpen}
             class:busy={rangeInFlight}
+            class:dragover={draggingBundle}
             aria-busy={rangeInFlight}
             bind:clientHeight={stageH}
+            ondragover={stageDragOver}
+            ondragleave={() => (draggingBundle = false)}
+            ondrop={stageDrop}
             data-testid="stage"
         >
+            {#if draggingBundle}
+                <span class="stage-busy mono" data-testid="stage-drop-hint"
+                    >{t('flamegraph.source.dropHint')}</span
+                >
+            {/if}
+            {#if rangeInFlight}
+                <span class="stage-busy mono" data-testid="stage-busy-note"
+                    >{t('flamegraph.rangeBusy')}</span
+                >
+            {/if}
             <div class="gutter">
                 <div class="lane gc">GC &mdash;</div>
                 {#each visibleLanes as lane, i (lane.id)}
@@ -1478,19 +1719,17 @@
         padding: var(--s-3) var(--rail) var(--s-5);
     }
     .profiler {
-        --f: 1.08;
-        --f-body: calc(13.5px * var(--f));
-        --f-ui: calc(12.5px * var(--f));
-        --f-small: calc(11.5px * var(--f));
-        --f-tiny: calc(10.5px * var(--f));
         --gut: calc(112px * var(--f));
         display: flex;
         flex-direction: column;
         min-height: 0;
         font-size: var(--f-body);
-        /* clears both fixed footers (tab bar + status strip) so the last panel is never stuck
-           behind them */
-        padding-bottom: 64px;
+        padding-bottom: 16px;
+    }
+    /* one measured box so the stage knows how tall the chrome rows actually wrapped to */
+    .chrome {
+        display: flex;
+        flex-direction: column;
     }
     .mono {
         font-family: var(--font-mono);
@@ -1504,9 +1743,27 @@
     .lossy {
         flex: none;
         color: var(--warn);
-        border: 1px solid var(--warn);
+        border: 1px solid var(--border);
         border-radius: 3px;
         padding: 0 6px;
+    }
+    .lossy.chip {
+        background: none;
+        font: inherit;
+        cursor: pointer;
+    }
+    .lossy.chip:hover {
+        background: color-mix(in srgb, var(--warn) 12%, transparent);
+    }
+    .tiphint {
+        margin: var(--s-1) 0 0;
+        color: var(--text-faint);
+        font-size: 0.7rem;
+        max-width: 36ch;
+    }
+    .tiplead {
+        margin: 0 0 var(--s-1);
+        max-width: 36ch;
     }
     .tipline {
         display: block;
@@ -1544,7 +1801,7 @@
         min-height: 28px;
     }
     .bar > button:hover {
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     .ord {
         font-size: var(--f-ui);
@@ -1587,7 +1844,7 @@
         cursor: pointer;
     }
     .filebtn:hover {
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     .filebtn.busy {
         opacity: 0.6;
@@ -1612,11 +1869,10 @@
         color: var(--text);
         font-weight: 500;
     }
-    .readout b.g0 {
-        color: var(--grade-0);
-    }
+    /* healthy is silent: only grades 2+ get a hue, so amber means something. */
+    .readout b.g0,
     .readout b.g1 {
-        color: var(--grade-1);
+        color: var(--text);
     }
     .readout b.g2 {
         color: var(--grade-2);
@@ -1626,6 +1882,92 @@
     }
     .readout b.g4 {
         color: var(--grade-4);
+    }
+    .readout b.p99 {
+        font-weight: 600;
+    }
+    .readout {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-3);
+    }
+    .spread {
+        position: relative;
+        display: inline-block;
+        width: 170px;
+        height: 16px;
+        cursor: help;
+    }
+    .spread .rail {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 7px;
+        height: 2px;
+        background: var(--border);
+    }
+    .spread .band {
+        position: absolute;
+        top: 5px;
+        height: 6px;
+        border-radius: 2px;
+    }
+    .spread .band-notch {
+        position: absolute;
+        top: 6px;
+        width: 1px;
+        height: 4px;
+        background: rgba(11, 14, 20, 0.55);
+    }
+    .spread .scale-mark {
+        position: absolute;
+        top: 3px;
+        width: 1px;
+        height: 10px;
+        background: var(--text-ghost);
+    }
+    .spread .scale-mark.budget {
+        background: var(--grade-4);
+        opacity: 0.75;
+    }
+    .spread .scale-lbl {
+        position: absolute;
+        top: -12px;
+        font-size: var(--f-tiny);
+        color: var(--text-faint);
+        transform: translateX(-50%);
+    }
+    .spread-tip {
+        border-collapse: collapse;
+    }
+    .spread-tip td {
+        padding: 0 0 0 var(--s-4);
+        text-align: right;
+        font-family: var(--font-mono);
+    }
+    .spread-tip td:first-child {
+        padding: 0;
+        color: var(--text-faint);
+        text-align: left;
+    }
+    .spread-tip td.g0,
+    .spread-tip td.g1 {
+        color: var(--text);
+    }
+    .spread-tip td.g2 {
+        color: var(--grade-2);
+    }
+    .spread-tip td.g3 {
+        color: var(--grade-3);
+    }
+    .spread-tip td.g4 {
+        color: var(--grade-4);
+    }
+    .spread-foot {
+        margin: var(--s-1) 0 0;
+        color: var(--text-faint);
+        font-size: 0.7rem;
+        max-width: 34ch;
     }
 
     .modes {
@@ -1650,7 +1992,7 @@
     }
     .clearring {
         font: inherit;
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         color: var(--text-dim);
         background: var(--bg-surface);
         border: 1px solid var(--border);
@@ -1660,19 +2002,32 @@
     }
     .clearring:hover:not(:disabled) {
         color: var(--text);
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     .clearring.armed {
         color: var(--bad);
         border-color: var(--bad);
     }
+    .iconbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 5px;
+    }
+    .iconbtn .btnlabel {
+        padding-right: 2px;
+    }
     .clearring:disabled {
         color: var(--text-ghost);
         cursor: default;
     }
+    /* rests dim so danger does not shout all session; hover and arming bring the full red. */
     .destructive {
-        color: var(--bad);
-        border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
+        color: color-mix(in srgb, var(--bad) 55%, var(--text-dim));
+        border-color: color-mix(in srgb, var(--bad) 25%, var(--border-strong));
     }
     .destructive:hover:not(:disabled) {
         color: var(--bad);
@@ -1748,7 +2103,8 @@
     .avg {
         display: flex;
         align-items: center;
-        gap: 16px;
+        flex-wrap: wrap;
+        gap: 8px 16px;
         min-height: 44px;
         padding: 6px 12px;
         font-size: var(--f-small);
@@ -1767,7 +2123,6 @@
         align-items: center;
         gap: 8px;
         margin-left: auto;
-        flex: none;
     }
     .find .lbl {
         color: var(--text-dim);
@@ -1787,7 +2142,7 @@
         transition: border-color var(--t-fast) var(--ease-out);
     }
     .find .box:hover {
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     .find .box:focus-within {
         border-color: var(--cyan);
@@ -1933,17 +2288,16 @@
         color: var(--text-ghost);
     }
 
-    /* fixed height because --chrome-h sums the chrome rows by hand */
     .legend {
         display: flex;
         align-items: center;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
+        margin-top: var(--s-2);
         gap: var(--s-3);
-        height: 22px;
+        min-height: 22px;
         margin: 0;
         padding: 0 12px;
         list-style: none;
-        overflow: hidden;
         font-size: var(--f-tiny);
         color: var(--text-faint);
     }
@@ -1960,13 +2314,14 @@
     }
 
     .stage {
+        position: relative;
         display: grid;
         grid-template-columns: var(--gut) 1fr;
         background: var(--bg-void);
         border-bottom: 1px solid var(--border);
         /* with no drawer open the stage owns the page; in split mode it hugs its lanes
            so the drawer can claim the slack */
-        height: calc(100vh - var(--chrome-h));
+        height: calc(100vh - var(--chrome-measured, var(--chrome-h)));
         min-height: 160px;
         overflow: auto;
         /* drag pans instead; bars just eat width next to the flame. */
@@ -1979,9 +2334,26 @@
         opacity: 0.6;
         cursor: progress;
     }
+    .stage.dragover {
+        outline: 2px dashed var(--cyan);
+        outline-offset: -2px;
+    }
+    .stage-busy {
+        position: absolute;
+        top: var(--s-2);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5;
+        padding: 2px 10px;
+        font-size: var(--f-small);
+        color: var(--text-dim);
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+    }
     .stage.split {
         height: auto;
-        max-height: calc(100vh - var(--drawer-h) - var(--chrome-h));
+        max-height: calc(100vh - var(--drawer-h) - var(--chrome-measured, var(--chrome-h)));
     }
     .gutter {
         border-right: 1px solid var(--border);

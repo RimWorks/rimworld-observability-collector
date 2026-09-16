@@ -1,96 +1,4 @@
-@import '@fontsource/chakra-petch/500.css';
-@import '@fontsource/chakra-petch/600.css';
-@import '@fontsource/chakra-petch/700.css';
-@import '@fontsource/hanken-grotesk/400.css';
-@import '@fontsource/hanken-grotesk/500.css';
-@import '@fontsource/hanken-grotesk/600.css';
-@import '@fontsource/ibm-plex-mono/400.css';
-@import '@fontsource/ibm-plex-mono/500.css';
-@import '@fontsource/ibm-plex-mono/600.css';
-
-:root {
-    --bg-void: #080a0f;
-    --bg-base: #0b0e14;
-    --bg-surface: #131925;
-    --bg-surface-2: #1a2230;
-    --bg-elev: #20293a;
-
-    --border: #28344a;
-    --border-soft: #1c2535;
-    --border-strong: #3a4a66;
-
-    --text: #d4dded;
-    --text-dim: #93a1ba;
-    --text-faint: #8a98b3;
-    /* dimmest text that still clears 4.5:1 on every surface, for axis units and separators */
-    --text-ghost: #75849f;
-    /* only for filled buttons, where the fill still reads. an outline button dimmed this
-       way loses its label against its own background, so those set a colour instead. */
-    --o-disabled: 0.6;
-
-    --cyan: #39c4d4;
-    --cyan-soft: #6fe0ec;
-
-    --good: #5fcf80;
-    --warn: #e8b53e;
-    --bad: #f25d63;
-    --bad-deep: #c2393e;
-
-    --grade-0: #5fcf80;
-    --grade-1: #9ed457;
-    --grade-2: #e8b53e;
-    --grade-3: #ff9d4e;
-    --grade-4: #f25d63;
-
-    /* frame quads, coloured by subsystem so the render and tick split reads at a glance */
-    --sub-tick: #39c4d4;
-    --sub-ai: #7c9cf5;
-    --sub-render: #e8b53e;
-    --sub-ui: #b184e8;
-    /* unity's own work, so engine time reads apart from rimworld's */
-    --sub-engine: #6f7f99;
-    /* the game waiting on vsync, not working. muted on purpose: a vsync-limited frame is not
-       a slow frame, and colouring the wait like cost makes every capped frame look blown. */
-    --sub-idle: #2f3a4d;
-    --sub-none: #5c6b85;
-
-    --font-display: 'Chakra Petch', ui-sans-serif, sans-serif;
-    --font-ui: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
-
-    --r-sm: 4px;
-    --r-md: 8px;
-    --r-lg: 14px;
-
-    --s-0: 0.125rem;
-    --s-1: 0.25rem;
-    --s-2: 0.5rem;
-    --s-3: 0.75rem;
-    --s-4: 1rem;
-    --s-5: 1.5rem;
-    --s-6: 2rem;
-    --s-7: 3rem;
-
-    /* the single left rail every page aligns to, matching the profiler comp's 12px rows */
-    --rail: 12px;
-    /* label/value and form surfaces cap here so a label stays coupled to its value */
-    --measure: 900px;
-
-    --topbar-h: 58px;
-    /* the always-on status strip. the tab footer stacks on top of it, so both read it. */
-    --status-h: 24px;
-    --drawer-h: 45vh;
-    /* topbar, strip, subsystem legend, transport bar, tab bar and status strip: everything
-       the stage shares the viewport with when the drawer is open */
-    --chrome-h: 344px;
-
-    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
-    --ring-focus: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--cyan);
-
-    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-    --t-fast: 120ms;
-    --t-base: 200ms;
-}
+@import './tokens.css';
 
 * {
     box-sizing: border-box;
@@ -167,7 +75,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-    border-color: var(--border-strong);
+    border-color: var(--text-dim);
 }
 
 button:disabled {
@@ -179,17 +87,6 @@ button:disabled {
     outline: none;
     box-shadow: var(--ring-focus);
     border-radius: var(--r-sm);
-}
-
-@keyframes row-in {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -207,29 +104,48 @@ button:disabled {
     button,
     a[href],
     select,
-    /* copy cells sit in fixed-height chrome rows, so 44px would break --chrome-h */
-    [role='button']:not(.copyable) {
+    [role='button'] {
         min-height: 44px;
     }
 }
 
-.copyable {
-    cursor: copy;
-    border-radius: var(--r-sm);
-}
-.copyable:hover {
-    color: var(--text);
-}
-.copyable.copied,
-.copyable.copied b {
-    color: var(--good);
-}
-
-input[type='checkbox'],
-input[type='radio'] {
+input[type='checkbox'] {
+    appearance: none;
     flex: none;
+    display: inline-grid;
+    place-content: center;
     width: 20px;
     height: 20px;
     margin: 3px;
-    accent-color: var(--cyan);
+    background: var(--bg-void);
+    /* the one control that keeps the bright border: an 18px box with a quiet one vanishes */
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition:
+        border-color var(--t-fast) var(--ease-out),
+        background var(--t-fast) var(--ease-out);
+}
+input[type='checkbox']::before {
+    content: '';
+    width: 11px;
+    height: 11px;
+    transform: scale(0);
+    clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 16%, 84% 0%, 38% 68%);
+    background: var(--bg-void);
+    transition: transform var(--t-fast) var(--ease-out);
+}
+input[type='checkbox']:hover:not(:disabled):not(:checked) {
+    border-color: var(--text-dim);
+}
+input[type='checkbox']:checked {
+    background: var(--cyan);
+    border-color: var(--cyan);
+}
+input[type='checkbox']:checked::before {
+    transform: scale(1);
+}
+input[type='checkbox']:disabled {
+    opacity: var(--o-disabled);
+    cursor: not-allowed;
 }

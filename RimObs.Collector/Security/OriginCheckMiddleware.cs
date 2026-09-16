@@ -19,7 +19,7 @@ internal static class OriginCheckMiddleware {
             string? origin = ctx.Request.Headers.Origin.Count > 0
                 ? ctx.Request.Headers.Origin.ToString()
                 : null;
-            if (!OriginCheck.IsAllowedOrigin(origin, port)) {
+            if (!OriginCheck.IsAllowedOrigin(origin, port, configStore?.Current.Security.AllowedOrigins)) {
                 ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await ctx.Response.WriteAsync("Forbidden: Origin header required for state-changing requests.");
                 return;

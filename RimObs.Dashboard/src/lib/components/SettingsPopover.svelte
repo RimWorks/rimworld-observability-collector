@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { computePosition, autoUpdate, flip, shift, offset } from '@floating-ui/dom';
     import {
         api,
         type AutoInstrumentCounters,
@@ -9,6 +8,7 @@
     import { t, getLang, LANGUAGES } from '../i18n';
     import { relativeTime, count, bytes } from '../format';
     import { userPrefs } from '../userPrefs.svelte';
+    import { uiSignals } from '../uiSignals.svelte';
     import { MIN_RING, MAX_RING, clampRing } from '../ringCapacity';
     import { liveConfig } from '../liveConfig.svelte';
     import { initialFilters, rememberFilters } from '../autoInstrumentDefaults';
@@ -25,6 +25,9 @@
     import type { AutoPreviewCounts } from '../api';
     import { MAX_SESSION_NAME, sessionLabel } from '../sessionLabel';
     import { sessionsStore } from '../sessions.svelte';
+    import { fly } from 'svelte/transition';
+    import { cubicOut } from 'svelte/easing';
+    import { motionMs } from '../motion';
     import BundleExportForm from './BundleExportForm.svelte';
     import Icon from './Icon.svelte';
     import AutoPatternBox from './AutoPatternBox.svelte';
@@ -57,38 +60,74 @@
         URL.revokeObjectURL(url);
     }
 
-    const GAP_PX = 8;
-    const EDGE_PX = 8;
-
     let open = $state(false);
     let btnEl = $state<HTMLElement | null>(null);
     let panelEl = $state<HTMLElement | null>(null);
 
-    // fixed strategy so the topbar's stacking context cannot clip the panel, same as Tooltip.
-    $effect(() => {
-        const anchor = btnEl;
-        const panel = panelEl;
-        if (!open || !anchor || !panel) return;
+    // whoever had focus when the panel opened gets it back on close, not always the gear.
+    let returnFocusEl: HTMLElement | null = null;
+    let pendingFocus = false;
 
-        const stop = autoUpdate(anchor, panel, () => {
-            void computePosition(anchor, panel, {
-                strategy: 'fixed',
-                placement: 'bottom-end',
-                middleware: [offset(GAP_PX), flip(), shift({ padding: EDGE_PX })],
-            }).then(({ x, y }) => {
-                panel.style.left = `${x}px`;
-                panel.style.top = `${y}px`;
-            });
-        });
-        return stop;
+    // every way of opening the panel loads the same things, or the controls sit disabled.
+    function openPanel(): void {
+        open = true;
+        if (config === null) void loadConfig();
+        void loadAutoStatus();
+        void sessionsStore.load();
+    }
+
+    // the capture chip asks for the gear from across the page.
+    $effect(() => {
+        if (uiSignals.settingsOpen) {
+            returnFocusEl = document.activeElement as HTMLElement | null;
+            pendingFocus = true;
+            openPanel();
+            uiSignals.settingsOpen = false;
+        }
     });
+
+    // the signal opens the panel from elsewhere on the page, so move focus into it.
+    $effect(() => {
+        const panel = panelEl;
+        if (!open || !panel || !pendingFocus) return;
+        pendingFocus = false;
+        queueMicrotask(() =>
+            panel
+                .querySelector<HTMLElement>('button:not([disabled]),input:not([disabled]),select')
+                ?.focus(),
+        );
+    });
+
+    // the panel became a full-height slideout (ka, 2026-09-16), so nothing positions it.
+    const SECTIONS = [
+        { id: 'session', label: 'overview.session' },
+        { id: 'profiling', label: 'settings.group.profiling' },
+        { id: 'collector', label: 'overview.collector' },
+        { id: 'dashboard', label: 'settings.group.dashboard' },
+    ] as const;
+    type SectionId = (typeof SECTIONS)[number]['id'];
+    // review-only fork: 'anchors' scrolls one column, 'tabs' shows one section at a time.
+    let navMode = $state<'anchors' | 'tabs'>('anchors');
+    let activeSection = $state<SectionId>('session');
+    let bodyEl = $state<HTMLElement | null>(null);
+
+    function jumpTo(id: SectionId): void {
+        activeSection = id;
+        if (navMode === 'anchors')
+            bodyEl?.querySelector(`#settings-${id}`)?.scrollIntoView({ block: 'start' });
+    }
+
+    function sectionShown(id: SectionId): boolean {
+        return navMode === 'anchors' || activeSection === id;
+    }
 
     $effect(() => {
         if (!open) return;
         function onKey(e: KeyboardEvent): void {
             if (e.key === 'Escape') {
                 open = false;
-                btnEl?.focus();
+                (returnFocusEl ?? btnEl)?.focus();
+                returnFocusEl = null;
             }
         }
         function onPointer(e: PointerEvent): void {
@@ -232,12 +271,9 @@
     aria-label={t('settings.title')}
     aria-expanded={open}
     onclick={() => {
-        open = !open;
-        if (open) {
-            if (config === null) void loadConfig();
-            void loadAutoStatus();
-            void sessionsStore.load();
-        }
+        returnFocusEl = null;
+        if (open) open = false;
+        else openPanel();
     }}
     data-testid="settings-gear"
 >
@@ -245,482 +281,553 @@
 </button>
 
 {#if open}
-    <div class="panel" bind:this={panelEl} role="dialog" aria-label={t('settings.title')}>
-        <section class="group">
-            <h3>{t('overview.session')}</h3>
-            {#if status?.session}
-                <div class="field">
-                    <Tooltip text={t('tip.settings.sessionName')} align="stretch">
-                        <span class="label">{t('session.name')}</span>
-                    </Tooltip>
-                    <input
-                        class="text"
-                        type="text"
-                        maxlength={MAX_SESSION_NAME}
-                        placeholder={t('session.name.placeholder')}
-                        value={sessions.find((s) => s.id === status?.session?.id)?.name ?? ''}
-                        onchange={(e) =>
-                            sessionsStore.rename(status!.session!.id, e.currentTarget.value)}
-                        aria-label={t('session.name')}
-                        data-testid="session-name"
-                    />
-                </div>
+    <div
+        class="panel"
+        bind:this={panelEl}
+        role="dialog"
+        aria-label={t('settings.title')}
+        transition:fly={{ x: 400, duration: motionMs(200), easing: cubicOut }}
+    >
+        <header class="head">
+            <h2>{t('settings.title')}</h2>
+            <button
+                type="button"
+                class="navmode mono"
+                onclick={() => (navMode = navMode === 'anchors' ? 'tabs' : 'anchors')}
+                data-testid="drawer-variant">{navMode === 'anchors' ? 'A' : 'B'}</button
+            >
+            <button
+                type="button"
+                class="close"
+                aria-label={t('common.close')}
+                onclick={() => {
+                    open = false;
+                    (returnFocusEl ?? btnEl)?.focus();
+                    returnFocusEl = null;
+                }}
+                data-testid="settings-close"><Icon name="close" size={14} /></button
+            >
+        </header>
+        <nav class="secnav" aria-label={t('settings.title')}>
+            {#each SECTIONS as s (s.id)}
+                <button
+                    type="button"
+                    aria-pressed={activeSection === s.id}
+                    onclick={() => jumpTo(s.id)}
+                    data-testid="settings-nav-{s.id}">{t(s.label)}</button
+                >
+            {/each}
+        </nav>
+        <div class="body" bind:this={bodyEl}>
+            {#if sectionShown('session')}
+                <section class="group" id="settings-session">
+                    <h3>{t('overview.session')}</h3>
+                    {#if status?.session}
+                        <div class="field">
+                            <Tooltip text={t('tip.settings.sessionName')} align="stretch">
+                                <span class="label">{t('session.name')}</span>
+                            </Tooltip>
+                            <input
+                                class="text"
+                                type="text"
+                                maxlength={MAX_SESSION_NAME}
+                                placeholder={t('session.name.placeholder')}
+                                value={sessions.find((s) => s.id === status?.session?.id)?.name ??
+                                    ''}
+                                onchange={(e) =>
+                                    sessionsStore.rename(
+                                        status!.session!.id,
+                                        e.currentTarget.value,
+                                    )}
+                                aria-label={t('session.name')}
+                                data-testid="session-name"
+                            />
+                        </div>
 
-                <details class="fold">
-                    <summary>
-                        <Icon name="chevron" size={13} />
-                        <span>{t('settings.sessionDetails')}</span>
-                    </summary>
-                    <dl class="readout">
-                        <dt>{t('overview.kv.id')}</dt>
-                        <dd class="mono">{status.session.id}</dd>
-                        <dt>{t('overview.kv.library')}</dt>
-                        <dd class="mono">{status.session.library_version}</dd>
-                        <dt>{t('overview.kv.started')}</dt>
-                        <dd>{new Date(status.session.started_utc).toLocaleString()}</dd>
-                        <dt>{t('overview.kv.lastBatch')}</dt>
-                        <dd>{relativeTime(status.receive?.last_batch_utc ?? null)}</dd>
-                    </dl>
-                </details>
+                        <details class="fold">
+                            <summary>
+                                <Icon name="chevron" size={13} />
+                                <span>{t('settings.sessionDetails')}</span>
+                            </summary>
+                            <dl class="readout">
+                                <dt>{t('overview.kv.id')}</dt>
+                                <dd class="mono">{status.session.id}</dd>
+                                <dt>{t('overview.kv.library')}</dt>
+                                <dd class="mono">{status.session.library_version}</dd>
+                                <dt>{t('overview.kv.started')}</dt>
+                                <dd>{new Date(status.session.started_utc).toLocaleString()}</dd>
+                                <dt>{t('overview.kv.lastBatch')}</dt>
+                                <dd>{relativeTime(status.receive?.last_batch_utc ?? null)}</dd>
+                            </dl>
+                        </details>
 
-                {#if exporting}
-                    <BundleExportForm sessionId={status.session.id} onExport={handleExport} />
-                    {#if exportError}
-                        <p class="error" role="alert">{exportError}</p>
+                        {#if exporting}
+                            <BundleExportForm
+                                sessionId={status.session.id}
+                                onExport={handleExport}
+                            />
+                            {#if exportError}
+                                <p class="error" role="alert">{exportError}</p>
+                            {/if}
+                        {:else}
+                            <button
+                                class="wide"
+                                type="button"
+                                onclick={() => (exporting = true)}
+                                data-testid="open-export"
+                            >
+                                <Icon name="download" size={14} />
+                                {t('bundle.export.title')}
+                            </button>
+                        {/if}
+                    {:else}
+                        <p class="muted">{t('overview.noSession')}</p>
                     {/if}
-                {:else}
-                    <button
-                        class="wide"
-                        type="button"
-                        onclick={() => (exporting = true)}
-                        data-testid="open-export"
-                    >
-                        <Icon name="download" size={14} />
-                        {t('bundle.export.title')}
-                    </button>
-                {/if}
-            {:else}
-                <p class="muted">{t('overview.noSession')}</p>
+
+                    {#if pastSessions.length > 0}
+                        <details class="fold">
+                            <summary>
+                                <Icon name="chevron" size={13} />
+                                <span>{t('session.past')}</span>
+                                <span class="tally mono">{pastSessions.length}</span>
+                            </summary>
+                            <div data-testid="past-sessions">
+                                {#each pastSessions as session (session.id)}
+                                    <div class="field row">
+                                        <Tooltip text={session.id}>
+                                            <span class="label trunc">{sessionLabel(session)}</span>
+                                        </Tooltip>
+                                        <input
+                                            class="text"
+                                            type="text"
+                                            maxlength={MAX_SESSION_NAME}
+                                            placeholder={t('session.name.placeholder')}
+                                            value={session.name}
+                                            onchange={(e) =>
+                                                sessionsStore.rename(
+                                                    session.id,
+                                                    e.currentTarget.value,
+                                                )}
+                                            aria-label={`${t('session.name')} ${session.id}`}
+                                            data-testid="past-session-name"
+                                        />
+                                    </div>
+                                {/each}
+                            </div>
+                        </details>
+                    {/if}
+                    {#if renameError}
+                        <p class="error" data-testid="rename-error">{renameError}</p>
+                    {/if}
+                </section>
             {/if}
 
-            {#if pastSessions.length > 0}
-                <details class="fold">
-                    <summary>
-                        <Icon name="chevron" size={13} />
-                        <span>{t('session.past')}</span>
-                        <span class="tally mono">{pastSessions.length}</span>
-                    </summary>
-                    <div data-testid="past-sessions">
-                        {#each pastSessions as session (session.id)}
-                            <div class="field row">
-                                <Tooltip text={session.id}>
-                                    <span class="label trunc">{sessionLabel(session)}</span>
+            {#if sectionShown('profiling')}
+                <section class="group" id="settings-profiling">
+                    <h3>{t('settings.group.profiling')}</h3>
+
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={auto?.enabled ?? false}
+                            disabled={config === null || saving}
+                            onchange={(e) => {
+                                const on = (e.currentTarget as HTMLInputElement).checked;
+                                void save((c) => (c.auto_instrument.enabled = on));
+                            }}
+                            data-testid="auto-instrument"
+                        />
+                        <Tooltip text={t('tip.settings.autoInstrument')} align="stretch">
+                            <span class="label">{t('settings.autoInstrument')}</span>
+                        </Tooltip>
+                    </label>
+                    <p class="cost" class:live={auto?.enabled}>
+                        {t('settings.autoInstrument.cost')}
+                    </p>
+
+                    <div class="field">
+                        <Tooltip text={t('tip.settings.autoInstrument.filters')} align="stretch">
+                            <span class="label">{t('settings.autoInstrument.filters')}</span>
+                        </Tooltip>
+                        <AutoPatternBox
+                            rows={5}
+                            placeholder={t('settings.autoInstrument.filters.placeholder')}
+                            disabled={config === null || saving || !auto?.enabled}
+                            value={editedFilters}
+                            oninput={(v) => (draftFilters = v)}
+                            onblur={() => void runPreview()}
+                            label={t('settings.autoInstrument.filters')}
+                            testid="auto-filters"
+                        />
+                    </div>
+
+                    <div class="field preview">
+                        <p class="count {band}" data-testid="auto-preview">
+                            {#if previewing}
+                                {t('settings.autoInstrument.preview.checking')}
+                            {:else if previewFailed}
+                                {t('settings.autoInstrument.preview.failed')}
+                            {:else if preview === null}
+                                &nbsp;
+                            {:else if preview.matched === 0}
+                                {t('settings.autoInstrument.preview.none')}
+                            {:else}
+                                {t('settings.autoInstrument.preview')
+                                    .replace('{eligible}', count(preview.eligible))
+                                    .replace('{matched}', count(preview.matched))}
+                                {#if band === 'bad'}
+                                    <span class="heavy"
+                                        >{t('settings.autoInstrument.preview.heavy')}</span
+                                    >
+                                {/if}
+                            {/if}
+                        </p>
+                        {#if applyPending !== null && applyPending > 0}
+                            <span class="count" data-testid="auto-applying">
+                                {t('settings.autoInstrument.applying').replace(
+                                    '{n}',
+                                    count(applyPending),
+                                )}
+                            </span>
+                        {/if}
+                        <Tooltip
+                            text={t('tip.settings.autoInstrument.apply')}
+                            align="stretch"
+                            childFocusable={config !== null && !saving && !!auto?.enabled && dirty}
+                        >
+                            <button
+                                type="button"
+                                class="apply"
+                                onclick={() => void applyFilters()}
+                                disabled={config === null || saving || !auto?.enabled || !dirty}
+                                data-testid="auto-apply"
+                                >{t('settings.autoInstrument.apply')}</button
+                            >
+                        </Tooltip>
+                    </div>
+
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={auto?.mute_trivial ?? true}
+                            disabled={config === null || saving || !auto?.enabled}
+                            onchange={(e) => {
+                                const on = (e.currentTarget as HTMLInputElement).checked;
+                                void save((c) => (c.auto_instrument.mute_trivial = on));
+                            }}
+                            data-testid="auto-mute-trivial"
+                        />
+                        <Tooltip text={t('tip.settings.autoMuteTrivial')} align="stretch">
+                            <span class="label">{t('settings.autoMuteTrivial')}</span>
+                        </Tooltip>
+                    </label>
+
+                    {#if auto?.enabled && autoStatus}
+                        <details class="fold">
+                            <summary>
+                                <Icon name="chevron" size={13} />
+                                <span>{t('settings.autoInstrument.status')}</span>
+                                <span class="tally">{t('settings.readonly')}</span>
+                            </summary>
+                            <dl class="readout">
+                                <dt>{t('settings.autoInstrument.matched')}</dt>
+                                <dd class="mono" data-testid="auto-matched">
+                                    {count(autoStatus.matched)}
+                                </dd>
+                                <dt>{t('settings.autoInstrument.instrumented')}</dt>
+                                <dd class="mono" data-testid="auto-instrumented">
+                                    {count(autoStatus.instrumented)}
+                                </dd>
+                                <dt>{t('settings.autoInstrument.muted')}</dt>
+                                <dd class="mono" data-testid="auto-muted">
+                                    {count(autoStatus.muted)}
+                                </dd>
+                                <dt>{t('settings.autoInstrument.skippedTrivial')}</dt>
+                                <dd class="mono" data-testid="auto-skipped-trivial">
+                                    {count(autoStatus.skippedTrivial)}
+                                </dd>
+                                <dt>{t('settings.autoInstrument.skippedOther')}</dt>
+                                <dd class="mono" data-testid="auto-skipped-other">
+                                    {count(autoStatus.skippedOther)}
+                                </dd>
+                                {#if autoStatus.truncated}
+                                    <dt>{t('settings.autoInstrument.skippedOverCap')}</dt>
+                                    <dd class="mono bad" data-testid="auto-skipped-over-cap">
+                                        {count(autoStatus.skippedOverCap)}
+                                    </dd>
+                                {/if}
+                                <dt>{t('settings.autoInstrument.refused')}</dt>
+                                <dd class="mono" data-testid="auto-refused">
+                                    {count(autoStatus.refused)}
+                                </dd>
+                                <dt>{t('settings.autoInstrument.pending')}</dt>
+                                <dd class="mono" data-testid="auto-pending">
+                                    {count(autoStatus.pending)}
+                                </dd>
+                            </dl>
+                            {#if autoStatus.truncated}
+                                <p class="truncated" role="alert" data-testid="auto-truncated">
+                                    {t('settings.autoInstrument.truncated')
+                                        .replace('{skipped}', count(autoStatus.skippedOverCap))
+                                        .replace('{cap}', count(autoStatus.maxTargets))}
+                                </p>
+                            {/if}
+                        </details>
+                    {/if}
+
+                    <h4>{t('settings.group.tuning')}</h4>
+
+                    {#snippet tuning(
+                        label: string,
+                        tip: string,
+                        min: number,
+                        max: number,
+                        step: string,
+                        value: number | string,
+                        testid: string,
+                        apply: (c: RimObsConfig, v: number) => void,
+                    )}
+                        <div class="field">
+                            <div class="row">
+                                <Tooltip text={tip}>
+                                    <span class="label">{label}</span>
                                 </Tooltip>
                                 <input
-                                    class="text"
-                                    type="text"
-                                    maxlength={MAX_SESSION_NAME}
-                                    placeholder={t('session.name.placeholder')}
-                                    value={session.name}
-                                    onchange={(e) =>
-                                        sessionsStore.rename(session.id, e.currentTarget.value)}
-                                    aria-label={`${t('session.name')} ${session.id}`}
-                                    data-testid="past-session-name"
+                                    class="text num mono"
+                                    type="number"
+                                    {min}
+                                    {max}
+                                    {step}
+                                    disabled={config === null || saving}
+                                    {value}
+                                    onchange={(e) => {
+                                        const v = Number(e.currentTarget.value);
+                                        void save((c) => apply(c, v));
+                                    }}
+                                    aria-label={label}
+                                    data-testid={testid}
                                 />
                             </div>
-                        {/each}
-                    </div>
-                </details>
-            {/if}
-            {#if renameError}
-                <p class="error" data-testid="rename-error">{renameError}</p>
-            {/if}
-        </section>
+                            <p class="hint mono">
+                                {t('settings.hint.range')
+                                    .replace('{min}', count(min))
+                                    .replace('{max}', count(max))}
+                            </p>
+                        </div>
+                    {/snippet}
 
-        <section class="group">
-            <h3>{t('settings.group.profiling')}</h3>
+                    {@render tuning(
+                        t('settings.maxDepth'),
+                        t('tip.settings.maxDepth'),
+                        MIN_DEPTH,
+                        MAX_DEPTH,
+                        '1',
+                        config?.sampling.max_capture_depth ?? '',
+                        'max-depth',
+                        (c, v) => (c.sampling.max_capture_depth = v),
+                    )}
+                    {@render tuning(
+                        t('settings.ringCapacity'),
+                        t('tip.settings.ringCapacity'),
+                        MIN_RING,
+                        MAX_RING,
+                        '100',
+                        config?.sampling.frame_ring_capacity ?? '',
+                        'ring-capacity',
+                        (c, v) => (c.sampling.frame_ring_capacity = v),
+                    )}
+                    {@render tuning(
+                        t('settings.sampleRing'),
+                        t('tip.settings.sampleRing'),
+                        MIN_SAMPLE_RING,
+                        MAX_SAMPLE_RING,
+                        '1024',
+                        config?.sampling.ring_capacity ?? '',
+                        'sample-ring',
+                        (c, v) => (c.sampling.ring_capacity = v),
+                    )}
+                    {@render tuning(
+                        t('settings.maxTargets'),
+                        t('tip.settings.maxTargets'),
+                        MIN_MAX_TARGETS,
+                        MAX_MAX_TARGETS,
+                        '1000',
+                        config?.auto_instrument.max_targets ?? '',
+                        'max-targets',
+                        (c, v) => (c.auto_instrument.max_targets = v),
+                    )}
 
-            <div class="costly">
-                <label class="switch">
-                    <input
-                        type="checkbox"
-                        checked={auto?.enabled ?? false}
-                        disabled={config === null || saving}
-                        onchange={(e) => {
-                            const on = (e.currentTarget as HTMLInputElement).checked;
-                            void save((c) => (c.auto_instrument.enabled = on));
-                        }}
-                        data-testid="auto-instrument"
-                    />
-                    <Tooltip text={t('tip.settings.autoInstrument')} align="stretch">
-                        <span class="label">{t('settings.autoInstrument')}</span>
-                    </Tooltip>
-                </label>
-                <span class="cost">
-                    <Icon name="alert" size={13} />
-                    {t('settings.autoInstrument.cost')}
-                </span>
-            </div>
-
-            <div class="field">
-                <Tooltip text={t('tip.settings.autoInstrument.filters')} align="stretch">
-                    <span class="label">{t('settings.autoInstrument.filters')}</span>
-                </Tooltip>
-                <AutoPatternBox
-                    rows={5}
-                    placeholder={t('settings.autoInstrument.filters.placeholder')}
-                    disabled={config === null || saving || !auto?.enabled}
-                    value={editedFilters}
-                    oninput={(v) => (draftFilters = v)}
-                    onblur={() => void runPreview()}
-                    label={t('settings.autoInstrument.filters')}
-                    testid="auto-filters"
-                />
-            </div>
-
-            <div class="field preview">
-                <p class="count {band}" data-testid="auto-preview">
-                    {#if previewing}
-                        {t('settings.autoInstrument.preview.checking')}
-                    {:else if previewFailed}
-                        {t('settings.autoInstrument.preview.failed')}
-                    {:else if preview === null}
-                        &nbsp;
-                    {:else if preview.matched === 0}
-                        {t('settings.autoInstrument.preview.none')}
-                    {:else}
-                        {t('settings.autoInstrument.preview')
-                            .replace('{eligible}', count(preview.eligible))
-                            .replace('{matched}', count(preview.matched))}
-                        {#if band === 'bad'}
-                            <span class="heavy">{t('settings.autoInstrument.preview.heavy')}</span>
-                        {/if}
-                    {/if}
-                </p>
-                {#if applyPending !== null && applyPending > 0}
-                    <span class="count" data-testid="auto-applying">
-                        {t('settings.autoInstrument.applying').replace('{n}', count(applyPending))}
-                    </span>
-                {/if}
-                <Tooltip text={t('tip.settings.autoInstrument.apply')} align="stretch">
-                    <button
-                        type="button"
-                        class="apply"
-                        onclick={() => void applyFilters()}
-                        disabled={config === null || saving || !auto?.enabled || !dirty}
-                        data-testid="auto-apply">{t('settings.autoInstrument.apply')}</button
-                    >
-                </Tooltip>
-            </div>
-
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    checked={auto?.mute_trivial ?? true}
-                    disabled={config === null || saving || !auto?.enabled}
-                    onchange={(e) => {
-                        const on = (e.currentTarget as HTMLInputElement).checked;
-                        void save((c) => (c.auto_instrument.mute_trivial = on));
-                    }}
-                    data-testid="auto-mute-trivial"
-                />
-                <Tooltip text={t('tip.settings.autoMuteTrivial')} align="stretch">
-                    <span class="label">{t('settings.autoMuteTrivial')}</span>
-                </Tooltip>
-            </label>
-
-            {#if auto?.enabled && autoStatus}
-                <details class="fold">
-                    <summary>
-                        <Icon name="chevron" size={13} />
-                        <span>{t('settings.autoInstrument.status')}</span>
-                        <span class="tally">{t('settings.readonly')}</span>
-                    </summary>
-                    <dl class="readout">
-                        <dt>{t('settings.autoInstrument.matched')}</dt>
-                        <dd class="mono" data-testid="auto-matched">{count(autoStatus.matched)}</dd>
-                        <dt>{t('settings.autoInstrument.instrumented')}</dt>
-                        <dd class="mono" data-testid="auto-instrumented">
-                            {count(autoStatus.instrumented)}
-                        </dd>
-                        <dt>{t('settings.autoInstrument.muted')}</dt>
-                        <dd class="mono" data-testid="auto-muted">{count(autoStatus.muted)}</dd>
-                        <dt>{t('settings.autoInstrument.skippedTrivial')}</dt>
-                        <dd class="mono" data-testid="auto-skipped-trivial">
-                            {count(autoStatus.skippedTrivial)}
-                        </dd>
-                        <dt>{t('settings.autoInstrument.skippedOther')}</dt>
-                        <dd class="mono" data-testid="auto-skipped-other">
-                            {count(autoStatus.skippedOther)}
-                        </dd>
-                        {#if autoStatus.truncated}
-                            <dt>{t('settings.autoInstrument.skippedOverCap')}</dt>
-                            <dd class="mono bad" data-testid="auto-skipped-over-cap">
-                                {count(autoStatus.skippedOverCap)}
-                            </dd>
-                        {/if}
-                        <dt>{t('settings.autoInstrument.refused')}</dt>
-                        <dd class="mono" data-testid="auto-refused">{count(autoStatus.refused)}</dd>
-                        <dt>{t('settings.autoInstrument.pending')}</dt>
-                        <dd class="mono" data-testid="auto-pending">{count(autoStatus.pending)}</dd>
-                    </dl>
-                    {#if autoStatus.truncated}
-                        <p class="truncated" role="alert" data-testid="auto-truncated">
-                            {t('settings.autoInstrument.truncated')
-                                .replace('{skipped}', count(autoStatus.skippedOverCap))
-                                .replace('{cap}', count(autoStatus.maxTargets))}
+                    {#if saveError}
+                        <p class="error" role="alert" data-testid="config-error">
+                            {t('settings.saveFailed')}: {saveError}
                         </p>
                     {/if}
-                </details>
+                </section>
             {/if}
 
-            <div class="field row">
-                <Tooltip text={t('tip.settings.maxDepth')}>
-                    <span class="label">{t('settings.maxDepth')}</span>
-                </Tooltip>
-                <input
-                    class="text num mono"
-                    type="number"
-                    min={MIN_DEPTH}
-                    max={MAX_DEPTH}
-                    step="1"
-                    disabled={config === null || saving}
-                    value={config?.sampling.max_capture_depth ?? ''}
-                    onchange={(e) => {
-                        const v = Number(e.currentTarget.value);
-                        void save((c) => (c.sampling.max_capture_depth = v));
-                    }}
-                    aria-label={t('settings.maxDepth')}
-                    data-testid="max-depth"
-                />
-            </div>
-
-            <div class="field row">
-                <Tooltip text={t('tip.settings.ringCapacity')}>
-                    <span class="label">{t('settings.ringCapacity')}</span>
-                </Tooltip>
-                <input
-                    class="text num mono"
-                    type="number"
-                    min={MIN_RING}
-                    max={MAX_RING}
-                    step="100"
-                    disabled={config === null || saving}
-                    value={config?.sampling.frame_ring_capacity ?? ''}
-                    onchange={(e) => {
-                        const v = Number(e.currentTarget.value);
-                        void save((c) => (c.sampling.frame_ring_capacity = v));
-                    }}
-                    aria-label={t('settings.ringCapacity')}
-                    data-testid="ring-capacity"
-                />
-            </div>
-
-            <div class="field row">
-                <Tooltip text={t('tip.settings.sampleRing')}>
-                    <span class="label">{t('settings.sampleRing')}</span>
-                </Tooltip>
-                <input
-                    class="text num mono"
-                    type="number"
-                    min={MIN_SAMPLE_RING}
-                    max={MAX_SAMPLE_RING}
-                    step="1024"
-                    disabled={config === null || saving}
-                    value={config?.sampling.ring_capacity ?? ''}
-                    onchange={(e) => {
-                        const v = Number(e.currentTarget.value);
-                        void save((c) => (c.sampling.ring_capacity = v));
-                    }}
-                    aria-label={t('settings.sampleRing')}
-                    data-testid="sample-ring"
-                />
-            </div>
-
-            <div class="field row">
-                <Tooltip text={t('tip.settings.maxTargets')}>
-                    <span class="label">{t('settings.maxTargets')}</span>
-                </Tooltip>
-                <input
-                    class="text num mono"
-                    type="number"
-                    min={MIN_MAX_TARGETS}
-                    max={MAX_MAX_TARGETS}
-                    step="1000"
-                    disabled={config === null || saving}
-                    value={config?.auto_instrument.max_targets ?? ''}
-                    onchange={(e) => {
-                        const v = Number(e.currentTarget.value);
-                        void save((c) => (c.auto_instrument.max_targets = v));
-                    }}
-                    aria-label={t('settings.maxTargets')}
-                    data-testid="max-targets"
-                />
-            </div>
-
-            {#if saveError}
-                <p class="error" role="alert" data-testid="config-error">
-                    {t('settings.saveFailed')}: {saveError}
-                </p>
-            {/if}
-        </section>
-
-        <section class="group">
-            <h3>{t('overview.collector')}</h3>
-            {#if status?.update?.available}
-                <a class="update" href={status.update.url} target="_blank" rel="noreferrer">
-                    <Icon name="external" size={13} />
-                    <span>{t('settings.update')}</span>
-                    <span class="mono">{status.update.latest_version}</span>
-                </a>
-            {/if}
-            <details class="fold">
-                <summary>
-                    <Icon name="chevron" size={13} />
-                    <span>{t('settings.collectorStatus')}</span>
-                    <span class="tally">{t('settings.readonly')}</span>
-                </summary>
-                <dl class="readout">
-                    <dt>{t('overview.kv.status')}</dt>
-                    <dd class="mono">{status?.status ?? '-'}</dd>
-                    <dt>{t('settings.version')}</dt>
-                    <dd class="mono">{status?.version ?? '-'}</dd>
-                    <dt>{t('settings.schema')}</dt>
-                    <dd class="mono">{status?.schema_version ?? '-'}</dd>
-                    {#if status?.receive}
-                        <dt>{t('overview.sections')}</dt>
-                        <dd class="mono" data-testid="kv-sections">
-                            {count(status.receive.section_count)}
-                        </dd>
-                        <dt>{t('overview.gc')}</dt>
-                        <dd class="mono" data-testid="kv-gc">
-                            {count(status.receive.total_gc_events)}
-                        </dd>
-                        <dt>{t('overview.batches')}</dt>
-                        <dd class="mono" data-testid="kv-batches">
-                            {count(status.receive.total_batches)}
-                        </dd>
-                        <dt>{t('overview.samples')}</dt>
-                        <dd class="mono" data-testid="kv-samples">
-                            {count(status.receive.total_samples)}
-                        </dd>
-                        <dt>{t('overview.bytes')}</dt>
-                        <dd class="mono" data-testid="kv-bytes">
-                            {bytes(status.receive.total_bytes)}
-                        </dd>
+            {#if sectionShown('collector')}
+                <section class="group" id="settings-collector">
+                    <h3>{t('overview.collector')}</h3>
+                    {#if status?.update?.available}
+                        <a class="update" href={status.update.url} target="_blank" rel="noreferrer">
+                            <Icon name="external" size={13} />
+                            <span>{t('settings.update')}</span>
+                            <span class="mono">{status.update.latest_version}</span>
+                        </a>
                     {/if}
-                    {#if prom}
-                        <dt>
-                            <Tooltip text={t('tip.settings.prometheus')}>
-                                <span>{t('settings.prometheus')}</span>
-                            </Tooltip>
-                        </dt>
-                        <dd class:on={prom.prometheus_enabled}>
-                            {prom.prometheus_enabled
-                                ? t('settings.exporter.enabled')
-                                : t('settings.exporter.disabled')}
-                        </dd>
-                        {#if prom.prometheus_enabled && health}
-                            <dt>{t('settings.exporter.endpoint')}</dt>
-                            <dd class="mono">/metrics</dd>
-                            <dt>{t('settings.exporter.last_scrape')}</dt>
-                            <dd class="mono">{health.last_scrape_utc ?? '-'}</dd>
-                            <dt>{t('settings.exporter.sample_count')}</dt>
-                            <dd class="mono">{health.last_sample_count}</dd>
-                            {#if health.total_errors > 0}
-                                <dt>{t('settings.exporter.errors')}</dt>
-                                <dd class="mono bad">
-                                    {health.total_errors} | {health.last_error ?? ''}
+                    <details class="fold">
+                        <summary>
+                            <Icon name="chevron" size={13} />
+                            <span>{t('settings.collectorStatus')}</span>
+                            <span class="tally">{t('settings.readonly')}</span>
+                        </summary>
+                        <dl class="readout">
+                            <dt>{t('overview.kv.status')}</dt>
+                            <dd class="mono">{status?.status ?? '-'}</dd>
+                            <dt>{t('settings.version')}</dt>
+                            <dd class="mono">{status?.version ?? '-'}</dd>
+                            <dt>{t('settings.schema')}</dt>
+                            <dd class="mono">{status?.schema_version ?? '-'}</dd>
+                            {#if status?.receive}
+                                <dt>{t('overview.sections')}</dt>
+                                <dd class="mono" data-testid="kv-sections">
+                                    {count(status.receive.section_count)}
+                                </dd>
+                                <dt>{t('overview.gc')}</dt>
+                                <dd class="mono" data-testid="kv-gc">
+                                    {count(status.receive.total_gc_events)}
+                                </dd>
+                                <dt>{t('overview.batches')}</dt>
+                                <dd class="mono" data-testid="kv-batches">
+                                    {count(status.receive.total_batches)}
+                                </dd>
+                                <dt>{t('overview.samples')}</dt>
+                                <dd class="mono" data-testid="kv-samples">
+                                    {count(status.receive.total_samples)}
+                                </dd>
+                                <dt>{t('overview.bytes')}</dt>
+                                <dd class="mono" data-testid="kv-bytes">
+                                    {bytes(status.receive.total_bytes)}
                                 </dd>
                             {/if}
-                        {/if}
-                    {:else}
-                        <dt>{t('settings.exporters')}</dt>
-                        <dd>{t('settings.exporter.unavailable')}</dd>
-                    {/if}
-                </dl>
-            </details>
-        </section>
+                            {#if prom}
+                                <dt>
+                                    <Tooltip text={t('tip.settings.prometheus')}>
+                                        <span>{t('settings.prometheus')}</span>
+                                    </Tooltip>
+                                </dt>
+                                <dd class:on={prom.prometheus_enabled}>
+                                    {prom.prometheus_enabled
+                                        ? t('settings.exporter.enabled')
+                                        : t('settings.exporter.disabled')}
+                                </dd>
+                                {#if prom.prometheus_enabled && health}
+                                    <dt>{t('settings.exporter.endpoint')}</dt>
+                                    <dd class="mono">/metrics</dd>
+                                    <dt>{t('settings.exporter.last_scrape')}</dt>
+                                    <dd class="mono">{health.last_scrape_utc ?? '-'}</dd>
+                                    <dt>{t('settings.exporter.sample_count')}</dt>
+                                    <dd class="mono">{health.last_sample_count}</dd>
+                                    {#if health.total_errors > 0}
+                                        <dt>{t('settings.exporter.errors')}</dt>
+                                        <dd class="mono bad">
+                                            {health.total_errors} | {health.last_error ?? ''}
+                                        </dd>
+                                    {/if}
+                                {/if}
+                            {:else}
+                                <dt>{t('settings.exporters')}</dt>
+                                <dd>{t('settings.exporter.unavailable')}</dd>
+                            {/if}
+                        </dl>
+                    </details>
+                </section>
+            {/if}
 
-        <section class="group">
-            <h3>{t('settings.group.dashboard')}</h3>
+            {#if sectionShown('dashboard')}
+                <section class="group" id="settings-dashboard">
+                    <h3>{t('settings.group.dashboard')}</h3>
 
-            <div class="field row">
-                <Tooltip text={t('tip.settings.language')}>
-                    <span class="label">{t('settings.language')}</span>
-                </Tooltip>
-                <select
-                    aria-label={t('settings.language')}
-                    class="text lang"
-                    value={getLang()}
-                    onchange={(e) =>
-                        userPrefs.setLang((e.currentTarget as HTMLSelectElement).value)}
-                >
-                    {#each LANGUAGES as l (l.code)}
-                        <option value={l.code}>{l.label}</option>
-                    {/each}
-                </select>
-            </div>
+                    <div class="field row">
+                        <Tooltip text={t('tip.settings.language')}>
+                            <span class="label">{t('settings.language')}</span>
+                        </Tooltip>
+                        <select
+                            aria-label={t('settings.language')}
+                            class="text lang"
+                            value={getLang()}
+                            onchange={(e) =>
+                                userPrefs.setLang((e.currentTarget as HTMLSelectElement).value)}
+                        >
+                            {#each LANGUAGES as l (l.code)}
+                                <option value={l.code}>{l.label}</option>
+                            {/each}
+                        </select>
+                    </div>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    checked={config?.session.prompt_for_name ?? false}
-                    disabled={config === null || saving}
-                    onchange={(e) => {
-                        const on = (e.currentTarget as HTMLInputElement).checked;
-                        void save((c) => (c.session.prompt_for_name = on));
-                    }}
-                    data-testid="prompt-for-name"
-                />
-                <Tooltip text={t('tip.settings.promptForName')} align="stretch">
-                    <span class="label">{t('settings.promptForName')}</span>
-                </Tooltip>
-            </label>
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={config?.session.prompt_for_name ?? false}
+                            disabled={config === null || saving}
+                            onchange={(e) => {
+                                const on = (e.currentTarget as HTMLInputElement).checked;
+                                void save((c) => (c.session.prompt_for_name = on));
+                            }}
+                            data-testid="prompt-for-name"
+                        />
+                        <Tooltip text={t('tip.settings.promptForName')} align="stretch">
+                            <span class="label">{t('settings.promptForName')}</span>
+                        </Tooltip>
+                    </label>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    checked={userPrefs.closeOnDisconnect}
-                    onchange={(e) =>
-                        userPrefs.setCloseOnDisconnect(
-                            (e.currentTarget as HTMLInputElement).checked,
-                        )}
-                    data-testid="close-on-disconnect"
-                />
-                <Tooltip text={t('tip.settings.closeOnDisconnect')} align="stretch">
-                    <span class="label">{t('settings.close_on_disconnect')}</span>
-                </Tooltip>
-            </label>
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={userPrefs.closeOnDisconnect}
+                            onchange={(e) =>
+                                userPrefs.setCloseOnDisconnect(
+                                    (e.currentTarget as HTMLInputElement).checked,
+                                )}
+                            data-testid="close-on-disconnect"
+                        />
+                        <Tooltip text={t('tip.settings.closeOnDisconnect')} align="stretch">
+                            <span class="label">{t('settings.close_on_disconnect')}</span>
+                        </Tooltip>
+                    </label>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    checked={userPrefs.flameRenderer === 'gl'}
-                    onchange={(e) =>
-                        userPrefs.setFlameRenderer(
-                            (e.currentTarget as HTMLInputElement).checked ? 'gl' : 'cpu',
-                        )}
-                    data-testid="flame-renderer-gl"
-                />
-                <Tooltip text={t('tip.settings.flameRendererGl')} align="stretch">
-                    <span class="label">{t('settings.flameRendererGl')}</span>
-                </Tooltip>
-            </label>
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={userPrefs.flameRenderer === 'gl'}
+                            onchange={(e) =>
+                                userPrefs.setFlameRenderer(
+                                    (e.currentTarget as HTMLInputElement).checked ? 'gl' : 'cpu',
+                                )}
+                            data-testid="flame-renderer-gl"
+                        />
+                        <Tooltip text={t('tip.settings.flameRendererGl')} align="stretch">
+                            <span class="label">{t('settings.flameRendererGl')}</span>
+                        </Tooltip>
+                    </label>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    checked={userPrefs.mainThreadOnly}
-                    onchange={(e) =>
-                        userPrefs.setMainThreadOnly((e.currentTarget as HTMLInputElement).checked)}
-                    data-testid="main-thread-only"
-                />
-                <Tooltip text={t('tip.threads.mainOnly')} align="stretch">
-                    <span class="label">{t('threads.mainOnly')}</span>
-                </Tooltip>
-            </label>
-        </section>
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={userPrefs.mainThreadOnly}
+                            onchange={(e) =>
+                                userPrefs.setMainThreadOnly(
+                                    (e.currentTarget as HTMLInputElement).checked,
+                                )}
+                            data-testid="main-thread-only"
+                        />
+                        <Tooltip text={t('tip.threads.mainOnly')} align="stretch">
+                            <span class="label">{t('threads.mainOnly')}</span>
+                        </Tooltip>
+                    </label>
+                </section>
+            {/if}
+        </div>
     </div>
 {/if}
 
@@ -733,7 +840,7 @@
         height: 28px;
         padding: 0;
         border: 1px solid var(--border-soft);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         background: var(--bg-surface);
         color: var(--text-dim);
         cursor: pointer;
@@ -749,17 +856,107 @@
     .panel {
         position: fixed;
         top: 0;
-        left: 0;
+        right: 0;
+        bottom: 0;
+        left: auto;
         z-index: 50;
-        width: 372px;
-        max-height: calc(100vh - var(--topbar-h) - var(--s-5));
+        display: flex;
+        flex-direction: column;
+        width: min(400px, 100vw);
+        background: var(--bg-base);
+        border-left: 1px solid var(--border);
+        box-shadow: -12px 0 32px -12px rgba(0, 0, 0, 0.55);
+    }
+    .head {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        padding: var(--s-3) var(--s-4);
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .head h2 {
+        margin: 0;
+        margin-right: auto;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
+    }
+    .navmode {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        font-size: 0.7rem;
+        color: var(--text-faint);
+    }
+    .close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--text-faint);
+    }
+    .close:hover {
+        color: var(--text);
+    }
+    .secnav {
+        display: flex;
+        gap: var(--s-1);
+        padding: var(--s-2) var(--s-4);
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .secnav button {
+        border: none;
+        background: none;
+        padding: var(--s-1) var(--s-2);
+        font-size: 0.74rem;
+        color: var(--text-faint);
+        border-radius: var(--r-sm);
+    }
+    .secnav button:hover {
+        color: var(--text);
+    }
+    .secnav button[aria-pressed='true'] {
+        color: var(--text);
+        box-shadow: inset 0 -2px 0 var(--cyan);
+        border-radius: 0;
+    }
+    .body {
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
-        background: var(--bg-elev);
-        border: 1px solid var(--border);
-        border-radius: var(--r-md);
-        box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.55);
         scrollbar-color: var(--border-strong) transparent;
+    }
+    h4 {
+        margin: var(--s-4) 0 var(--s-2);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-faint);
+    }
+    .hint {
+        margin: 2px 0 0;
+        font-size: 0.68rem;
+        color: var(--text-faint);
+        text-align: right;
+    }
+    .cost {
+        margin: 0 0 var(--s-2);
+        padding-left: 26px;
+        font-size: 0.72rem;
+        color: var(--text-faint);
+    }
+    .cost.live {
+        color: var(--warn);
     }
     .panel ::selection {
         background: var(--cyan);
@@ -817,7 +1014,7 @@
         caret-color: var(--cyan);
     }
     .text:hover:not(:disabled) {
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     .preview {
         gap: var(--s-2);
@@ -888,20 +1085,6 @@
 
     /* auto-instrumentation patches thousands of methods, so it does not get to look like the
        language picker. the tint and the badge are the only warning before the game stutters. */
-    .costly {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--s-2);
-        margin-bottom: var(--s-3);
-        padding: var(--s-2) var(--s-3);
-        border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
-        border-radius: var(--r-md);
-        background: color-mix(in srgb, var(--warn) 8%, var(--bg-surface));
-    }
-    .costly .switch {
-        margin-bottom: 0;
-    }
     .cost {
         display: inline-flex;
         align-items: center;
@@ -992,10 +1175,10 @@
         gap: var(--s-2);
         margin-bottom: var(--s-3);
         padding: var(--s-2) var(--s-3);
-        border: 1px solid color-mix(in srgb, var(--cyan) 30%, var(--border));
+        border: 1px solid var(--border);
         border-radius: var(--r-md);
         font-size: 0.8rem;
-        color: var(--cyan-soft);
+        color: var(--text);
     }
     .update span:last-child {
         margin-left: auto;

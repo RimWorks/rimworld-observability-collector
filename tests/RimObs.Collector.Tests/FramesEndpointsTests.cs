@@ -63,7 +63,8 @@ public sealed class FramesEndpointsTests {
             frame.GetProperty("node_count").GetInt32().Should().Be(2);
             frame.GetProperty("duration_us").GetDouble().Should().BeApproximately(50.0, 0.01);
             frame.GetProperty("nodes").GetProperty("section_ids").GetArrayLength().Should().Be(2);
-            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(1);
+            // the frame is served from the open preview, so nothing is sealed yet
+            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(0);
         }
         finally {
             await app.StopAsync();
@@ -515,6 +516,40 @@ public sealed class FramesEndpointsTests {
         });
     }
 
+    [Fact]
+    public async Task Stats_frame_count_reports_the_frames_sealed_past_the_open_window() {
+        const int seeded = 20;
+        int port = PickFreePort();
+        CollectorToken token = CollectorToken.FromExplicitValue("frames-sealed-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        SessionAggregator aggregator = QuietAggregator(app);
+        aggregator.OnSessionMeta(new SessionMeta {
+            SessionId = "frames-sealed",
+            StopwatchFrequency = 10_000_000L,
+            AnchorTimestamp = 0L,
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [.. Enumerable.Repeat(10, seeded)],
+            ParentIds = [.. Enumerable.Repeat(-1, seeded)],
+            StartTimestamps = [.. Enumerable.Range(0, seeded).Select(i => 100L + (i * 1000L))],
+            ElapsedTicks = [.. Enumerable.Repeat(500L, seeded)],
+            FrameOrdinals = [.. Enumerable.Range(1, seeded)],
+        });
+        await app.StartAsync();
+
+        try {
+            using HttpClient client = new();
+            string body = await client.GetStringAsync($"http://127.0.0.1:{port}/api/v1/frames/latest");
+            using JsonDocument doc = JsonDocument.Parse(body);
+
+            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32()
+                .Should().Be(seeded - FrameRing.DefaultOpenFrameWindow);
+        }
+        finally {
+            await app.StopAsync();
+        }
+    }
+
     private static int[] Ordinals(JsonDocument doc) {
         return [.. doc.RootElement.GetProperty("frames").EnumerateArray()
             .Select(f => f.GetProperty("capture_ordinal").GetInt32())];
@@ -536,7 +571,8 @@ public sealed class FramesEndpointsTests {
             Ordinals(doc).Should().Equal(2, 3, 4);
             doc.RootElement.GetProperty("frames")[0].GetProperty("nodes")
                 .GetProperty("section_ids").GetArrayLength().Should().Be(1);
-            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(5);
+            // every ordinal is still open, and frame_count reports sealed frames only
+            doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(0);
         }
         finally {
             await app.StopAsync();

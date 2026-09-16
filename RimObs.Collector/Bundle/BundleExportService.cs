@@ -73,7 +73,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, request.SessionId, StringComparison.Ordinal))
             return Task.FromResult(new BundleExportResult { Status = BundleExportStatus.UnknownSession });
 
-        FrameSnapshot[] frames = ReadFrames(request.Includes);
+        (FrameSnapshot[] frames, int sealedFrames) = ReadFrames(request.Includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(request.Includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -86,7 +86,7 @@ public sealed class BundleExportService {
             });
         }
 
-        byte[] bytes = BuildZip(meta, request.Includes, frames);
+        byte[] bytes = BuildZip(meta, request.Includes, frames, sealedFrames);
         return Task.FromResult(new BundleExportResult {
             Status = BundleExportStatus.Ok,
             Bytes = bytes,
@@ -101,7 +101,7 @@ public sealed class BundleExportService {
         if (!string.Equals(meta.SessionId, sessionId, StringComparison.Ordinal))
             return new BundleEstimateResult { Status = BundleExportStatus.UnknownSession };
 
-        FrameSnapshot[] frames = ReadFrames(includes);
+        (FrameSnapshot[] frames, _) = ReadFrames(includes);
         BundleEstimateInput estimateInput = BuildEstimateInput(includes, frames);
         BundleSizeEstimate estimate = EstimateOverride is not null
             ? EstimateOverride(estimateInput)
@@ -116,10 +116,10 @@ public sealed class BundleExportService {
 
     // the snapshot already previews open frames, so the newest frame ships without sealing
     // the live ring out from under the lanes still draining.
-    private FrameSnapshot[] ReadFrames(IReadOnlySet<BundleContentKey> includes) {
+    private (FrameSnapshot[] Frames, int SealedCount) ReadFrames(IReadOnlySet<BundleContentKey> includes) {
         if (!includes.Contains(BundleContentKey.Frames))
-            return [];
-        return _aggregator.Frames.Snapshot();
+            return ([], 0);
+        return _aggregator.Frames.SnapshotWithSealedCount();
     }
 
     private BundleEstimateInput BuildEstimateInput(IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames) {
@@ -143,7 +143,7 @@ public sealed class BundleExportService {
         return total;
     }
 
-    private byte[] BuildZip(SessionMeta meta, IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames) {
+    private byte[] BuildZip(SessionMeta meta, IReadOnlySet<BundleContentKey> includes, FrameSnapshot[] frames, int sealedFrames) {
         using MemoryStream output = new MemoryStream();
         using (ZipArchive zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true)) {
             List<string> entryNames = new List<string>();
@@ -184,7 +184,7 @@ public sealed class BundleExportService {
             }
             if (includes.Contains(BundleContentKey.Frames)) {
                 // compact: indented puts every node array element on its own line, ~130 bytes a node not ~45.
-                WriteJson(zip, "frames.json", BuildFrames(meta, frames), indented: false);
+                WriteJson(zip, "frames.json", BuildFrames(meta, frames, sealedFrames), indented: false);
                 entryNames.Add("frames.json");
             }
 
@@ -329,7 +329,7 @@ public sealed class BundleExportService {
         return new { roots = roots };
     }
 
-    private object BuildFrames(SessionMeta meta, FrameSnapshot[] frames) {
+    private object BuildFrames(SessionMeta meta, FrameSnapshot[] frames, int sealedFrames) {
         double usPerTick = TickConverter.NsPerTick(meta) / 1000.0;
         object[] mapped = new object[frames.Length];
         for (int i = 0; i < frames.Length; i++)
@@ -340,10 +340,12 @@ public sealed class BundleExportService {
             session_id = meta.SessionId,
             stopwatch_frequency = meta.StopwatchFrequency,
             frames = mapped,
-            stats = FramePayload.MapStats(FrameRing.StatsFor(frames), usPerTick),
+            stats = FramePayload.MapStats(FrameRing.StatsFor(frames) with { FrameCount = sealedFrames }, usPerTick),
             dropped = new {
                 pre_frame_samples = _aggregator.Frames.PreFrameSamples,
                 late_samples = _aggregator.Frames.LateSamples,
+                orphaned_samples = _aggregator.Frames.OrphanedSamples,
+                transport_lost_batches = _aggregator.LostDatagrams,
                 library_ring_samples = meta.SamplesDropped,
             },
             // provenance: an import carries this forward so a re-export never claims the

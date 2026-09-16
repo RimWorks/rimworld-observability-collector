@@ -95,7 +95,11 @@ public static class Program {
         token ??= CollectorToken.CreateFromEnvOrGenerate();
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
         builder.Host.UseSerilog();
-        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        // ka widened this on 2026-09-14: tailscale and lan browsers reach the dashboard, writes
+        // stay token-gated, and the origin check pins state changes to this machine's own names.
+#pragma warning disable S5332 // http is the design: a local profiler with no certs, gated by token + origin.
+        builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+#pragma warning restore S5332
 
         Logging.RingBufferLogSink sink = logSink ?? new Logging.RingBufferLogSink();
         builder.Services.AddSingleton(sink);

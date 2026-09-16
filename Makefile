@@ -39,7 +39,7 @@ help:
 	@echo "  deploy-collector    framework-dependent host publish into Collector/<rid> for in-game auto-launch"
 	@echo "  test                run xUnit suites"
 	@echo "  format              dotnet format + prettier"
-	@echo "  lint                dotnet format --verify-no-changes + eslint"
+	@echo "  lint                dotnet format --verify-no-changes + prettier + svelte-check"
 	@echo "  watch               dotnet watch on the collector"
 	@echo "  publish-collector   self-contained publish for all RIDs"
 

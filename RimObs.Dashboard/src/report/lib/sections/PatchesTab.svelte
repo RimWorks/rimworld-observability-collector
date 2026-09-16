@@ -21,7 +21,7 @@
         padding: 1rem 0;
     }
     .empty {
-        color: #888;
+        color: var(--text-faint);
         font-style: italic;
     }
     dl {
@@ -31,10 +31,10 @@
     }
     dt {
         font-weight: 600;
-        color: #444;
+        color: var(--text-dim);
     }
     dd {
         margin: 0;
-        font-family: 'IBM Plex Mono', monospace;
+        font-family: var(--font-mono);
     }
 </style>

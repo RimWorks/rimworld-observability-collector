@@ -17,6 +17,13 @@
     import Download from '@lucide/svelte/icons/download';
     import Upload from '@lucide/svelte/icons/upload';
     import Info from '@lucide/svelte/icons/info';
+    import FileDown from '@lucide/svelte/icons/file-down';
+    import CircleArrowDown from '@lucide/svelte/icons/circle-arrow-down';
+    import ChartGantt from '@lucide/svelte/icons/chart-gantt';
+    import Maximize from '@lucide/svelte/icons/maximize';
+    import RefreshCcw from '@lucide/svelte/icons/refresh-ccw';
+    import Trash2 from '@lucide/svelte/icons/trash-2';
+    import X from '@lucide/svelte/icons/x';
 
     const ICONS = {
         gauge: Gauge,
@@ -37,6 +44,13 @@
         download: Download,
         upload: Upload,
         info: Info,
+        exportFrame: FileDown,
+        exportRing: CircleArrowDown,
+        exportTimeline: ChartGantt,
+        fit: Maximize,
+        restart: RefreshCcw,
+        trash: Trash2,
+        close: X,
     };
     export type IconName = keyof typeof ICONS;
     export { ICONS };

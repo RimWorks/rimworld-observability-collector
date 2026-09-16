@@ -1,5 +1,8 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
+    import { slide } from 'svelte/transition';
+    import { cubicOut } from 'svelte/easing';
+    import { motionMs } from '../motion';
     import {
         buildTreeRows,
         buildInvertedRows,
@@ -11,7 +14,8 @@
     } from '../frameTable';
     import type { TreeNode } from '../frameTree';
     import { ns, bytes } from '../format';
-    import { api, type SectionTimeseriesResponse } from '../api';
+    import { api, type SectionTimeseriesResponse, type VramResponse } from '../api';
+    import { Resource } from '../poll.svelte';
     import LineChart from './LineChart.svelte';
     import { deltaSeverity } from '../frameCost';
     import { t } from '../i18n';
@@ -65,6 +69,15 @@
 
     let expanded = $state(new SvelteSet<string>());
 
+    // the census lands every ~10s, so a faster poll only re-reads the same snapshot.
+    const vram = new Resource<VramResponse>(() => api.vram(), 5000);
+    $effect(() => {
+        if (activeTab === 'vram') vram.start();
+        else vram.stop();
+        return () => vram.stop();
+    });
+    const VRAM_KINDS = ['vram.kind.texture', 'vram.kind.mesh', 'vram.kind.rt'] as const;
+
     // session scope only: its a session ring, says nothing about the frame on screen
     let trendSectionId = $state<number | null>(null);
     let trend = $state<SectionTimeseriesResponse | null>(null);
@@ -97,7 +110,7 @@
             label: t('tree.trend.mean'),
             values: (trend?.points ?? []).map((p) => p.mean_ns),
             stroke: '--cyan',
-            fill: 'rgba(57, 196, 212, 0.12)',
+            fill: '--cyan-fill',
         },
     ]);
     let sortColumn = $state<SortColumn>('total');
@@ -204,6 +217,11 @@
         if (sortColumn !== column) return '';
         return ascending ? ' ↑' : ' ↓';
     }
+
+    function sortDir(column: SortColumn): 'ascending' | 'descending' | 'none' {
+        if (sortColumn !== column) return 'none';
+        return ascending ? 'ascending' : 'descending';
+    }
 </script>
 
 <div class="panel" class:open={activeTab !== null} data-testid="call-tree-panel">
@@ -223,6 +241,7 @@
             <b class="mono">{ns(frameDurationUs * 1000)}</b>
         </span>
         <span class="side">
+            <span class="tabsep" aria-hidden="true"></span>
             {#each SIDE_TABS as tab (tab.id)}
                 <button
                     type="button"
@@ -246,14 +265,18 @@
     </div>
 
     {#if activeTab !== null}
-        <div class="drawer" data-testid="tree-drawer">
+        <div
+            class="drawer"
+            data-testid="tree-drawer"
+            transition:slide={{ duration: motionMs(200), easing: cubicOut }}
+        >
             {#if !SIDE_TABS.some((s) => s.id === activeTab)}
                 <div class="bar">
                     <span class="seg" role="group" aria-label={t('tree.scope')}>
                         {#each SCOPES as s (s.id)}
                             <button
                                 type="button"
-                                class:on={scope === s.id}
+                                aria-pressed={scope === s.id}
                                 onclick={() => (scope = s.id)}
                                 data-testid="scope-{s.id}">{t(s.label)}</button
                             >
@@ -305,6 +328,53 @@
                         }}
                     />
                 {/if}
+            {:else if activeTab === 'vram'}
+                {#if !vram.data?.collected}
+                    <p class="empty" data-testid="vram-waiting">{t('vram.waiting')}</p>
+                {:else}
+                    {@const v = vram.data}
+                    {@const tracked =
+                        (v.texture_bytes ?? 0) + (v.mesh_bytes ?? 0) + (v.render_target_bytes ?? 0)}
+                    <div class="vram" data-testid="vram-view">
+                        <dl class="vram-totals">
+                            <dt>
+                                {(v.driver_bytes ?? 0) > 0 ? t('vram.driver') : t('vram.tracked')}
+                            </dt>
+                            <dd class="mono" data-testid="vram-driver">
+                                {bytes((v.driver_bytes ?? 0) > 0 ? (v.driver_bytes ?? 0) : tracked)}
+                            </dd>
+                            <dt>{t('vram.kind.texture')}</dt>
+                            <dd class="mono">
+                                {bytes(v.texture_bytes ?? 0)}
+                                <span class="dim">x{v.texture_count ?? 0}</span>
+                            </dd>
+                            <dt>{t('vram.kind.mesh')}</dt>
+                            <dd class="mono">
+                                {bytes(v.mesh_bytes ?? 0)}
+                                <span class="dim">x{v.mesh_count ?? 0}</span>
+                            </dd>
+                            <dt>{t('vram.kind.rt')}</dt>
+                            <dd class="mono">
+                                {bytes(v.render_target_bytes ?? 0)}
+                                <span class="dim">x{v.render_target_count ?? 0}</span>
+                            </dd>
+                        </dl>
+                        <h4 class="vram-h">{t('vram.top')}</h4>
+                        <table class="vram-top">
+                            <tbody>
+                                {#each v.top ?? [] as entry, i (i)}
+                                    <tr data-testid="vram-top-row">
+                                        <td class="name">{entry.name || t('vram.unnamed')}</td>
+                                        <td class="dim"
+                                            >{t(VRAM_KINDS[entry.kind] ?? VRAM_KINDS[0])}</td
+                                        >
+                                        <td class="num mono">{bytes(entry.bytes)}</td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                    </div>
+                {/if}
             {:else if activeTab !== 'tree' && activeTab !== 'alloc'}
                 <p class="empty" data-testid="tab-soon">{t('tree.soon')}</p>
             {:else if rows.length === 0}
@@ -330,12 +400,12 @@
                         <tr>
                             <th class="pct" aria-label="share"></th>
                             <th class="num pct">%</th>
-                            <th class="num">
+                            <th class="num" aria-sort={sortDir('total')}>
                                 <button type="button" onclick={() => sortBy('total')}>
                                     {t('tree.col.total')}{arrow('total')}
                                 </button>
                             </th>
-                            <th class="num">
+                            <th class="num" aria-sort={sortDir('self')}>
                                 <button
                                     type="button"
                                     onclick={() => sortBy('self')}
@@ -345,7 +415,7 @@
                                 </button>
                             </th>
                             <th class="num">{t('tree.col.delta')}</th>
-                            <th class="num">
+                            <th class="num" aria-sort={sortDir('calls')}>
                                 <button type="button" onclick={() => sortBy('calls')}>
                                     {t('tree.col.calls')}{arrow('calls')}
                                 </button>
@@ -355,7 +425,7 @@
                                 <th class="num">{t('tree.col.p95')}</th>
                                 <th class="num">{t('tree.col.p99')}</th>
                             {/if}
-                            <th class="num">
+                            <th class="num" aria-sort={sortDir('alloc')}>
                                 <button
                                     type="button"
                                     onclick={() => sortBy('alloc')}
@@ -364,7 +434,7 @@
                                     {t('tree.col.alloc')}{arrow('alloc')}
                                 </button>
                             </th>
-                            <th class="name">
+                            <th class="name" aria-sort={sortDir('label')}>
                                 <button type="button" onclick={() => sortBy('label')}>
                                     {t('tree.col.label')}{arrow('label')}
                                 </button>
@@ -489,7 +559,10 @@
     }
     .drawer {
         /* --stage-h is measured by the page that owns the stage */
-        height: max(var(--drawer-h), calc(100vh - var(--chrome-h) - var(--stage-h, 100vh)));
+        height: max(
+            var(--drawer-h),
+            calc(100vh - var(--chrome-measured, var(--chrome-h)) - var(--stage-h, 100vh))
+        );
         overflow: auto;
         border-bottom: 1px solid var(--border);
     }
@@ -498,6 +571,13 @@
         align-items: center;
         gap: var(--s-1);
         margin-left: auto;
+    }
+    /* the right group is workflows, not frame views; the divider says so. */
+    .tabsep {
+        width: 1px;
+        height: 16px;
+        margin: 0 var(--s-2);
+        background: var(--border);
     }
     .close {
         font: inherit;
@@ -522,7 +602,7 @@
     }
     .tab {
         font: inherit;
-        font-size: var(--f-body, 13px);
+        font-size: var(--f-body);
         color: var(--text-dim);
         background: none;
         border: 0;
@@ -540,11 +620,11 @@
         display: inline-flex;
         align-items: center;
         gap: var(--s-1);
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         color: var(--text-dim);
         background: var(--bg-surface-2);
         border: 1px solid var(--border);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         padding: 2px 10px;
     }
     .chip b {
@@ -563,7 +643,7 @@
         align-items: center;
         padding: 5px 8px;
         border-bottom: 1px solid var(--border);
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         background: var(--bg-surface);
         position: sticky;
         top: 0;
@@ -582,7 +662,7 @@
         color: var(--text-faint);
         padding: 3px 10px;
     }
-    .seg button.on {
+    .seg button[aria-pressed='true'] {
         background: color-mix(in srgb, var(--cyan) 20%, var(--bg-elev));
         color: var(--cyan-soft);
         font-weight: 500;
@@ -591,7 +671,7 @@
         flex: 1;
         min-width: 6rem;
         font: inherit;
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         color: var(--text);
         background: var(--bg-void);
         border: 1px solid var(--border);
@@ -607,7 +687,7 @@
     }
     .bar > button {
         font: inherit;
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         color: var(--text);
         background: var(--bg-surface-2);
         border: 1px solid var(--border);
@@ -619,7 +699,7 @@
         width: 100%;
         table-layout: fixed;
         border-collapse: collapse;
-        font-size: var(--f-small, 12px);
+        font-size: var(--f-small);
     }
     .c-bar {
         width: 54px;
@@ -644,7 +724,7 @@
         margin-left: var(--s-2);
         padding: 0 5px;
         border: 1px solid var(--border);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         font-size: 0.68rem;
         line-height: 1.5;
         color: var(--text-faint);
@@ -652,7 +732,7 @@
     .trend-toggle {
         margin-left: var(--s-2);
         font: inherit;
-        font-size: var(--f-tiny, 11px);
+        font-size: var(--f-tiny);
         color: var(--text-faint);
         background: none;
         border: 0;
@@ -671,7 +751,7 @@
     .trend-state {
         margin: 0;
         color: var(--text-faint);
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
     }
     thead th {
         position: sticky;
@@ -683,7 +763,7 @@
         color: var(--text-dim);
         padding: 4px 8px;
         border-bottom: 1px solid var(--border);
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
         white-space: nowrap;
     }
     thead th.name,
@@ -766,6 +846,57 @@
     .empty {
         padding: var(--s-3);
         color: var(--text-dim);
-        font-size: var(--f-ui, 12px);
+        font-size: var(--f-ui);
+    }
+    .vram {
+        padding: var(--s-3) var(--rail);
+    }
+    .vram-totals {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--s-1) var(--s-4);
+        margin: 0 0 var(--s-3);
+        max-width: 420px;
+    }
+    .vram-totals dt {
+        color: var(--text-dim);
+    }
+    .vram-totals dd {
+        margin: 0;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .vram-h {
+        margin: var(--s-3) 0 var(--s-2);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-faint);
+    }
+    .vram-top {
+        width: 100%;
+        max-width: 640px;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+    .vram-top td {
+        padding: 2px var(--s-3) 2px 0;
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .vram-top .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 320px;
+    }
+    .vram-top .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .vram .dim {
+        color: var(--text-faint);
+        font-size: 0.72rem;
     }
 </style>

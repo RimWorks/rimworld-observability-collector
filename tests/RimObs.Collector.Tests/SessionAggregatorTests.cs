@@ -298,6 +298,72 @@ public sealed class SessionAggregatorTests {
         aggregator.Frames.FindByOrdinal(1)!.NodeCount.Should().Be(2);
     }
 
+    // a datagram the kernel ate is invisible to both ends; the sequence gap is the only witness.
+    [Fact]
+    public void Sequence_gaps_count_lost_datagrams_and_a_restart_counts_nothing() {
+        SessionAggregator aggregator = new();
+        aggregator.OnDatagramSequence("game", 1);
+        aggregator.OnDatagramSequence("game", 2);
+        aggregator.OnDatagramSequence("game", 5);
+        aggregator.LostDatagrams.Should().Be(2);
+
+        aggregator.OnDatagramSequence("other", 40);
+        aggregator.LostDatagrams.Should().Be(2);
+
+        aggregator.OnDatagramSequence("game", 1);
+        aggregator.LostDatagrams.Should().Be(2);
+        aggregator.OnDatagramSequence("game", 2);
+        aggregator.LostDatagrams.Should().Be(2);
+    }
+
+    // transport loss belongs to its session: the counters and sequence baselines reset on a
+    // session change, or the new session reports drops that never happened in it.
+    [Fact]
+    public void A_session_change_resets_the_transport_loss_counters() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
+        aggregator.OnDatagramSequence("game", 1);
+        aggregator.OnDatagramSequence("game", 9);
+        aggregator.OnBacklogDrop();
+        aggregator.LostDatagrams.Should().Be(7);
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
+
+        aggregator.LostDatagrams.Should().Be(0);
+        aggregator.BacklogDrops.Should().Be(0);
+        // the old baseline must go too, or the first datagram of the new session counts as a gap.
+        aggregator.OnDatagramSequence("game", 1);
+        aggregator.LostDatagrams.Should().Be(0);
+    }
+
+    // a backlog-dropped datagram never dispatches, so it also leaves a sequence gap; the
+    // reported loss is the gap alone, or every backlog drop would count twice.
+    [Fact]
+    public void A_backlog_dropped_datagram_is_counted_once_through_its_gap() {
+        SessionAggregator aggregator = new();
+        aggregator.OnDatagramSequence("game", 1);
+        aggregator.OnBacklogDrop();
+        aggregator.OnDatagramSequence("game", 3);
+
+        aggregator.LostDatagrams.Should().Be(1);
+        aggregator.BacklogDrops.Should().Be(1);
+    }
+
+    [Fact]
+    public void OnVram_serves_the_latest_census_and_caps_the_history() {
+        SessionAggregator aggregator = new();
+        aggregator.LatestVram.Should().BeNull();
+
+        for (int i = 1; i <= 725; i++)
+            aggregator.OnVram(new VramBatch { DriverBytes = i });
+
+        aggregator.LatestVram!.Value.Batch.DriverBytes.Should().Be(725);
+        (DateTime, long)[] history = aggregator.VramHistory;
+        history.Should().HaveCount(720);
+        history[0].Item2.Should().Be(6);
+        history[^1].Item2.Should().Be(725);
+    }
+
     [Fact]
     public void OnSectionBatch_files_samples_into_the_frame_ring_by_ordinal() {
         SessionAggregator aggregator = new();

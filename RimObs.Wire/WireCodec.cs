@@ -81,6 +81,8 @@ public static class WireCodec {
                 return Serialize(v);
             case TpsFpsBatch v:
                 return Serialize(v);
+            case VramBatch v:
+                return Serialize(v);
             case ControlSearchRequest v:
                 return Serialize(v);
             case ControlSearchResponse v:
@@ -250,6 +252,22 @@ public static class WireCodec {
         return writer.ToArray();
     }
 
+    public static byte[] Serialize(VramBatch value) {
+        WireBufferWriter writer = new WireBufferWriter();
+        writer.WriteArrayHeader(10);
+        writer.WriteInt64(value.DriverBytes);
+        writer.WriteInt64(value.TextureBytes);
+        writer.WriteInt64(value.MeshBytes);
+        writer.WriteInt64(value.RenderTargetBytes);
+        writer.WriteInt32(value.TextureCount);
+        writer.WriteInt32(value.MeshCount);
+        writer.WriteInt32(value.RenderTargetCount);
+        WriteStringArray(writer, value.TopNames);
+        writer.WriteBinary(value.TopKinds);
+        WriteInt64Array(writer, value.TopBytes);
+        return writer.ToArray();
+    }
+
     public static byte[] Serialize(TpsFpsBatch value) {
         WireBufferWriter writer = new WireBufferWriter();
         writer.WriteArrayHeader(3);
@@ -372,6 +390,7 @@ public static class WireCodec {
         [typeof(AllocationsBatch)] = data => ReadAllocationsBatch(data),
         [typeof(PatchConflictsBatch)] = data => ReadPatchConflictsBatch(data),
         [typeof(TpsFpsBatch)] = data => ReadTpsFpsBatch(data),
+        [typeof(VramBatch)] = data => ReadVramBatch(data),
         [typeof(ControlSearchRequest)] = data => ReadControlSearchRequest(data),
         [typeof(ControlSearchResponse)] = data => ReadControlSearchResponse(data),
         [typeof(ControlAssembliesResponse)] = data => ReadControlAssembliesResponse(data),
@@ -533,6 +552,23 @@ public static class WireCodec {
         if (fieldCount >= 8)
             batch.FrameOrdinals = ReadInt32Array(reader);
         return batch;
+    }
+
+    private static VramBatch ReadVramBatch(byte[] data) {
+        WireBufferReader reader = new WireBufferReader(data);
+        reader.ReadArrayHeader();
+        return new VramBatch {
+            DriverBytes = reader.ReadInt64(),
+            TextureBytes = reader.ReadInt64(),
+            MeshBytes = reader.ReadInt64(),
+            RenderTargetBytes = reader.ReadInt64(),
+            TextureCount = reader.ReadInt32(),
+            MeshCount = reader.ReadInt32(),
+            RenderTargetCount = reader.ReadInt32(),
+            TopNames = ReadStringArray(reader),
+            TopKinds = reader.ReadBinary() ?? Array.Empty<byte>(),
+            TopBytes = ReadInt64Array(reader),
+        };
     }
 
     private static AllocationsBatch ReadAllocationsBatch(byte[] data) {

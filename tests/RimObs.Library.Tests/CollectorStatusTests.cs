@@ -117,7 +117,7 @@ public sealed class CollectorStatusTests {
     public void BuildLinesReportsCoreSectionCounts() {
         StatusLine core = Running().BuildLines().Single(l => l.Label == "Core sections");
 
-        core.Value.Should().Be("12/13 installed (unresolved=1, failed=0)");
+        core.Value.Should().Be("12 installed of 13 known (unresolved=1, failed=0)");
         core.Healthy.Should().BeFalse();
     }
 
@@ -188,10 +188,10 @@ public sealed class CollectorStatusTests {
     }
 
     [Fact]
-    public void BuildLinesMarksOptInAllocationSamplerAsHealthyWhenOff() {
+    public void BuildLinesMarksAllocationSamplerAsHealthyWhenOff() {
         StatusLine sampler = Running().BuildLines().Single(l => l.Label == "Allocation sampler");
 
-        sampler.Value.Should().Be("off (opt-in)");
+        sampler.Value.Should().Be("off");
         sampler.Healthy.Should().BeTrue();
     }
 }

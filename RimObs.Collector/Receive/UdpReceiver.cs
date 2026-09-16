@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using RimWorks.RimObs.Collector.Aggregation;
 using RimWorks.RimObs.Collector.Instrumentation;
 using RimWorks.RimObs.Wire;
@@ -23,9 +24,20 @@ public sealed class UdpReceiver : BackgroundService {
         _port = port;
     }
 
+    /// <summary>Dispatch backlog. ~10KB per datagram, so full is ~80MB, and past that the drop is counted.</summary>
+    private const int BacklogCapacity = 8192;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         _client = new UdpClient(new IPEndPoint(IPAddress.Loopback, _port));
-        _log.LogInformation("UDP receiver listening on 127.0.0.1:{Port}", _port);
+        try {
+            // the kernel clamps this to net.core.rmem_max; the default ~212KB held ~30ms of a
+            // busy session, and every overrun was an invisible kernel drop.
+            _client.Client.ReceiveBufferSize = 1 << 23;
+        }
+        catch (SocketException) {
+            // the OS refused; the backlog channel below still absorbs dispatch stalls.
+        }
+        _log.LogInformation("UDP receiver listening on 127.0.0.1:{Port} (rcvbuf {Rcvbuf})", _port, _client.Client.ReceiveBufferSize);
 
         stoppingToken.Register(() => {
             try {
@@ -36,18 +48,18 @@ public sealed class UdpReceiver : BackgroundService {
             }
         });
 
+        // receive and dispatch decoupled: a dispatch stall used to back up the socket until
+        // the kernel dropped datagrams, and a dropped Root_Play.Update orphaned its whole frame.
+        Channel<UdpReceiveResult> backlog = Channel.CreateBounded<UdpReceiveResult>(
+            new BoundedChannelOptions(BacklogCapacity) { SingleReader = true, SingleWriter = true });
+        UdpClient client = _client;
+        Task consumer = Task.Run(() => ConsumeAsync(client, backlog.Reader, stoppingToken), stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested) {
             try {
                 UdpReceiveResult result = await _client.ReceiveAsync(stoppingToken).ConfigureAwait(false);
-                byte[]? response = Dispatch(result.Buffer);
-                if (response is not null) {
-                    try {
-                        await _client.SendAsync(response, response.Length, result.RemoteEndPoint).ConfigureAwait(false);
-                    }
-                    catch (Exception sendEx) {
-                        _log.LogWarning(sendEx, "Failed to send pong to {Remote}", result.RemoteEndPoint);
-                    }
-                }
+                if (!backlog.Writer.TryWrite(result))
+                    _aggregator.OnBacklogDrop();
             }
             catch (OperationCanceledException) {
                 break;
@@ -57,6 +69,28 @@ public sealed class UdpReceiver : BackgroundService {
             }
             catch (Exception ex) {
                 _log.LogWarning(ex, "UDP receive error");
+            }
+        }
+
+        backlog.Writer.TryComplete();
+        try {
+            await consumer.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) {
+            // shutdown path.
+        }
+    }
+
+    private async Task ConsumeAsync(UdpClient client, ChannelReader<UdpReceiveResult> reader, CancellationToken stoppingToken) {
+        await foreach (UdpReceiveResult result in reader.ReadAllAsync(stoppingToken).ConfigureAwait(false)) {
+            byte[]? response = Dispatch(result.Buffer);
+            if (response is null)
+                continue;
+            try {
+                await client.SendAsync(response, response.Length, result.RemoteEndPoint).ConfigureAwait(false);
+            }
+            catch (Exception sendEx) {
+                _log.LogWarning(sendEx, "Failed to send pong to {Remote}", result.RemoteEndPoint);
             }
         }
     }
@@ -85,6 +119,7 @@ public sealed class UdpReceiver : BackgroundService {
         }
 
         _aggregator.OnBatchReceived(bytes.Length);
+        _aggregator.OnDatagramSequence(envelope.OwnerId, envelope.Sequence);
 
         try {
             switch (envelope.BatchType) {
@@ -119,6 +154,9 @@ public sealed class UdpReceiver : BackgroundService {
                     break;
                 case BatchType.TpsFps:
                     _aggregator.OnTpsFps(WireCodec.Deserialize<TpsFpsBatch>(envelope.Payload));
+                    break;
+                case BatchType.Vram:
+                    _aggregator.OnVram(WireCodec.Deserialize<VramBatch>(envelope.Payload));
                     break;
                 case BatchType.Ping:
                     PingMessage ping = WireCodec.Deserialize<PingMessage>(envelope.Payload);

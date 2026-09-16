@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import ThreadFilter from './ThreadFilter.svelte';
 import { userPrefs } from '../userPrefs.svelte';
+import { t } from '../i18n';
 import { ThreadRole } from '../threadLanes';
 import type { ThreadLane } from '../api';
 import type { FrameNodes } from '../frameTree';
@@ -78,6 +79,19 @@ describe('ThreadFilter', () => {
         expect(userPrefs.mainThreadOnly).toBe(false);
         expect(selected.has(1)).toBe(true);
         expect(selected.has(2)).toBe(true);
+    });
+
+    // the locked explanation is the only thing telling you why the rows mirror the gutter,
+    // so it has to reach keyboard and touch, not just a native title on hover.
+    it('explains a locked row with a tooltip', async () => {
+        userPrefs.mainThreadOnly = true;
+        mount();
+        const wrap = screen.getByTestId('thread-row-1').closest('.tt-wrap')!;
+        expect(wrap).not.toBeNull();
+
+        await fireEvent.mouseEnter(wrap);
+
+        expect(wrap.querySelector('[role="tooltip"]')?.textContent).toBe(t('tip.threads.mainOnly'));
     });
 
     it('caps the percent label at 100 even when spans spill past the frame', () => {

@@ -53,7 +53,7 @@ leaves the game running the previous binary with no error, so check the timestam
 ```bash
 make test                                                          # xUnit suites
 dotnet test tests/RimObs.Library.Tests/RimObs.Library.Tests.csproj # one project
-make lint                                                          # dotnet format check + eslint
+make lint                                                          # dotnet format check + prettier + svelte-check
 ```
 
 - Run the full suite before committing. All tests must pass.
@@ -65,7 +65,7 @@ make lint                                                          # dotnet form
 ## Code style
 
 - Formatter: `dotnet format` and prettier, via `make format`. Linter: `make lint` runs
-  `dotnet format --verify-no-changes` plus eslint over the dashboard. Run them; do not
+  `dotnet format --verify-no-changes` plus prettier and svelte-check over the dashboard. Run them; do not
   hand-format.
 - Library code targets `net472` and must not allocate in the hot path.
 - Follow the patterns already in neighboring files.

@@ -2,8 +2,10 @@
     import type { StatusResponse, AutoInstrumentCounters } from '../api';
     import { t } from '../i18n';
     import { relativeTime, rate } from '../format';
+    import { FRAME_BUDGET_US, tickBudgetUs } from '../frameCost';
     import Icon from './Icon.svelte';
     import Logo from './Logo.svelte';
+    import Dialog from './Dialog.svelte';
     import SettingsPopover from './SettingsPopover.svelte';
     import Tooltip from './Tooltip.svelte';
     import { liveVitals } from '../vitals.svelte';
@@ -31,6 +33,17 @@
         liveVitals.frameMedianUs !== null ? liveVitals.frameMedianUs / 1000 : null,
     );
 
+    // budget share, the spread meter's idiom: a full bar means the budget is spent.
+    let tickShare = $derived(tickMs !== null ? tickMs / (tickBudgetUs(tps) / 1000) : null);
+    let frameShare = $derived(frameMs !== null ? frameMs / (FRAME_BUDGET_US / 1000) : null);
+    const shareWidth = (share: number) => Math.min(100, share * 100);
+    // whole-cost shares, not section heat: trouble means nearing or blowing the budget,
+    // or a healthy 10ms frame (22% of budget) would paint orange.
+    const costHue = (share: number) => {
+        if (share < 0.8) return 'var(--border-strong)';
+        return share <= 1 ? 'var(--warn)' : 'var(--bad)';
+    };
+
     // one copy of the bindings, read by the ? overlay.
     const KEY_GROUPS = [
         { id: 'transport', key: 'flamegraph.keys.transport' },
@@ -39,12 +52,6 @@
     ];
 
     let keysOpen = $state(false);
-    let keysEl = $state<HTMLDialogElement | null>(null);
-
-    // jsdom 25 has no showModal; the optional call keeps the overlay testable there.
-    $effect(() => {
-        if (keysOpen) keysEl?.showModal?.();
-    });
 
     function keydown(e: KeyboardEvent): void {
         const el = e.target as HTMLElement | null;
@@ -72,25 +79,18 @@
     <div class="crumbs">
         <div class="glyph"><Logo size={24} /></div>
         <h1>RimObs</h1>
-        <p class="what">{t('nav.flamegraph.what')}</p>
-        <Tooltip text={t('flamegraph.keys.hint')} placement="bottom" tabindex={-1}>
-            <button
-                class="help"
-                type="button"
-                aria-label={t('flamegraph.keys.title')}
-                onclick={() => (keysOpen = true)}
-                data-testid="keys-help"
-            >
-                <Icon name="info" size={13} />
-            </button>
-        </Tooltip>
+        <button class="help" type="button" onclick={() => (keysOpen = true)} data-testid="keys-help"
+            >{t('flamegraph.keys.cta')}</button
+        >
     </div>
 
     <div class="right">
         {#if patching}
             <div class="patching" data-testid="patch-progress">
                 <span class="patchlabel">{t('topbar.patching')}</span>
-                <span class="track"><span class="fill" style="width: {patchPct}%"></span></span>
+                <span class="track"
+                    ><span class="fill" style="transform: scaleX({patchPct / 100})"></span></span
+                >
                 <span class="mono pct">{Math.round(patchPct)}%</span>
             </div>
             <span class="rule"></span>
@@ -99,22 +99,62 @@
         {#if tps !== null || fps !== null}
             <div class="vitals" data-testid="vitals">
                 {#if tps !== null}
-                    <div class="vital" data-testid="vital-tps">
-                        <b class="mono">{rate(tps)}</b><span
-                            >{t('overview.tps')}{#if tickMs !== null}<em class="ms mono"
-                                    >{tickMs.toFixed(2)}ms</em
-                                >{/if}</span
-                        >
-                    </div>
+                    <Tooltip
+                        text={tickMs !== null
+                            ? t('overview.tps.cost')
+                                  .replace('{ms}', tickMs.toFixed(2))
+                                  .replace('{budget}', (tickBudgetUs(tps) / 1000).toFixed(2))
+                            : t('overview.tps')}
+                        placement="bottom"
+                    >
+                        <div class="vital" data-testid="vital-tps">
+                            <span class="top"
+                                ><b class="mono">{rate(tps)}</b><span class="lbl"
+                                    >{t('overview.tps')}</span
+                                ></span
+                            >
+                            {#if tickShare !== null}
+                                <span class="costbar"
+                                    ><span
+                                        class="fill"
+                                        style="width: {shareWidth(
+                                            tickShare,
+                                        )}%; background: {costHue(tickShare)}"
+                                        data-testid="tps-cost"
+                                    ></span></span
+                                >
+                            {/if}
+                        </div>
+                    </Tooltip>
                 {/if}
                 {#if fps !== null}
-                    <div class="vital" data-testid="vital-fps">
-                        <b class="mono">{rate(fps)}</b><span
-                            >{t('overview.fps')}{#if frameMs !== null}<em class="ms mono"
-                                    >{frameMs.toFixed(2)}ms</em
-                                >{/if}</span
-                        >
-                    </div>
+                    <Tooltip
+                        text={frameMs !== null
+                            ? t('overview.fps.cost')
+                                  .replace('{ms}', frameMs.toFixed(2))
+                                  .replace('{budget}', (FRAME_BUDGET_US / 1000).toFixed(1))
+                            : t('overview.fps')}
+                        placement="bottom"
+                    >
+                        <div class="vital" data-testid="vital-fps">
+                            <span class="top"
+                                ><b class="mono">{rate(fps)}</b><span class="lbl"
+                                    >{t('overview.fps')}</span
+                                ></span
+                            >
+                            {#if frameShare !== null}
+                                <span class="costbar"
+                                    ><span
+                                        class="fill"
+                                        style="width: {shareWidth(
+                                            frameShare,
+                                        )}%; background: {costHue(frameShare)}"
+                                        data-testid="fps-cost"
+                                    ></span></span
+                                >
+                            {/if}
+                        </div>
+                    </Tooltip>
                 {/if}
             </div>
             <span class="rule"></span>
@@ -143,29 +183,21 @@
 </header>
 
 {#if keysOpen}
-    <dialog
-        class="keys"
-        bind:this={keysEl}
-        onclose={() => (keysOpen = false)}
-        aria-label={t('flamegraph.keys.title')}
-        data-testid="keys-dialog"
+    <Dialog
+        title={t('flamegraph.keys.title')}
+        testid="keys-dialog"
+        closeTestid="keys-close"
+        width="30rem"
+        onDismiss={() => (keysOpen = false)}
     >
-        <div class="head">
-            <h2>{t('flamegraph.keys.title')}</h2>
-            <button
-                type="button"
-                class="close"
-                aria-label={t('common.close')}
-                onclick={() => (keysOpen = false)}
-                data-testid="keys-close">&times;</button
-            >
-        </div>
-        <ul>
-            {#each KEY_GROUPS as group (group.id)}
-                <li data-testid="keys-{group.id}">{t(group.key)}</li>
-            {/each}
-        </ul>
-    </dialog>
+        {#snippet body()}
+            <ul class="keylist">
+                {#each KEY_GROUPS as group (group.id)}
+                    <li data-testid="keys-{group.id}">{t(group.key)}</li>
+                {/each}
+            </ul>
+        {/snippet}
+    </Dialog>
 {/if}
 
 <style>
@@ -181,7 +213,9 @@
         background: var(--bg-base);
         position: sticky;
         top: 0;
-        z-index: 5;
+        /* the settings slideout renders inside this context, so the topbar must outrank
+           the bottom pane (40) and status strip (41) or the drawer is trapped under them */
+        z-index: 60;
     }
     .crumbs {
         display: flex;
@@ -195,18 +229,6 @@
         width: 24px;
         height: 24px;
         flex: none;
-    }
-    .what {
-        margin: 0;
-        font-size: 0.76rem;
-        line-height: 1.3;
-        color: var(--text-faint);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        transition:
-            color var(--t-fast) var(--ease-out),
-            background var(--t-fast) var(--ease-out);
     }
     h1 {
         font-family: var(--font-display);
@@ -224,17 +246,21 @@
         align-items: center;
         gap: var(--s-1);
         font-size: 0.78rem;
-        color: var(--cyan-soft);
+        color: var(--text-faint);
         border: 1px solid var(--border);
         background: var(--bg-surface);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         padding: var(--s-1) var(--s-3);
+    }
+    .update:hover {
+        color: var(--cyan-soft);
+        border-color: var(--border-strong);
     }
     .patching {
         display: flex;
         gap: var(--s-2);
         align-items: center;
-        font-size: var(--f-small, 11.5px);
+        font-size: var(--f-small);
         color: var(--text-dim);
     }
     .patchlabel {
@@ -249,10 +275,12 @@
     }
     .patching .fill {
         display: block;
+        width: 100%;
         height: 100%;
         background: var(--cyan);
         border-radius: 2px;
-        transition: width 300ms linear;
+        transform-origin: left;
+        transition: transform 300ms linear;
     }
     .patching .pct {
         min-width: 3ch;
@@ -282,67 +310,45 @@
         letter-spacing: 0.1em;
         color: var(--text-faint);
     }
-    .vital .ms {
-        font-style: normal;
-        text-transform: none;
-        letter-spacing: 0;
-        margin-left: var(--s-1);
-        color: var(--text-dim);
-        font-variant-numeric: tabular-nums;
+    .vital .top {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+    }
+    .vital .lbl {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-faint);
+    }
+    .vital .costbar {
+        position: relative;
+        width: 64px;
+        height: 3px;
+        margin-top: 2px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    .vital .costbar .fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        border-radius: 2px;
     }
     .help {
-        display: grid;
-        place-items: center;
         flex: none;
-        padding: 0;
+        min-height: 28px;
+        padding: 0 var(--s-2);
         border: 0;
         background: none;
         cursor: pointer;
+        font-size: var(--f-small);
         color: var(--text-faint);
     }
     .help:hover {
         color: var(--text-dim);
     }
-    .keys {
-        width: min(30rem, calc(100vw - 2rem));
-        margin: auto;
-        padding: var(--s-5);
-        color: var(--text);
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-lg);
-        box-shadow: 0 18px 48px rgb(0 0 0 / 55%);
-    }
-    .keys::backdrop {
-        background: rgb(0 0 0 / 55%);
-    }
-    .keys .head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--s-3);
-        margin-bottom: var(--s-3);
-    }
-    .keys h2 {
-        margin: 0;
-        font-family: var(--font-display);
-        font-size: 1.05rem;
-        letter-spacing: 0.03em;
-    }
-    .keys .close {
-        font: inherit;
-        font-size: 1.1rem;
-        line-height: 1;
-        color: var(--text-dim);
-        background: none;
-        border: 0;
-        padding: 2px 6px;
-        cursor: pointer;
-    }
-    .keys .close:hover {
-        color: var(--text);
-    }
-    .keys ul {
+    .keylist {
         display: flex;
         flex-direction: column;
         gap: var(--s-2);
@@ -364,10 +370,6 @@
         gap: var(--s-2);
         font-size: 0.78rem;
         color: var(--text-dim);
-        border: 1px solid var(--border-soft);
-        border-radius: 99px;
-        padding: var(--s-1) var(--s-3);
-        background: var(--bg-surface);
     }
     .ago {
         color: var(--text-faint);
@@ -390,31 +392,6 @@
         .right {
             gap: var(--s-2);
             min-width: 0;
-        }
-        .patching {
-            display: flex;
-            gap: var(--s-2);
-            align-items: center;
-            font-size: var(--f-small, 11.5px);
-            color: var(--text-dim);
-        }
-        .patching .track {
-            width: 72px;
-            height: 4px;
-            overflow: hidden;
-            background: var(--bg-elev);
-            border-radius: 2px;
-        }
-        .patching .fill {
-            display: block;
-            height: 100%;
-            background: var(--cyan);
-            border-radius: 2px;
-            transition: width 300ms linear;
-        }
-        .patching .pct {
-            min-width: 3ch;
-            color: var(--text);
         }
         .vitals {
             gap: var(--s-3);

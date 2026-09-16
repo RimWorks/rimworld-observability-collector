@@ -302,6 +302,24 @@ public sealed class WireCodecTests {
     }
 
     [Fact]
+    public void VramBatch_round_trips() {
+        VramBatch original = new() {
+            DriverBytes = 1_500_000_000L,
+            TextureBytes = 900_000_000L,
+            MeshBytes = 200_000_000L,
+            RenderTargetBytes = 150_000_000L,
+            TextureCount = 18_204,
+            MeshCount = 3_311,
+            RenderTargetCount = 41,
+            TopNames = ["TerrainAtlas", "PawnAtlas"],
+            TopKinds = [0, 2],
+            TopBytes = [268_435_456L, 67_108_864L],
+        };
+        VramBatch decoded = WireCodec.Deserialize<VramBatch>(WireCodec.Serialize(original));
+        decoded.Should().BeEquivalentTo(original);
+    }
+
+    [Fact]
     public void TpsFpsBatch_round_trips() {
         TpsFpsBatch original = new() {
             Tps = 59.84231,
@@ -664,7 +682,7 @@ public sealed class WireCodecTests {
 
     [Fact]
     public void Generic_dispatch_covers_every_serializable_wire_type() {
-        AllWireTypes().Count.Should().Be(22);
+        AllWireTypes().Count.Should().Be(23);
     }
 
     // the preview is only trustworthy if every counter survives the wire, so this asserts the

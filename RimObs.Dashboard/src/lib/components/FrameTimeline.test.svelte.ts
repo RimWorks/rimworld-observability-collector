@@ -46,16 +46,16 @@ function waitForFrame(): Promise<void> {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function stubRect(el: HTMLElement, width = 600, height = 100): void {
+function stubRect(el: HTMLElement, width = 600, height = 100, left = 0): void {
     el.getBoundingClientRect = () =>
         ({
-            left: 0,
+            left,
             top: 0,
-            right: width,
+            right: left + width,
             bottom: height,
             width,
             height,
-            x: 0,
+            x: left,
             y: 0,
             toJSON() {},
         }) as DOMRect;
@@ -466,6 +466,38 @@ describe('FrameTimeline', () => {
         const [, quads, opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
         expect(opts.hoverIndex).toBe(quads.findIndex((q) => q.count > 1));
         expect(opts.hoverIndex).not.toBe(4);
+    });
+
+    // an error banner appearing above the canvas moves it with no resize and no scroll, so the
+    // cached top went stale and hover reported the wrong lane until the next resize.
+    it('re-measures the canvas on pointerenter after it moved', async () => {
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = screen.getByRole('application');
+        stubRect(canvas, 600, 100, 0);
+        await firePointerMove(canvas, 30, 20);
+        await waitForFrame();
+        const before = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(before[1][before[2].hoverIndex].depth).toBe(1);
+
+        // the canvas slid down one row, so the same client y is now the root row, not depth 1.
+        canvas.getBoundingClientRect = () =>
+            ({
+                left: 0,
+                top: 18,
+                right: 600,
+                bottom: 118,
+                width: 600,
+                height: 100,
+                x: 0,
+                y: 18,
+                toJSON() {},
+            }) as DOMRect;
+        await fireEvent.pointerEnter(canvas);
+        await firePointerMove(canvas, 30, 20);
+        await waitForFrame();
+
+        const [, quads, opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(quads[opts.hoverIndex].depth).toBe(0);
     });
 
     // rerender re-runs the dirty effect whichever props move, so this pins the label
@@ -1116,5 +1148,42 @@ describe('FrameTimeline search scope', () => {
         } finally {
             info.mockRestore();
         }
+    });
+});
+
+// a hover fires at pointer rate, so a getBoundingClientRect per move forces layout on every
+// one. the rect is cached and refreshed on resize and on an ancestor scroll.
+describe('FrameTimeline layout reads', () => {
+    it('measures no rect while the pointer moves over the flame', async () => {
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = screen.getByRole('application');
+        stubRect(canvas, 600);
+        // the first move pays for the missed layout, everything after reads the cache
+        await firePointerMove(canvas, 12, 20);
+        const spy = vi.spyOn(canvas, 'getBoundingClientRect');
+
+        await firePointerMove(canvas, 20, 20);
+        await firePointerMove(canvas, 40, 20);
+        await waitForFrame();
+
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('picks up a scrolled-away origin on the next pointer move', async () => {
+        render(FrameTimeline, { series: buildSeries([FRAME]), names: NAMES });
+        const canvas = screen.getByRole('application');
+        stubRect(canvas, 600);
+        await firePointerMove(canvas, 12, 20);
+        await waitFor(() => expect(screen.getByText('of frame')).toBeInTheDocument());
+
+        // the page scrolled the flame 100px right; the same node now sits at clientX 112
+        stubRect(canvas, 600, 100, 100);
+        document.dispatchEvent(new Event('scroll'));
+
+        await firePointerMove(canvas, 112, 20);
+        await waitForFrame();
+        const [, , opts] = vi.mocked(drawTimeline).mock.calls.at(-1)!;
+        expect(opts.hoverIndex).toBeGreaterThanOrEqual(0);
+        expect(screen.getByText('of frame')).toBeInTheDocument();
     });
 });

@@ -41,12 +41,10 @@ describe('StatusFooter', () => {
 
     // nothing reports process memory to the dashboard yet. the point of this test is that the
     // readout stays empty of numbers rather than inventing one, whatever the locale calls it.
-    it('shows memory as unavailable rather than a fabricated number', () => {
+    // a slot that can never hold a value trains users to stop reading the strip.
+    it('ships no memory slot until the collector reports one', () => {
         render(StatusFooter, BASE);
-        const memory = screen.getByTestId('footer-memory');
-
-        expect(memory).toHaveTextContent(t('footer.memory.unavailable'));
-        expect(memory.textContent).not.toMatch(/\d/);
+        expect(screen.queryByTestId('footer-memory')).toBeNull();
     });
 
     it('renders the overhead readout it was handed', () => {
@@ -81,24 +79,18 @@ describe('StatusFooter', () => {
     });
 
     // mod authors paste these numbers into Discord, so every cell hands over its own label too.
-    it('copies a footer cell as label and value on click', async () => {
+    it('copies nothing on click', async () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
         render(StatusFooter, BASE);
-
-        const ring = screen.getByTestId('footer-ring');
-        await fireEvent.click(ring);
-
-        expect(writeText).toHaveBeenCalledWith(`${t('flamegraph.ringsize')} 2,000/5,000`);
-        await expect.poll(() => ring.className).toContain('copied');
-        expect(ring).toHaveAttribute('title', t('copy.copied'));
+        await fireEvent.click(screen.getByTestId('footer-ring'));
+        expect(writeText).not.toHaveBeenCalled();
     });
 
     it('gives each readout a descriptive tooltip', async () => {
         render(StatusFooter, BASE);
         for (const testid of [
             'footer-ring',
-            'footer-memory',
             'footer-overhead',
             'footer-timerres',
             'footer-delta',

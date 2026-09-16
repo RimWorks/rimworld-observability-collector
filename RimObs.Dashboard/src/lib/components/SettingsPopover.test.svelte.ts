@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import SettingsPopover from './SettingsPopover.svelte';
 import { liveConfig } from '../liveConfig.svelte';
+import { uiSignals } from '../uiSignals.svelte';
 import type { StatusResponse } from '../api';
 
 const SESSION = {
@@ -146,6 +147,35 @@ describe('SettingsPopover', () => {
         expect(screen.getByText('1.2.3')).toBeTruthy();
     });
 
+    it('closes from the header button and returns focus to the gear', async () => {
+        render(SettingsPopover, { status });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+
+        await fireEvent.click(screen.getByTestId('settings-close'));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(document.activeElement).toBe(screen.getByTestId('settings-gear'));
+    });
+
+    // the review fork: anchors shows every group at once, tabs shows one at a time.
+    it('shows one section at a time in tabs mode and all of them in anchors mode', async () => {
+        render(SettingsPopover, { status });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+
+        expect(document.getElementById('settings-session')).toBeTruthy();
+        expect(document.getElementById('settings-dashboard')).toBeTruthy();
+
+        await fireEvent.click(screen.getByTestId('drawer-variant'));
+        expect(document.getElementById('settings-session')).toBeTruthy();
+        expect(document.getElementById('settings-dashboard')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('settings-nav-dashboard'));
+        expect(document.getElementById('settings-session')).toBeNull();
+        expect(document.getElementById('settings-dashboard')).toBeTruthy();
+    });
+
     it('closes on escape', async () => {
         render(SettingsPopover, { status });
         await fireEvent.click(screen.getByTestId('settings-gear'));
@@ -174,6 +204,40 @@ describe('SettingsPopover', () => {
         await fireEvent.pointerDown(panel);
 
         expect(screen.queryByRole('dialog')).toBeTruthy();
+    });
+
+    // the capture chip opens the gear from across the page, so the panel has to come to the
+    // keyboard, and escape has to put focus back on the chip rather than the gear.
+    it('moves focus into the panel on the signal path and back to the opener on close', async () => {
+        render(SettingsPopover, { status });
+        const opener = globalThis.document.createElement('button');
+        opener.setAttribute('data-testid', 'opener');
+        globalThis.document.body.append(opener);
+        opener.focus();
+
+        uiSignals.settingsOpen = true;
+        const panel = await screen.findByRole('dialog');
+        await waitFor(() => expect(panel.contains(globalThis.document.activeElement)).toBe(true));
+
+        await fireEvent.keyDown(globalThis.document, { key: 'Escape' });
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(globalThis.document.activeElement).toBe(opener);
+        opener.remove();
+    });
+
+    // the signal path used to skip the loads, so a chip-opened panel came up with every
+    // control disabled.
+    it('loads the config on the signal path, not just the gear click', async () => {
+        mockConfig();
+        render(SettingsPopover, { status });
+
+        uiSignals.settingsOpen = true;
+        await screen.findByRole('dialog');
+
+        await waitFor(() =>
+            expect(screen.getByTestId<HTMLInputElement>('auto-instrument').disabled).toBe(false),
+        );
     });
 
     it('shows the prometheus health block only while the exporter is on', async () => {

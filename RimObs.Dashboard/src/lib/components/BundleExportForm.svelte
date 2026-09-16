@@ -25,7 +25,11 @@
         { key: 'frames', labelKey: 'bundle.export.include.frames' },
     ];
 
-    let selected = $state<Set<string>>(new Set(defaultIncludes));
+    let selected = $state<Set<string>>(new Set());
+    // the parent can swap the defaults out from under an open form, so track them.
+    $effect(() => {
+        selected = new Set(defaultIncludes);
+    });
     let force = $state(false);
     let submitting = $state(false);
     let estimate = $state<EstimateBundleResult | null>(null);

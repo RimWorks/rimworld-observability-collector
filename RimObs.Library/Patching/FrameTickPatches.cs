@@ -69,6 +69,7 @@ internal static class FrameTickPatches {
         FrameTickCounters.BeginFrame();
         ControlServices.Queue.Drain();
         AutoInstrumentRunner.Pump();
+        VramSampler.Pump();
     }
 
     private static void FramePostfix() {

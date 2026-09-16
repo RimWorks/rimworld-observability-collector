@@ -20,19 +20,19 @@ describe('App shell', () => {
     it('renders the flamegraph as the only page', async () => {
         render(App);
 
-        expect(await screen.findByTestId('frame-budget')).toBeInTheDocument();
+        expect(await screen.findByTestId('pause')).toBeInTheDocument();
     });
 
     it('still renders the flamegraph for a hash left over from a cut route', async () => {
         globalThis.location.hash = '#/comparison';
         render(App);
 
-        expect(await screen.findByTestId('frame-budget')).toBeInTheDocument();
+        expect(await screen.findByTestId('pause')).toBeInTheDocument();
     });
 
     it('offers no navigation', async () => {
         render(App);
-        await screen.findByTestId('frame-budget');
+        await screen.findByTestId('pause');
 
         expect(screen.queryByRole('navigation')).toBeNull();
         expect(screen.queryByRole('link')).toBeNull();

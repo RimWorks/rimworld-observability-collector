@@ -247,17 +247,15 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         padding: 1px 6px;
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         border: 1px solid var(--border);
         color: var(--text-faint);
     }
     .pill-active {
         color: var(--good);
-        border-color: color-mix(in srgb, var(--good) 45%, transparent);
     }
     .pill-stale {
         color: var(--bad);
-        border-color: color-mix(in srgb, var(--bad) 45%, transparent);
     }
     button {
         background: var(--bg-surface);

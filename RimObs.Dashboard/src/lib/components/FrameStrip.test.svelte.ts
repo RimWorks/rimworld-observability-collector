@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import FrameStrip from './FrameStrip.svelte';
+import { drawStrip } from '../stripDraw';
 import { FRAME_BUDGET_US } from '../frameCost';
 
 // jsdom's canvas has no getContext, so without this mock the draw path never runs.
@@ -34,19 +36,23 @@ afterEach(() => {
     HTMLCanvasElement.prototype.getContext = realGetContext;
 });
 
-function stubRect(el: HTMLElement, width = 200, height = 100): void {
-    el.getBoundingClientRect = () =>
+function stubRect(el: HTMLElement, width = 200, height = 100, left = 0): void {
+    const rect = () =>
         ({
-            left: 0,
+            left,
             top: 0,
-            right: width,
+            right: left + width,
             bottom: height,
             width,
             height,
-            x: 0,
+            x: left,
             y: 0,
             toJSON() {},
         }) as DOMRect;
+    el.getBoundingClientRect = rect;
+    // the component measures the wrapper, not the canvas, and caches what it read
+    if (el.parentElement) el.parentElement.getBoundingClientRect = rect;
+    document.dispatchEvent(new Event('scroll'));
 }
 
 const ORDINALS = Array.from({ length: 10 }, (_, i) => i);
@@ -101,6 +107,68 @@ describe('FrameStrip tooltip', () => {
         const tip = screen.getByTestId('strip-tooltip');
         const left = Number.parseFloat(tip.style.left);
         expect(left).toBeGreaterThanOrEqual(0);
+    });
+});
+
+// the strip streams at 30/s, so a getBoundingClientRect per pointer event forces layout on
+// every one of them. the rect is cached and refreshed on resize and on an ancestor scroll.
+describe('FrameStrip layout reads', () => {
+    it('measures no rect while the pointer moves over it', async () => {
+        render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: FULL });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+        canvas.setPointerCapture = () => {};
+        const host = canvas.parentElement as HTMLElement;
+        const spy = vi.spyOn(host, 'getBoundingClientRect');
+        const canvasSpy = vi.spyOn(canvas, 'getBoundingClientRect');
+
+        await fireEvent.mouseMove(canvas, { clientX: 100, clientY: 10 });
+        canvas.dispatchEvent(
+            new MouseEvent('pointerdown', { button: 0, clientX: 40, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointermove', { clientX: 120, clientY: 10, bubbles: true }),
+        );
+        canvas.dispatchEvent(
+            new MouseEvent('pointerup', { clientX: 120, clientY: 10, bubbles: true }),
+        );
+        await fireEvent.click(canvas, { clientX: 100, clientY: 10 });
+
+        expect(spy).not.toHaveBeenCalled();
+        expect(canvasSpy).not.toHaveBeenCalled();
+    });
+
+    it('picks up a scrolled-away left edge on the next pointer move', async () => {
+        render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: FULL });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+        await fireEvent.mouseMove(canvas, { clientX: 100, clientY: 10 });
+        expect(screen.getByTestId('strip-tooltip').textContent).toContain('#5');
+
+        // the page scrolled the strip 100px right; same bar now sits at clientX 200
+        stubRect(canvas, 200, 100, 100);
+
+        await fireEvent.mouseMove(canvas, { clientX: 200, clientY: 10 });
+
+        expect(screen.getByTestId('strip-tooltip').textContent).toContain('#5');
+    });
+
+    // the paint deliberately draws no hover mark, so a hover that repaints is 2000 identical
+    // bars of wasted canvas work per mousemove.
+    it('repaints nothing when the pointer moves', async () => {
+        render(FrameStrip, { ordinals: ORDINALS, durationsUs: DURATIONS, slots: FULL });
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        stubRect(canvas, 200, 100);
+        await tick();
+        vi.mocked(drawStrip).mockClear();
+
+        await fireEvent.mouseMove(canvas, { clientX: 100, clientY: 10 });
+        await tick();
+        await fireEvent.mouseMove(canvas, { clientX: 120, clientY: 10 });
+        await tick();
+
+        expect(screen.getByTestId('strip-tooltip')).not.toBeNull();
+        expect(drawStrip).not.toHaveBeenCalled();
     });
 });
 

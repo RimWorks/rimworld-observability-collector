@@ -17,4 +17,25 @@ if (globalThis.window !== undefined && !globalThis.matchMedia) {
         }) as MediaQueryList;
 }
 
+// jsdom has no element.animate; svelte transitions need one that finishes at once.
+if (globalThis.Element !== undefined && !Element.prototype.animate) {
+    Element.prototype.animate = function () {
+        const anim = {
+            onfinish: null as (() => void) | null,
+            oncancel: null as (() => void) | null,
+            cancel() {},
+            finished: Promise.resolve(),
+        };
+        queueMicrotask(() => anim.onfinish?.());
+        return anim as unknown as Animation;
+    } as unknown as typeof Element.prototype.animate;
+}
+
+// jsdom has no ResizeObserver, and svelte's clientHeight bindings construct one on mount.
+globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 afterEach(() => cleanup());

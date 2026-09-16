@@ -11,6 +11,7 @@ public enum BatchType : byte {
     PatchConflicts = 9,
     TpsFps = 10,
     ThreadRegistrations = 11,
+    Vram = 12,
     Pong = 254,
     Ping = 255,
 }

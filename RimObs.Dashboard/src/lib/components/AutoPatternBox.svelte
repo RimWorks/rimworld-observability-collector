@@ -194,7 +194,7 @@
         line-height: 1.5;
     }
     textarea:hover:not(:disabled) {
-        border-color: var(--border-strong);
+        border-color: var(--text-dim);
     }
     textarea:disabled {
         color: var(--text-ghost);
@@ -228,7 +228,7 @@
         border-radius: 3px;
         background: none;
         text-align: left;
-        font-size: var(--f-small, 11.5px);
+        font-size: var(--f-small);
         color: var(--text);
         white-space: nowrap;
         overflow: hidden;

@@ -95,7 +95,7 @@ function luminanceOf(rgbOrHex: string): number {
 
 const THEME: DrawTheme = {
     background: '#0b0e14',
-    collapsed: '#28344a',
+    collapsed: '#2a303c',
     inkLight: '#d4dded',
     inkDark: '#080a0f',
     hue: { tick: '#39c4d4', ai: '#7c9cf5', render: '#e8b53e', ui: '#b184e8' },
@@ -533,7 +533,7 @@ describe('drawTimeline', () => {
                 [quad({ count: 9, sectionId: -1 })],
                 opts({ subsystem: () => 'render' }),
             );
-            expect(fillStyleForRect(collapsed.calls, 0)).toBe('rgb(66, 76, 96)');
+            expect(fillStyleForRect(collapsed.calls, 0)).toBe('rgb(68, 73, 83)');
         });
     });
 
@@ -705,8 +705,8 @@ describe('readTheme', () => {
             hueNone: '#555555',
             font: '500 11px Test Mono',
             match: '#39c4d4',
-            zebra: 'rgba(26, 34, 49, 0.45)',
-            laneLine: '#1c2434',
+            zebra: 'rgba(32, 41, 58, 0.45)',
+            laneLine: '#1e232c',
         });
         el.remove();
     });
@@ -719,7 +719,7 @@ describe('readTheme', () => {
         const theme = readTheme(el);
         expect(theme).toEqual({
             background: '#131925',
-            collapsed: '#28344a',
+            collapsed: '#2a303c',
             inkLight: '#d4dded',
             inkDark: '#080a0f',
             hue: {
@@ -733,8 +733,8 @@ describe('readTheme', () => {
             hueNone: '#5c6b85',
             font: '500 11px monospace',
             match: '#39c4d4',
-            zebra: 'rgba(26, 34, 49, 0.45)',
-            laneLine: '#1c2434',
+            zebra: 'rgba(32, 41, 58, 0.45)',
+            laneLine: '#1e232c',
         });
         el.remove();
     });

@@ -236,7 +236,9 @@ public class BundleExportServiceTests {
         frames[0].GetProperty("node_count").GetInt32().Should().Be(1);
         frames[0].GetProperty("nodes").GetProperty("section_ids")[0].GetInt32().Should().Be(10);
         doc.RootElement.GetProperty("session_id").GetString().Should().Be("sess-test");
-        doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(2);
+        // both ordinals sit inside the open window, so they ship as previews while the count
+        // stays sealed-only: an imported bundle's footer can never read over the ring capacity.
+        doc.RootElement.GetProperty("stats").GetProperty("frame_count").GetInt32().Should().Be(0);
     }
 
     // without the filter set in the file, a re-export of an imported bundle can only stamp the

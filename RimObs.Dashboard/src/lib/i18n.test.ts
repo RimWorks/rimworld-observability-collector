@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { t, tn, getLang, LANGUAGES } from './i18n';
 import { userPrefs } from './userPrefs.svelte';
 
@@ -85,6 +85,38 @@ describe('getLang', () => {
 
     it('registers all four added languages plus English', () => {
         expect(LANGUAGES.map((l) => l.code)).toEqual(['en', 'zh', 'fr', 'es', 'de']);
+    });
+});
+
+// t() runs per rendered string, so a URLSearchParams per call is a parse and an allocation on
+// a hot path. the parse is cached on the search string it came from.
+describe('query parsing', () => {
+    it('parses the query once across many lookups', () => {
+        setSearch('?lang=fr');
+        const real = globalThis.URLSearchParams;
+        let built = 0;
+        class Counting extends real {
+            constructor(init?: string) {
+                super(init);
+                built++;
+            }
+        }
+        vi.stubGlobal('URLSearchParams', Counting);
+        try {
+            getLang();
+            built = 0;
+            for (let i = 0; i < 50; i++) expect(t('common.retry')).toBe('Réessayer');
+            expect(built).toBe(0);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('still sees a query that changed after the first lookup', () => {
+        setSearch('?lang=fr');
+        expect(getLang()).toBe('fr');
+        setSearch('?lang=de');
+        expect(getLang()).toBe('de');
     });
 });
 

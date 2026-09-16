@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import Flamegraph from './Flamegraph.svelte';
+import { uiSignals } from '../lib/uiSignals.svelte';
 import { sectionSearch } from '../lib/sectionSearchState.svelte';
 import { userPrefs } from '../lib/userPrefs.svelte';
 
@@ -303,6 +304,33 @@ async function openNodesTip() {
     await fireEvent.mouseEnter(wrap!);
 }
 
+async function openCaptureTip() {
+    await fireEvent.mouseEnter(screen.getByTestId('lossy-badge').closest('.tt-wrap')!);
+}
+
+// the badge only raises on a counter STEP between polls, old drops are not news. this mock
+// starts quiet and then jumps the late counter so the chip appears.
+function raiseCaptureChip() {
+    let late = 0;
+    let orphaned = 0;
+    mockFetch();
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (!requestUrl(input).includes('/frames/latest')) return base(input, init);
+        return jsonResponse({
+            ...FRAMES_BODY,
+            dropped: {
+                pre_frame_samples: 12,
+                late_samples: late,
+                orphaned_samples: orphaned,
+                transport_lost_batches: 0,
+                library_ring_samples: 0,
+            },
+        });
+    }) as unknown as typeof fetch;
+    return { step: () => (late = 7), stepOrphaned: () => (orphaned = 9) };
+}
+
 function jsonResponse(body: unknown) {
     return Promise.resolve(
         new Response(JSON.stringify(body), {
@@ -329,6 +357,39 @@ async function openFile(getByLabelText: (m: RegExp) => HTMLElement, name = 'sess
     await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
 }
 
+// the drag-and-drop mirror of openFile: profilers accept a bundle dropped on the stage.
+describe('Flamegraph bundle drop', () => {
+    it('imports a bundle dropped on the stage', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('stage')).toBeInTheDocument());
+        const file = new File(['zip'], 'session.rimobs.zip', { type: 'application/zip' });
+        await fireEvent.drop(screen.getByTestId('stage'), {
+            dataTransfer: { files: [file], types: ['Files'] },
+        });
+        await waitFor(() => expect(screen.getByTestId('frame-scrub')).toBeInTheDocument());
+    });
+
+    it('rejects a non-zip drop with a named error', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('stage')).toBeInTheDocument());
+        const file = new File(['x'], 'notes.txt', { type: 'text/plain' });
+        await fireEvent.drop(screen.getByTestId('stage'), {
+            dataTransfer: { files: [file], types: ['Files'] },
+        });
+        expect(screen.getByRole('alert')).toHaveTextContent('notes.txt');
+    });
+
+    it('shows the drop hint only while a file drags over', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('stage')).toBeInTheDocument());
+        const stage = screen.getByTestId('stage');
+        await fireEvent.dragOver(stage, { dataTransfer: { files: [], types: ['Files'] } });
+        expect(screen.getByTestId('stage-drop-hint')).toBeInTheDocument();
+        await fireEvent.dragLeave(stage);
+        expect(screen.queryByTestId('stage-drop-hint')).toBeNull();
+    });
+});
+
 function cardValue(label: string) {
     const cell = [...document.querySelectorAll('.cell')].find((e) =>
         e.textContent?.trim().toLowerCase().startsWith(label.toLowerCase()),
@@ -347,15 +408,6 @@ afterEach(() => {
 });
 
 describe('Flamegraph page', () => {
-    it('reads every headline number off the frame it drew', async () => {
-        render(Flamegraph);
-        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
-        expect(cardValue('Duration')).toContain('16.200 ms');
-        expect(cardValue('Nodes')).toContain('2');
-        expect(screen.getByTestId('stat-median_us')).toHaveTextContent('5.000 ms');
-        expect(screen.getByTestId('stat-p99_us')).toHaveTextContent('99.000 ms');
-    });
-
     it('renders the timeline widget', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
@@ -405,70 +457,94 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(frameCalls()).toBeGreaterThan(before));
     });
 
-    it('shows every drop counter separately, zeroes included', async () => {
+    // the three loss counters share one root cause, so they live in one chip's tooltip
+    // with the remedy, not as three sibling alarms.
+    it('carries every loss counter in the capture chip tooltip', async () => {
+        const chip = raiseCaptureChip();
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
-        expect(screen.getByTestId('drop-late')).toHaveTextContent('0');
-        await openNodesTip();
-        expect(screen.getByTestId('drop-preframe')).toHaveTextContent('12');
-        expect(screen.getByTestId('drop-orphans')).toHaveTextContent('0');
-    });
-
-    it('pairs each drop label with its own counter', async () => {
-        render(Flamegraph);
-        await screen.findByTestId('frame-drops');
+        chip.step();
+        await screen.findByTestId('lossy-badge');
+        await openCaptureTip();
         expect(screen.getByTestId('drop-late').parentElement).toHaveTextContent(/^Late samples/);
-        await openNodesTip();
-        expect(screen.getByTestId('drop-preframe').parentElement).toHaveTextContent(
-            /^Pre-frame samples/,
+        expect(screen.getByTestId('drop-late')).toHaveTextContent('7');
+        expect(screen.getByTestId('drop-orphaned').parentElement).toHaveTextContent(
+            /^Orphaned samples/,
         );
-        expect(screen.getByTestId('drop-orphans').parentElement).toHaveTextContent(/^Orphan nodes/);
+        expect(screen.getByTestId('drop-ring').parentElement).toHaveTextContent(/^Ring drops/);
+        expect(screen.getByTestId('drop-preframe')).toHaveTextContent('12');
     });
 
-    it('keeps the stat row to four cells', async () => {
+    // a frame discarded whole is capture loss like any other; the chip must not stay quiet on it
+    it('raises the capture chip when orphaned frames climb', async () => {
+        const chip = raiseCaptureChip();
+        render(Flamegraph);
+        await screen.findByTestId('frame-drops');
+        chip.stepOrphaned();
+        await screen.findByTestId('lossy-badge');
+        await openCaptureTip();
+        expect(screen.getByTestId('drop-orphaned')).toHaveTextContent('9');
+    });
+
+    it('opens settings from the capture chip', async () => {
+        const chip = raiseCaptureChip();
+        render(Flamegraph);
+        await screen.findByTestId('frame-drops');
+        chip.step();
+        await screen.findByTestId('lossy-badge');
+        await fireEvent.click(screen.getByTestId('lossy-badge'));
+        expect(uiSignals.settingsOpen).toBe(true);
+        uiSignals.settingsOpen = false;
+    });
+
+    it('keeps the stat row to two cells', async () => {
         render(Flamegraph);
         const row = await screen.findByTestId('frame-drops');
         const cells = [...row.querySelectorAll('.stats .cell')].map((c) => c.textContent?.trim());
-        expect(cells).toHaveLength(4);
+        expect(cells).toHaveLength(2);
         expect(cells[0]).toMatch(/^Nodes/);
         expect(cells[1]).toMatch(/^Duration/);
-        expect(cells[2]).toMatch(/^Late samples/);
-        expect(cells[3]).toMatch(/^Ring drops/);
     });
 
-    // these numbers get pasted into Discord, so a cell copies its own label with its value.
-    it('copies a percentile and a stat cell, tooltip cell included', async () => {
+    // click-to-copy is gone everywhere (ka, 2026-09-14): cells explain, they do not copy.
+    it('copies nothing and explains the percentiles on hover', async () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
 
-        const p99 = screen.getByTestId('stat-p99_us').parentElement!;
-        await fireEvent.click(p99);
-        expect(writeText).toHaveBeenCalledWith('p99 99.000 ms');
-        await waitFor(() => expect(p99.className).toContain('copied'));
-
+        await fireEvent.click(screen.getByTestId('stat-p99_us').parentElement!);
         const nodes = screen.getByTestId('frame-drops').querySelector('.stats .tt-wrap span')!;
         await fireEvent.click(nodes);
-        expect(writeText).toHaveBeenLastCalledWith('Nodes 2');
-        await openNodesTip();
-        expect(screen.getByTestId('drop-orphans')).toBeInTheDocument();
+        expect(writeText).not.toHaveBeenCalled();
+
+        await fireEvent.mouseEnter(screen.getByTestId('stat-p99_us').closest('.tt-wrap')!);
+        await waitFor(() =>
+            expect(screen.getByRole('tooltip')).toHaveTextContent(/spike ceiling/i),
+        );
     });
 
-    it('explains the bare collector nouns with title text', async () => {
+    it('explains the loss counters and names the remedy in the chip tooltip', async () => {
+        const chip = raiseCaptureChip();
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
-        expect(screen.getByTestId('drop-late').parentElement).toHaveAttribute('title');
-        expect(screen.getByTestId('drop-ring').parentElement).toHaveAttribute('title');
+        chip.step();
+        await screen.findByTestId('lossy-badge');
+        await openCaptureTip();
+        expect(
+            screen.getByText(/bigger Sample ring or narrower instrument filters/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/never reached the flame/i)).toBeInTheDocument();
     });
 
     it('marks late samples as a warning', async () => {
-        mockFetch({
-            ...FRAMES_BODY,
-            dropped: { pre_frame_samples: 12, late_samples: 7, library_ring_samples: 0 },
-        });
+        const chip = raiseCaptureChip();
         render(Flamegraph);
-        const late = await screen.findByTestId('drop-late');
+        await screen.findByTestId('frame-drops');
+        chip.step();
+        await screen.findByTestId('lossy-badge');
+        await openCaptureTip();
+        const late = screen.getByTestId('drop-late');
         expect(late).toHaveTextContent('7');
         expect(late.className).toContain('warn');
     });
@@ -476,9 +552,7 @@ describe('Flamegraph page', () => {
     it('leaves a healthy launch unwarned, pre-frame samples included', async () => {
         render(Flamegraph);
         await screen.findByTestId('frame-drops');
-        expect(screen.getByTestId('drop-late').className).not.toContain('warn');
         await openNodesTip();
-        expect(screen.getByTestId('drop-preframe').className).not.toContain('warn');
         expect(screen.getByTestId('drop-orphans').className).not.toContain('warn');
     });
 
@@ -550,6 +624,7 @@ describe('Flamegraph page', () => {
         await vi.advanceTimersByTimeAsync(64);
         expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
         expect(screen.getByTestId('lossy-count')).toHaveTextContent('400');
+        await openCaptureTip();
         expect(screen.getByTestId('drop-ring')).toHaveTextContent('400');
 
         // regression: the ring counter only refreshes on the 5s meta heartbeat, so one step has
@@ -791,8 +866,8 @@ describe('Flamegraph page', () => {
         await fireEvent.change(getByLabelText(/open bundle/i), { target: { files: [file] } });
 
         await screen.findByTestId('frame-scrub');
+        await openCaptureTip();
         expect(screen.getByTestId('drop-late')).toHaveTextContent('3');
-        await openNodesTip();
         expect(screen.getByTestId('drop-preframe')).toHaveTextContent('0');
     });
 
@@ -816,7 +891,7 @@ describe('Flamegraph page', () => {
         const badge = screen.getByTestId('lossy-badge');
         const stats = screen.getByTestId('frame-drops').querySelector('.stats')!;
         expect(stats.contains(badge)).toBe(false);
-        expect(badge.parentElement).toBe(stats.parentElement);
+        expect(badge.closest('.tt-wrap')!.parentElement).toBe(stats.parentElement);
         expect(
             badge.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING,
         ).toBeTruthy();
@@ -841,6 +916,7 @@ describe('Flamegraph page', () => {
         await screen.findByTestId('frame-scrub');
         expect(screen.getByTestId('lossy-badge')).toBeInTheDocument();
         expect(screen.getByTestId('lossy-count')).toHaveTextContent('19');
+        await openCaptureTip();
         expect(screen.getByTestId('drop-ring')).toHaveTextContent('0');
     });
 
@@ -1077,14 +1153,15 @@ describe('Flamegraph page', () => {
 
     // past the refresh window nothing refetches the pin, so only the polled stats can tell
     // the ring wrapped past it. without that the page sits on stale nodes under the badge.
-    it('notices a pin the ring wrapped past, with no fetch in flight', async () => {
+    it('stays frozen on a pin the ring wrapped past, with no fetch in flight', async () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
 
         await fireEvent.click(screen.getByTestId('pause'));
         expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
 
-        // newest 9999 and the collector's own oldest is 7921, well past 4321.
+        // newest 9999 and the collector's own oldest is 7921, well past 4321. the frame on
+        // screen is a client-side copy, so the pause holds and the notice says cached.
         mockFetch({
             ...FRAMES_BODY,
             frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
@@ -1093,8 +1170,9 @@ describe('Flamegraph page', () => {
 
         const notice = await screen.findByTestId('pin-evicted');
         expect(notice).toHaveTextContent(/4321/);
-        expect(screen.queryByTestId('paused-badge')).toBeNull();
-        await waitFor(() => expect(screen.getByText('9999')).toBeInTheDocument());
+        expect(notice).toHaveTextContent(/cached/);
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+        expect(screen.getByText('4321')).toBeInTheDocument();
 
         // one notice per eviction: later polls still read as evicted, and must stay quiet.
         await fireEvent.click(screen.getByTestId('pin-evicted-dismiss'));
@@ -1146,7 +1224,8 @@ describe('Flamegraph page', () => {
 
         const notice = await screen.findByTestId('pin-evicted');
         expect(notice).toHaveTextContent(/4321/);
-        expect(screen.queryByTestId('paused-badge')).toBeNull();
+        expect(notice).toHaveTextContent(/cached/);
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
     // and the other side of it: the pin is exactly the oldest the collector still holds, so
@@ -1218,10 +1297,27 @@ describe('Flamegraph page', () => {
         expect(high).toContain('g4');
     });
 
+    // p75/p90 live in the meter band and its tooltip; inline cells were removed on purpose
+    // and a repair round restored them once. pinned to two.
+    it('keeps only p50 and p99 inline, the rest in the meter tooltip', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByTestId('stat-median_us')).toBeInTheDocument());
+        expect(screen.queryByTestId('stat-p75_us')).toBeNull();
+        expect(screen.queryByTestId('stat-p90_us')).toBeNull();
+    });
+
     it('shows the whole percentile spread, not just median and p99', async () => {
         render(Flamegraph);
-        await waitFor(() => expect(screen.getByTestId('stat-p75_us')).toBeInTheDocument());
-        expect(screen.getByTestId('stat-p90_us')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTestId('spread-meter')).toBeInTheDocument());
+        expect(screen.getByTestId('spread-band')).toBeInTheDocument();
+        expect(screen.getByTestId('tick-budget')).toBeInTheDocument();
+        expect(screen.getByTestId('frame-budget')).toBeInTheDocument();
+
+        await fireEvent.mouseEnter(screen.getByTestId('spread-meter').closest('.tt-wrap')!);
+        await waitFor(() => expect(screen.getByTestId('tip-p75_us')).toBeInTheDocument());
+        expect(screen.getByTestId('tip-p90_us')).toBeInTheDocument();
+        expect(screen.getByTestId('tip-median_us')).toBeInTheDocument();
+        expect(screen.getByTestId('tip-p99_us')).toBeInTheDocument();
     });
 
     // the per-second trend drill-down, ported from the Hotspots page. session scope only:
@@ -1326,7 +1422,9 @@ describe('Flamegraph page', () => {
         await openTree();
 
         // the result flips the tree to session scope, where the delta is now measurable
-        await waitFor(() => expect(screen.getByTestId('scope-session')).toHaveClass('on'));
+        await waitFor(() =>
+            expect(screen.getByTestId('scope-session')).toHaveAttribute('aria-pressed', 'true'),
+        );
         await waitFor(() =>
             expect(
                 screen.getAllByTestId('tree-delta').some((e) => e.textContent?.trim() !== ''),
@@ -1460,6 +1558,33 @@ describe('Flamegraph page', () => {
 
         await fireEvent.keyDown(window, { key: 'PageDown' });
         await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+    });
+
+    // an open modal owns the keyboard: the transport must not step frames behind the scrim,
+    // and Space on a focused button is that button's activation, not a pause toggle.
+    it('ignores transport keys from inside an open dialog', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('step-older'));
+        await waitFor(() => expect(screen.getByText('4320')).toBeInTheDocument());
+
+        const dialog = document.createElement('dialog');
+        dialog.setAttribute('open', '');
+        const inner = document.createElement('button');
+        dialog.appendChild(inner);
+        document.body.appendChild(dialog);
+        await fireEvent.keyDown(inner, { key: 'Home' });
+        expect(screen.getByText('4320')).toBeInTheDocument();
+        dialog.remove();
+    });
+
+    it('leaves Space alone when a button outside a dialog has focus', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const btn = screen.getByTestId('step-older');
+        (btn as HTMLElement).focus();
+        await fireEvent.keyDown(btn, { key: ' ' });
+        expect(screen.queryByTestId('paused-badge')).toBeNull();
     });
 
     // the help copy promises bare Home jumps to newest, so the handler must not need shift.
@@ -1654,20 +1779,21 @@ describe('Flamegraph page', () => {
         await waitFor(() => expect(document.querySelector('tr.selected')).toBeInTheDocument());
     });
 
-    it('offers all four profiler tabs and honestly labels the ones with no collector', async () => {
+    it('offers all four profiler tabs and says when the vram census has not landed', async () => {
         render(Flamegraph);
         await screen.findByTestId('call-tree-panel');
         for (const id of ['tree', 'pie', 'alloc', 'vram']) {
             expect(screen.getByTestId(`tab-${id}`)).toBeInTheDocument();
         }
         await fireEvent.click(screen.getByTestId('tab-vram'));
-        expect(screen.getByTestId('tab-soon')).toBeInTheDocument();
+        expect(screen.getByTestId('vram-waiting')).toBeInTheDocument();
         expect(screen.queryAllByTestId('tree-row')).toHaveLength(0);
 
         await fireEvent.click(screen.getByTestId('tab-tree'));
         await waitFor(() => expect(screen.getAllByTestId('tree-row').length).toBeGreaterThan(0));
     });
 
+    // one axis, many frames: the frame-view block that follows shares the drawer harness.
     // the whole point of the multi-frame view: one axis, many frames, not one frame per draw.
     // the window is fetched so a zoom out has somewhere to go, but landing on all of it
     // would bury the frame the user is looking at.
@@ -1888,7 +2014,8 @@ describe('Flamegraph search control affordance', () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
 
-        const frame = screen.getByTestId('section-search-scope-frame');
+        sectionSearch.query = 'Tick';
+        const frame = await screen.findByTestId('section-search-scope-frame');
         const window_ = screen.getByTestId('section-search-scope-window');
         expect(frame.textContent?.trim()).toBeTruthy();
         expect(window_.textContent?.trim()).toBeTruthy();
@@ -1905,7 +2032,8 @@ describe('Flamegraph search control affordance', () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
 
-        const box = screen.getByTestId('section-search-filter') as HTMLInputElement;
+        sectionSearch.query = 'Tick';
+        const box = (await screen.findByTestId('section-search-filter')) as HTMLInputElement;
         expect(box.type).toBe('checkbox');
         expect(box.closest('label')?.textContent?.trim()).toBeTruthy();
 
@@ -1917,8 +2045,28 @@ describe('Flamegraph search control affordance', () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
 
-        expect(screen.getByTestId('section-search-prev').getAttribute('aria-label')).toBeTruthy();
+        sectionSearch.query = 'Tick';
+        expect(
+            (await screen.findByTestId('section-search-prev')).getAttribute('aria-label'),
+        ).toBeTruthy();
         expect(screen.getByTestId('section-search-next').getAttribute('aria-label')).toBeTruthy();
+    });
+
+    // hicks law: scope, filter, tally and steppers are search tools, so an idle bar
+    // shows only the input (ka, 2026-09-16)
+    it('hides the search tools until there is a query', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByRole('application')).toBeInTheDocument());
+
+        expect(screen.queryByTestId('section-search-scope-frame')).toBeNull();
+        expect(screen.queryByTestId('section-search-filter')).toBeNull();
+        expect(screen.queryByTestId('section-search-next')).toBeNull();
+
+        sectionSearch.query = 'Tick';
+        await screen.findByTestId('section-search-scope-frame');
+
+        sectionSearch.query = '';
+        await waitFor(() => expect(screen.queryByTestId('section-search-scope-frame')).toBeNull());
     });
 });
 
@@ -2023,6 +2171,43 @@ describe('Flamegraph frame history selection', () => {
         await dragRange();
 
         await waitFor(() => expect(screen.getByTestId('frame-span').textContent).toContain('3'));
+    });
+
+    // fetchRange only blames the ring when no frame of the range survives, and the stats
+    // path has to agree: the start aging out still leaves frames to show.
+    it('keeps a range pin whose start aged out but whose newest is held', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await dragRange();
+        await waitFor(() => expect(screen.getByTestId('strip-range')).toBeInTheDocument());
+
+        // from (4319) aged out, the displayed frame (4321) is still held
+        mockFetch({
+            ...FRAMES_BODY,
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 4325, oldest_ordinal: 4320 },
+        });
+        const seen = frameCalls();
+        await waitFor(() => expect(frameCalls()).toBeGreaterThan(seen + 1));
+        expect(screen.queryByTestId('pin-evicted')).toBeNull();
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
+    });
+
+    it('stays frozen on a range pin the ring wrapped fully past, naming its start', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        await dragRange();
+        await waitFor(() => expect(screen.getByTestId('strip-range')).toBeInTheDocument());
+
+        mockFetch({
+            ...FRAMES_BODY,
+            frame: { ...FRAMES_BODY.frame, capture_ordinal: 9999 },
+            stats: { ...FRAMES_BODY.stats, newest_ordinal: 9999, oldest_ordinal: 7921 },
+        });
+
+        const notice = await screen.findByTestId('pin-evicted');
+        expect(notice).toHaveTextContent(/4319/);
+        expect(notice).toHaveTextContent(/cached/);
+        expect(screen.getByTestId('paused-badge')).toBeInTheDocument();
     });
 
     it('reset view clears the range selection and resumes', async () => {
@@ -2133,7 +2318,11 @@ describe('Flamegraph frame history selection', () => {
         Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
             configurable: true,
             get(this: HTMLElement) {
-                return this.dataset.testid === 'stage' ? 240 : 0;
+                const id = this.dataset.testid;
+                if (id === 'stage') return 240;
+                if (id === 'chrome') return 180;
+                if (id === 'frame-drops') return 44;
+                return 0;
             },
         });
         try {
@@ -2144,6 +2333,10 @@ describe('Flamegraph frame history selection', () => {
                 expect(screen.getByTestId('profiler').style.getPropertyValue('--stage-h')).toBe(
                     '240px',
                 ),
+            );
+            // the wrapped chrome rows, not a hand-summed constant
+            expect(screen.getByTestId('profiler').style.getPropertyValue('--chrome-measured')).toBe(
+                'calc(224px + var(--chrome-fixed-h))',
             );
         } finally {
             if (real) Object.defineProperty(HTMLElement.prototype, 'clientHeight', real);
@@ -2159,12 +2352,26 @@ describe('Flamegraph clear history confirm', () => {
         render(Flamegraph);
         await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
         const btn = screen.getByTestId('clear-ring');
-        expect(btn.textContent).toContain('Clear history');
+        expect(btn.getAttribute('aria-label')).toContain('Clear history');
 
         await fireEvent.click(btn);
 
-        expect(btn.textContent).toContain('2,000');
-        expect(btn.textContent).toContain('frames?');
+        expect(btn.getAttribute('aria-label')).toContain('2,000');
+        expect(btn.getAttribute('aria-label')).toContain('frames?');
+    });
+
+    // a screen reader ignores an aria-label swap on the element it is already sitting on.
+    it('announces the armed confirm through a live region', async () => {
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+        const live = screen.getByTestId('clear-ring-status');
+        expect(live).toHaveAttribute('aria-live', 'polite');
+        expect(live.textContent?.trim()).toBe('');
+
+        await fireEvent.click(screen.getByTestId('clear-ring'));
+
+        expect(live.textContent).toContain('2,000');
+        expect(live.textContent).toContain('frames?');
     });
 
     it('does not call the api until the second click', async () => {
@@ -2190,10 +2397,10 @@ describe('Flamegraph clear history confirm', () => {
         const btn = screen.getByTestId('clear-ring');
 
         await fireEvent.click(btn);
-        expect(btn.textContent).toContain('frames?');
+        expect(btn.getAttribute('aria-label')).toContain('frames?');
         await fireEvent.blur(btn);
 
-        expect(btn.textContent).toContain('Clear history');
+        expect(btn.getAttribute('aria-label')).toContain('Clear history');
     });
 });
 
@@ -2378,6 +2585,8 @@ describe('Flamegraph thread lanes', () => {
         expect(payload.dropped).toEqual({
             pre_frame_samples: 12,
             late_samples: 0,
+            orphaned_samples: 0,
+            transport_lost_batches: 0,
             library_ring_samples: 0,
         });
         expect(payload.auto_instrument).toEqual({
@@ -2524,7 +2733,7 @@ describe('Flamegraph stage sizing', () => {
     it('fills the page below the chrome when no drawer tab is open', () => {
         const rule = /\.stage\s*\{([^}]*)\}/.exec(stageCss())?.[1] ?? '';
 
-        expect(rule).toContain('height: calc(100vh - var(--chrome-h))');
+        expect(rule).toContain('height: calc(100vh - var(--chrome-measured, var(--chrome-h)))');
         expect(rule).not.toContain('max-height');
     });
 
@@ -2532,7 +2741,9 @@ describe('Flamegraph stage sizing', () => {
         const rule = /\.stage\.split\s*\{([^}]*)\}/.exec(stageCss())?.[1] ?? '';
 
         expect(rule).toContain('height: auto');
-        expect(rule).toContain('max-height: calc(100vh - var(--drawer-h) - var(--chrome-h))');
+        expect(rule).toContain(
+            'max-height: calc(100vh - var(--drawer-h) - var(--chrome-measured, var(--chrome-h)))',
+        );
     });
 
     it('lets the drawer claim the slack a short stage leaves', () => {
@@ -2541,8 +2752,8 @@ describe('Flamegraph stage sizing', () => {
         )[1];
         const rule = /\.drawer\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
 
-        expect(rule).toContain(
-            'height: max(var(--drawer-h), calc(100vh - var(--chrome-h) - var(--stage-h, 100vh)))',
+        expect(rule.replace(/\s+/g, ' ')).toContain(
+            'height: max( var(--drawer-h), calc(100vh - var(--chrome-measured, var(--chrome-h)) - var(--stage-h, 100vh)) );',
         );
     });
 });
@@ -2578,12 +2789,15 @@ describe('Flamegraph subsystem legend', () => {
         expect(swatch('untagged')).toContain('linear-gradient');
     });
 
-    it('counts the legend row into the chrome height', () => {
+    // it used to be pinned to 22px with overflow: hidden so the hand-summed --chrome-h stayed
+    // honest, which silently clipped entries on a narrow window
+    it('wraps instead of clipping entries', () => {
         const css = readFileSync('src/routes/Flamegraph.svelte', 'utf-8').split('<style>')[1];
         const rule = /\.legend\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
 
-        expect(rule).toContain('height: 22px');
-        expect(readFileSync('src/lib/theme.css', 'utf-8')).toContain('--chrome-h: 344px');
+        expect(rule).toContain('flex-wrap: wrap');
+        expect(rule).not.toContain('overflow: hidden');
+        expect(rule).not.toMatch(/(?<!min-)height:/);
     });
 });
 

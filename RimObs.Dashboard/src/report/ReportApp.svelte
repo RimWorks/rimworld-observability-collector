@@ -11,8 +11,36 @@
     import CallHierarchyTab from './lib/sections/CallHierarchyTab.svelte';
 
     let { raw }: { raw: unknown } = $props();
-    const data = parseBundle(raw);
+    let data = $derived(parseBundle(raw));
     let active = $state('summary');
+
+    let tabs = $derived(
+        data
+            ? [
+                  { id: 'summary', label: 'Summary', show: true },
+                  { id: 'hotspots', label: 'Hotspots', show: true },
+                  { id: 'metrics', label: 'Custom metrics', show: true },
+                  { id: 'loadorder', label: 'Load order', show: true },
+                  { id: 'health', label: 'Health', show: true },
+                  { id: 'alloc', label: 'Allocations', show: data.hasAllocations },
+                  { id: 'gc', label: 'GC', show: data.hasGcEvents },
+                  { id: 'patches', label: 'Patches', show: data.hasPatches },
+                  { id: 'calls', label: 'Call hierarchy', show: data.hasCallHierarchy },
+              ].filter((t) => t.show)
+            : [],
+    );
+
+    function onTabKey(e: KeyboardEvent) {
+        const from = tabs.findIndex((t) => t.id === active);
+        const to = { ArrowLeft: from - 1, ArrowRight: from + 1, Home: 0, End: tabs.length - 1 }[
+            e.key
+        ];
+        if (to === undefined) return;
+
+        e.preventDefault();
+        active = tabs[(to + tabs.length) % tabs.length].id;
+        document.getElementById(`tab-${active}`)?.focus();
+    }
 </script>
 
 {#if data === null}
@@ -30,89 +58,109 @@
                 | {data.manifest.createdUtc}
             </p>
         </header>
-        <nav class="tabs">
-            <button class:active={active === 'summary'} onclick={() => (active = 'summary')}
-                >Summary</button
-            >
-            <button class:active={active === 'hotspots'} onclick={() => (active = 'hotspots')}
-                >Hotspots</button
-            >
-            <button class:active={active === 'metrics'} onclick={() => (active = 'metrics')}
-                >Custom metrics</button
-            >
-            <button class:active={active === 'loadorder'} onclick={() => (active = 'loadorder')}
-                >Load order</button
-            >
-            <button class:active={active === 'health'} onclick={() => (active = 'health')}
-                >Health</button
-            >
-            {#if data.hasAllocations}
-                <button class:active={active === 'alloc'} onclick={() => (active = 'alloc')}
-                    >Allocations</button
+        <div class="tabs" role="tablist" aria-label="Report sections">
+            {#each tabs as tab}
+                <button
+                    role="tab"
+                    id="tab-{tab.id}"
+                    aria-controls="panel-{tab.id}"
+                    aria-selected={active === tab.id}
+                    tabindex={active === tab.id ? 0 : -1}
+                    class:active={active === tab.id}
+                    onkeydown={onTabKey}
+                    onclick={() => (active = tab.id)}>{tab.label}</button
                 >
-            {/if}
-            {#if data.hasGcEvents}
-                <button class:active={active === 'gc'} onclick={() => (active = 'gc')}>GC</button>
-            {/if}
-            {#if data.hasPatches}
-                <button class:active={active === 'patches'} onclick={() => (active = 'patches')}
-                    >Patches</button
+            {/each}
+        </div>
+        {#each tabs as tab}
+            {#if active === tab.id}
+                <div
+                    role="tabpanel"
+                    id="panel-{tab.id}"
+                    aria-labelledby="tab-{tab.id}"
+                    tabindex="0"
                 >
+                    {#if tab.id === 'summary'}<SummaryTab data={data.sessionSummary} />{/if}
+                    {#if tab.id === 'hotspots'}<HotspotsTab data={data.hotspots} />{/if}
+                    {#if tab.id === 'metrics'}<CustomMetricsTab data={data.customMetrics} />{/if}
+                    {#if tab.id === 'loadorder'}<LoadOrderTab data={data.loadOrder} />{/if}
+                    {#if tab.id === 'health'}<HealthTab data={data.collectorHealth} />{/if}
+                    {#if tab.id === 'alloc' && data.allocations}<AllocationsTab
+                            data={data.allocations}
+                        />{/if}
+                    {#if tab.id === 'gc' && data.gcEvents}<GcTab data={data.gcEvents} />{/if}
+                    {#if tab.id === 'patches' && data.patches}<PatchesTab
+                            data={data.patches}
+                        />{/if}
+                    {#if tab.id === 'calls' && data.callHierarchy}<CallHierarchyTab
+                            data={data.callHierarchy}
+                        />{/if}
+                </div>
             {/if}
-            {#if data.hasCallHierarchy}
-                <button class:active={active === 'calls'} onclick={() => (active = 'calls')}
-                    >Call hierarchy</button
-                >
-            {/if}
-        </nav>
-        {#if active === 'summary'}<SummaryTab data={data.sessionSummary} />{/if}
-        {#if active === 'hotspots'}<HotspotsTab data={data.hotspots} />{/if}
-        {#if active === 'metrics'}<CustomMetricsTab data={data.customMetrics} />{/if}
-        {#if active === 'loadorder'}<LoadOrderTab data={data.loadOrder} />{/if}
-        {#if active === 'health'}<HealthTab data={data.collectorHealth} />{/if}
-        {#if active === 'alloc' && data.allocations}<AllocationsTab data={data.allocations} />{/if}
-        {#if active === 'gc' && data.gcEvents}<GcTab data={data.gcEvents} />{/if}
-        {#if active === 'patches' && data.patches}<PatchesTab data={data.patches} />{/if}
-        {#if active === 'calls' && data.callHierarchy}<CallHierarchyTab
-                data={data.callHierarchy}
-            />{/if}
+        {/each}
     </main>
 {/if}
 
 <style>
+    /* the report is one static file with no @fontsource payload, so every family here
+       resolves through the token's fallback chain rather than an embedded webfont. */
+    :global(body) {
+        margin: 0;
+        background: var(--bg-base);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 14px;
+        line-height: 1.5;
+    }
     .report-root,
     .empty-root {
-        font-family: 'Hanken Grotesk', sans-serif;
+        font-family: var(--font-ui);
         max-width: 1280px;
         margin: 0 auto;
-        padding: 2rem;
+        padding: var(--s-6);
+    }
+    h1 {
+        font-family: var(--font-display);
+        font-weight: 600;
+    }
+    code {
+        font-family: var(--font-mono);
     }
     header {
-        margin-bottom: 1.5rem;
+        margin-bottom: var(--s-5);
     }
     .meta {
-        color: #666;
+        color: var(--text-dim);
         font-size: 0.9rem;
     }
     .tabs {
         display: flex;
-        gap: 0.25rem;
-        border-bottom: 1px solid #ddd;
-        margin-bottom: 1rem;
+        gap: var(--s-1);
+        border-bottom: 1px solid var(--border);
+        margin-bottom: var(--s-4);
         flex-wrap: wrap;
     }
     .tabs button {
         background: none;
         border: none;
-        border-radius: 0;
-        padding: 0.5rem 1rem;
+        border-radius: var(--r-sm) var(--r-sm) 0 0;
+        padding: var(--s-2) var(--s-4);
         cursor: pointer;
         border-bottom: 2px solid transparent;
         font: inherit;
-        color: #444;
+        color: var(--text-dim);
+    }
+    .tabs button:hover {
+        color: var(--text);
     }
     .tabs button.active {
-        border-bottom-color: #2563eb;
-        color: #2563eb;
+        background: var(--bg-surface);
+        border-bottom-color: var(--cyan);
+        color: var(--cyan);
+        font-weight: 600;
+    }
+    .tabs button:focus-visible {
+        outline: 2px solid var(--cyan);
+        outline-offset: -2px;
     }
 </style>

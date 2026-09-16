@@ -2,15 +2,16 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { resolve } from 'node:path';
+import { dropWoff1 } from './src/lib/dropWoff1';
 
 export default defineConfig(({ mode }) => {
     const isReport = mode === 'report';
     return {
-        plugins: [svelte(), ...(isReport ? [viteSingleFile()] : [])],
+        plugins: [svelte(), ...(isReport ? [viteSingleFile()] : [dropWoff1])],
         build: {
             outDir: isReport ? 'dist-report' : 'dist',
             target: 'es2022',
-            sourcemap: !isReport,
+            sourcemap: false,
             emptyOutDir: true,
             rollupOptions: isReport
                 ? { input: resolve(__dirname, 'src/report/index.html') }

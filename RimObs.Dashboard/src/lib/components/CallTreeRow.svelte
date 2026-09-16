@@ -84,7 +84,7 @@
     }
     .share-track {
         height: 6px;
-        border-radius: 99px;
+        border-radius: var(--r-sm);
         background: var(--border-soft);
         overflow: hidden;
     }
@@ -92,7 +92,7 @@
         display: block;
         height: 100%;
         background: var(--cyan);
-        border-radius: 99px;
+        border-radius: var(--r-sm);
     }
     .calls {
         text-align: right;

@@ -14,9 +14,9 @@ using RimWorks.RimObs.Session;
 
 namespace RimWorks.RimObs.Transport;
 
-internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationSink, ITpsFpsSink, IDisposable {
+internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationSink, ITpsFpsSink, IVramSink, IDisposable {
     public const int DefaultPort = 17654;
-    public const int DefaultRingCapacity = 16384;
+    public const int DefaultRingCapacity = 65536;
     private const int BatchSize = 256;
     // a busy main lane fills 16384 slots in ~40ms at speed 3, so the drain has to wake well
     // inside that. meta ticks are scaled to keep the ~1s burst and ~5s heartbeat.
@@ -40,6 +40,11 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     private readonly SampleBatch _batch = new SampleBatch(BatchSize);
     private SectionBatch? _sectionBatchView;
+
+    // the frame anchor stops last each frame, exactly when the ring is fullest, and a lost
+    // anchor makes the collector orphan the whole frame. overflowed anchors go to a side ring.
+    private volatile int _rootSectionId = -1;
+    private volatile SampleRingBuffer? _anchorRing;
     private readonly int[] _registrationIds = new int[64];
     private readonly string[] _registrationNames = new string[64];
     private readonly string?[] _registrationSubsystems = new string?[64];
@@ -72,6 +77,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     private PatchConflictsBatch? _patchConflicts;
     private TpsFpsBatch? _pendingTpsFps;
+    private VramBatch? _pendingVram;
     private ulong _sequence;
     private long _metaTicks;
     private long _sent;
@@ -95,6 +101,9 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
     /// <summary>Resizes the per-lane sample rings and returns the capacity actually taken.</summary>
     public int SetRingCapacity(int capacity) => _ring.SetLaneCapacity(capacity);
 
+    /// <summary>The sender learns this from registrations; tests have no sender running yet.</summary>
+    internal void SetRootSectionIdForTests(int id) => _rootSectionId = id;
+
     public long SamplesSent => Interlocked.Read(ref _sent);
     public long BytesSent => Interlocked.Read(ref _bytesSent);
     public long SamplesDropped => _ring.Dropped;
@@ -115,12 +124,23 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordSection(int sectionId, int parentId, int nodeId, int parentNodeId, long startTimestamp, long elapsedTicks, long allocBytes) {
-        _ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, FrameTickCounters.FrameOrdinal, allocBytes);
+        int ordinal = FrameTickCounters.FrameOrdinal;
+        if (_ring.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, ordinal, allocBytes))
+            return;
+        if (sectionId != _rootSectionId)
+            return;
+        // only the main thread records the frame root, so the side ring stays single-producer.
+        // the one-time alloc sits on the overflow path, never the steady state.
+        _anchorRing ??= new SampleRingBuffer(64, Environment.CurrentManagedThreadId);
+        if (_anchorRing.TryWrite(sectionId, parentId, nodeId, parentNodeId, startTimestamp, elapsedTicks, ordinal, allocBytes))
+            _ring.UndropCurrentLane();
     }
 
     public void RecordGcEvent(in GcEventSample sample) => _gcQueue.TryEnqueue(sample);
 
     public void RecordAllocation(in AllocationSample sample) => _allocQueue.TryEnqueue(sample);
+
+    public void RecordVram(VramBatch batch) => Interlocked.Exchange(ref _pendingVram, batch);
 
     public void RecordTpsFps(in TpsFpsSample sample) {
         Interlocked.Exchange(ref _pendingTpsFps, new TpsFpsBatch {
@@ -150,6 +170,7 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
                 FlushGcEvents();
                 FlushAllocations();
                 FlushTpsFps();
+                FlushVram();
                 AutoMute.JudgeIfDue(FrameTickCounters.FrameOrdinal);
                 SpinClock.Verify();
             }
@@ -204,6 +225,10 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
             _registrationIds, _registrationNames, _registrationSubsystems, _registrationAssemblies);
         if (n == 0)
             return;
+        for (int i = 0; i < n; i++) {
+            if (_registrationNames[i] == Patching.FrameTickPatches.FrameSection)
+                _rootSectionId = _registrationIds[i];
+        }
         SectionRegistrationsBatch batch = new() {
             SectionIds = Slice(_registrationIds, n),
             Names = Slice(_registrationNames, n),
@@ -333,7 +358,22 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         while (true) {
             int n = _ring.Drain(_batch, BatchSize, minFrameOrdinal);
             if (n == 0)
-                return;
+                break;
+
+            StageThreadRegistrations(_batch.ThreadIds, n);
+            FlushThreadRegistrations();
+
+            ArraySegment<byte> payload = WireCodec.SerializePooled(batch, n);
+            SendPayload(BatchType.Sections, payload.Array!, payload.Count);
+            Interlocked.Add(ref _sent, n);
+        }
+
+        // anchors rescued from a full lane; without them the collector orphans their frames.
+        SampleRingBuffer? anchors = _anchorRing;
+        while (anchors != null) {
+            int n = anchors.Drain(_batch, BatchSize, minFrameOrdinal);
+            if (n == 0)
+                break;
 
             StageThreadRegistrations(_batch.ThreadIds, n);
             FlushThreadRegistrations();
@@ -460,6 +500,13 @@ internal sealed class UdpTelemetrySink : ISampleSink, IGcEventSink, IAllocationS
         if (batch == null)
             return;
         SendBatch(BatchType.TpsFps, batch);
+    }
+
+    private void FlushVram() {
+        VramBatch? batch = Interlocked.Exchange(ref _pendingVram, null);
+        if (batch == null)
+            return;
+        SendBatch(BatchType.Vram, batch);
     }
 
     private void SendBatch<TBatch>(BatchType type, TBatch batch) where TBatch : class {

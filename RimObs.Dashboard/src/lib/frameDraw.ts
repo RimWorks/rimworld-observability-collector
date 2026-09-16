@@ -85,15 +85,15 @@ function readThemeUncached(el: Element): DrawTheme {
     }
     return {
         background: read('--bg-surface', '#131925'),
-        collapsed: read('--border', '#28344a'),
+        collapsed: read('--border', '#2a303c'),
         inkLight: read('--text', '#d4dded'),
         inkDark: read('--bg-void', '#080a0f'),
         hue,
         hueNone: read('--sub-none', '#5c6b85'),
         font: `500 11px ${read('--font-mono', 'monospace')}`,
         match: read('--cyan', '#39c4d4'),
-        zebra: withAlpha(read('--bg-elev', '#1a2231'), 0.45),
-        laneLine: read('--border-soft', '#1c2434'),
+        zebra: withAlpha(read('--bg-elev', '#20293a'), 0.45),
+        laneLine: read('--border-soft', '#1e232c'),
     };
 }
 

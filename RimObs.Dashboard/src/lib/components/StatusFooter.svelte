@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import Tooltip from './Tooltip.svelte';
-    import { copyable } from '../copyable';
     import { count } from '../format';
     import { t } from '../i18n';
 
@@ -51,33 +50,27 @@
 
 <p class="status mono" data-testid="status-footer">
     <Tooltip text={t('tip.footer.ring')} tabindex={-1}>
-        <span data-testid="footer-ring" use:copyable>
+        <span data-testid="footer-ring">
             {t('flamegraph.ringsize')}
             <b>{count(ringHeld)}{ringCapacity !== null ? `/${count(ringCapacity)}` : ''}</b>
         </span>
     </Tooltip>
     |
-    <Tooltip text={t('tip.footer.memory')} tabindex={-1}>
-        <span data-testid="footer-memory" use:copyable>
-            {t('footer.memory')} <b>{t('footer.memory.unavailable')}</b>
-        </span>
-    </Tooltip>
-    |
     <Tooltip text={t('tip.footer.dashFps')} tabindex={-1}>
-        <span data-testid="footer-dash-fps" use:copyable>
+        <span data-testid="footer-dash-fps">
             {t('footer.dashFps')} <b>{dashFps === null ? '-' : dashFps}</b>
         </span>
     </Tooltip>
     {#if overheadText}
         |
         <Tooltip text={t('flamegraph.overhead.hint')} tabindex={-1}>
-            <span data-testid="footer-overhead" use:copyable>{overheadText}</span>
+            <span data-testid="footer-overhead">{overheadText}</span>
         </Tooltip>
     {/if}
     {#if timerResLine}
         |
         <Tooltip text={t('tip.footer.timerres')} tabindex={-1}>
-            <span data-testid="footer-timerres" use:copyable>{timerResLine}</span>
+            <span data-testid="footer-timerres">{timerResLine}</span>
         </Tooltip>
     {/if}
     {#if deltaUs !== null}
@@ -87,8 +80,7 @@
                 class="delta"
                 class:warn={deltaSeverity === 1}
                 class:cool={deltaSeverity === -1}
-                data-testid="footer-delta"
-                use:copyable>&Delta; {deltaText}</span
+                data-testid="footer-delta">&Delta; {deltaText}</span
             >
         </Tooltip>
     {/if}

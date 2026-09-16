@@ -3,6 +3,7 @@
     import 'uplot/dist/uPlot.min.css';
     import { onMount, onDestroy } from 'svelte';
     import { cssVar as readVar, resolveColor as readColor } from '../theme';
+    import { t } from '../i18n';
 
     interface SeriesSpec {
         label: string;
@@ -82,23 +83,46 @@
         }
     }
 
+    // the cursor hook fires per pointer move, and every offset* read off the plot forces
+    // layout. offsets are relative to the offset parent, so only a resize can stale them.
+    let over = { left: 0, top: 0, w: 0, h: 0 };
+
+    function measureOver(u: uPlot): void {
+        over = {
+            left: u.over.offsetLeft,
+            top: u.over.offsetTop,
+            w: u.over.offsetWidth,
+            h: u.over.offsetHeight,
+        };
+    }
+
+    // the tooltip DOM and its measured size only change when the hovered index does, so a
+    // same-index move is pure arithmetic with no rebuild and no offsetWidth reflow.
+    let tipIdx = -1;
+    let tipW = 0;
+    let tipH = 0;
+
     function updateTip(u: uPlot): void {
         if (!tip) return;
         const idx: number | null | undefined = u.cursor.idx;
         if (idx == null || idx < 0) {
+            tipIdx = -1;
             tip.style.opacity = '0';
             return;
         }
-        renderTip(u, idx);
+        if (idx !== tipIdx) {
+            renderTip(u, idx);
+            tipIdx = idx;
+            tipW = tip.offsetWidth;
+            tipH = tip.offsetHeight;
+        }
 
-        const overLeft: number = u.over.offsetLeft;
-        const overTop: number = u.over.offsetTop;
-        const w: number = u.over.offsetWidth;
-        const h: number = u.over.offsetHeight;
+        if (over.w <= 0) measureOver(u);
+        const { left: overLeft, top: overTop, w, h } = over;
         const cx: number = u.cursor.left ?? 0;
         const cy: number = u.cursor.top ?? 0;
-        const ttW: number = tip.offsetWidth;
-        const ttH: number = tip.offsetHeight;
+        const ttW: number = tipW;
+        const ttH: number = tipH;
         const offset: number = 12;
         const flipX: boolean = cx + ttW + offset + 4 > w;
         const flipY: boolean = cy + ttH + offset + 4 > h;
@@ -142,6 +166,8 @@
             ],
             hooks: {
                 setCursor: [(u) => updateTip(u)],
+                ready: [(u) => measureOver(u)],
+                setSize: [(u) => measureOver(u)],
             },
         };
         return new uPlot(opts, data(), host);
@@ -168,12 +194,38 @@
     });
 
     $effect(() => {
-        if (chart) chart.setData(data());
+        if (chart) {
+            chart.setData(data());
+            // fresh data invalidates the tooltip cache or a parked cursor shows stale values.
+            tipIdx = -1;
+        }
     });
+
+    function describe(s: SeriesSpec): string {
+        let min: number = Infinity;
+        let max: number = -Infinity;
+        let last: number | null = null;
+        for (const v of s.values) {
+            if (v == null || !Number.isFinite(v)) continue;
+            if (v < min) min = v;
+            if (v > max) max = v;
+            last = v;
+        }
+        if (last == null) return t('chart.aria.empty').replace('{label}', s.label);
+        return t('chart.aria.series')
+            .replace('{label}', s.label)
+            .replace('{min}', format(min))
+            .replace('{max}', format(max))
+            .replace('{last}', format(last));
+    }
+
+    let ariaLabel: string = $derived(
+        [t('chart.aria'), ...series.map(describe)].join('. ').concat('.'),
+    );
 </script>
 
 <div class="wrap" bind:this={wrap}>
-    <div class="chart" bind:this={host}></div>
+    <div class="chart" bind:this={host} role="img" aria-label={ariaLabel}></div>
     <div class="tt" bind:this={tip} role="tooltip" aria-hidden="true"></div>
 </div>
 

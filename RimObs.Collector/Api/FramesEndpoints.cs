@@ -37,6 +37,10 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    orphaned_samples = aggregator.Frames.OrphanedSamples,
+                    transport_lost_batches = aggregator.LostDatagrams,
+                    late_lag_avg = aggregator.Frames.LateLag.Avg,
+                    late_lag_max = aggregator.Frames.LateLag.Max,
                     library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
@@ -132,6 +136,10 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    orphaned_samples = aggregator.Frames.OrphanedSamples,
+                    transport_lost_batches = aggregator.LostDatagrams,
+                    late_lag_avg = aggregator.Frames.LateLag.Avg,
+                    late_lag_max = aggregator.Frames.LateLag.Max,
                     library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
@@ -154,6 +162,10 @@ public static class FramesEndpoints {
                 dropped = new {
                     pre_frame_samples = aggregator.Frames.PreFrameSamples,
                     late_samples = aggregator.Frames.LateSamples,
+                    orphaned_samples = aggregator.Frames.OrphanedSamples,
+                    transport_lost_batches = aggregator.LostDatagrams,
+                    late_lag_avg = aggregator.Frames.LateLag.Avg,
+                    late_lag_max = aggregator.Frames.LateLag.Max,
                     library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
                 },
             });
@@ -246,6 +258,10 @@ public static class FramesEndpoints {
             dropped = new {
                 pre_frame_samples = aggregator.Frames.PreFrameSamples,
                 late_samples = aggregator.Frames.LateSamples,
+                orphaned_samples = aggregator.Frames.OrphanedSamples,
+                transport_lost_batches = aggregator.LostDatagrams,
+                late_lag_avg = aggregator.Frames.LateLag.Avg,
+                late_lag_max = aggregator.Frames.LateLag.Max,
                 library_ring_samples = aggregator.Meta?.SamplesDropped ?? 0L,
             },
         };
