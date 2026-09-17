@@ -1,51 +1,90 @@
 <script lang="ts">
-    import { donutArcs, OTHER_SECTION_ID, type PieSlice } from '../pieSlices';
+    import {
+        donutArcs,
+        OTHER_SECTION_ID,
+        OTHER_MOD_KEY,
+        type ModSlice,
+        type PieSlice,
+    } from '../pieSlices';
+    import { hashedSectionColor } from '../frameDraw';
     import { ns } from '../format';
     import { percent2 } from '../frameCost';
 
+    type Slice = PieSlice | ModSlice;
+
     let {
         slices,
-        onSelect,
-    }: { slices: readonly PieSlice[]; onSelect?: (sectionId: number) => void } = $props();
+        onPick,
+    }: { slices: readonly Slice[]; onPick?: (slice: PieSlice | ModSlice) => void } = $props();
 
     let arcs = $derived(donutArcs(slices));
-    let hovered = $state<number | null>(null);
+    let hovered = $state<string | null>(null);
 
-    function colorFor(slice: PieSlice): string {
-        if (slice.sectionId === OTHER_SECTION_ID) return 'var(--sub-none)';
+    function isSection(slice: Slice): slice is PieSlice {
+        return 'sectionId' in slice;
+    }
+
+    function keyOf(slice: Slice): string {
+        return isSection(slice) ? `s${slice.sectionId}` : `m${slice.key}`;
+    }
+
+    function isOther(slice: Slice): boolean {
+        return isSection(slice)
+            ? slice.sectionId === OTHER_SECTION_ID
+            : slice.key === OTHER_MOD_KEY;
+    }
+
+    // mods carry no subsystem, so they hash their key into the palette. slice order churns
+    // every poll, so the color has to come from the key, not the position.
+    function hashKey(key: string): number {
+        let h = 0;
+        for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+        return h;
+    }
+
+    function colorFor(slice: Slice): string {
+        if (isOther(slice)) return 'var(--sub-none)';
+        if (!isSection(slice)) return hashedSectionColor(hashKey(slice.key));
         return slice.subsystem
             ? `var(--sub-${slice.subsystem}, var(--sub-none))`
             : 'var(--sub-none)';
     }
 
-    function pick(sectionId: number): void {
-        if (sectionId !== OTHER_SECTION_ID) onSelect?.(sectionId);
+    function pick(slice: Slice): void {
+        if (!isOther(slice)) onPick?.(slice);
     }
 </script>
 
 <div class="pie" data-testid="pie-chart">
     <svg viewBox="0 0 100 100" role="img" aria-label="self time by section">
-        {#each arcs as arc (arc.slice.sectionId)}
+        {#each arcs as arc (keyOf(arc.slice))}
             <path
                 d={arc.path}
                 fill={colorFor(arc.slice)}
-                class:dim={hovered !== null && hovered !== arc.slice.sectionId}
-                role="presentation"
-                onmouseenter={() => (hovered = arc.slice.sectionId)}
-                onmouseleave={() => (hovered = null)}><title>{arc.slice.label}</title></path
+                class:dim={hovered !== null && hovered !== keyOf(arc.slice)}
+                class:pickable={!isOther(arc.slice)}
+                role="button"
+                aria-label={arc.slice.label}
+                tabindex={isOther(arc.slice) ? undefined : 0}
+                data-testid="pie-arc"
+                onmouseenter={() => (hovered = keyOf(arc.slice))}
+                onmouseleave={() => (hovered = null)}
+                onclick={() => pick(arc.slice)}
+                onkeydown={(e) => e.key === 'Enter' && pick(arc.slice)}
+                ><title>{arc.slice.label}</title></path
             >
         {/each}
     </svg>
 
     <ul class="legend">
-        {#each slices as slice (slice.sectionId)}
-            <li class:dim={hovered !== null && hovered !== slice.sectionId}>
+        {#each slices as slice (keyOf(slice))}
+            <li class:dim={hovered !== null && hovered !== keyOf(slice)}>
                 <button
                     type="button"
-                    onmouseenter={() => (hovered = slice.sectionId)}
+                    onmouseenter={() => (hovered = keyOf(slice))}
                     onmouseleave={() => (hovered = null)}
-                    onclick={() => pick(slice.sectionId)}
-                    disabled={slice.sectionId === OTHER_SECTION_ID}
+                    onclick={() => pick(slice)}
+                    disabled={isOther(slice)}
                 >
                     <span class="swatch" style="background: {colorFor(slice)}"></span>
                     <span class="name mono">{slice.label}</span>
@@ -130,5 +169,8 @@
             grid-template-columns: 1fr;
             justify-items: center;
         }
+    }
+    path.pickable {
+        cursor: pointer;
     }
 </style>

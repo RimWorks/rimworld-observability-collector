@@ -30,6 +30,7 @@ describe('UserPrefs', () => {
             lang: '',
             mainThreadOnly: true,
             flameRenderer: 'gl',
+            treeGroupMode: 'sections',
         });
     });
 
@@ -48,6 +49,7 @@ describe('UserPrefs', () => {
             lang: 'de',
             mainThreadOnly: true,
             flameRenderer: 'gl',
+            treeGroupMode: 'sections',
         });
     });
 
@@ -79,5 +81,21 @@ describe('flame renderer pref', () => {
         expect(prefs.flameRenderer).toBe('gl');
         prefs.setFlameRenderer('cpu');
         expect(new UserPrefs().flameRenderer).toBe('cpu');
+    });
+});
+
+describe('tree group mode pref', () => {
+    it('defaults to sections and persists a mods switch', () => {
+        const prefs = new UserPrefs();
+        expect(prefs.treeGroupMode).toBe('sections');
+        prefs.setTreeGroupMode('mods');
+        expect(new UserPrefs().treeGroupMode).toBe('mods');
+    });
+
+    it('reset() returns to sections', () => {
+        const prefs = new UserPrefs();
+        prefs.setTreeGroupMode('mods');
+        prefs.reset();
+        expect(prefs.treeGroupMode).toBe('sections');
     });
 });

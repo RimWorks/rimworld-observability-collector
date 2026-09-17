@@ -19,7 +19,7 @@ public static class Obs {
             string packageId = OwnerRegistry.ResolveOrThrow(owner);
             string fullName = packageId + "." + name;
             _ = unit;
-            return SectionRegistry.Register(fullName, subsystem);
+            return SectionRegistry.Register(fullName, subsystem, owner.GetName().Name);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

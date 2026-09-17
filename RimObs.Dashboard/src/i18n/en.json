@@ -192,6 +192,11 @@
     "tree.scope": "Scope",
     "tree.scope.frame": "This frame",
     "tree.scope.session": "Session",
+    "tree.scope.mod": "By mod",
+    "tree.group.sections": "Sections",
+    "tree.group.mods": "Mods",
+    "tree.mod.unknown": "Unknown",
+    "tree.mod.bundleHint": "Imported bundles carry no mod identity, so grouping by mod is unavailable for this source.",
     "tree.search": "Filter by name",
     "tree.inverted": "Inverted",
     "tree.fold": "Fold recursion",
@@ -339,5 +344,7 @@
     "vram.kind.rt": "Render targets",
     "vram.top": "Top consumers",
     "vram.unnamed": "(unnamed)",
-    "vram.tracked": "Tracked assets"
+    "vram.tracked": "Tracked assets",
+    "tree.pie.backSections": "< All sections",
+    "tree.pie.backMods": "< All mods"
 }

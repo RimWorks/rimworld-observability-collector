@@ -198,4 +198,24 @@ public class AutoInstrumentScannerTests {
 
         plan.Targets.Should().ContainSingle().Which.IsStatic.Should().BeTrue();
     }
+
+    // regression: assemblies scanned in appdomain load order let the base game fill the
+    // whole target cap before any mod assembly was reached, so mods never instrumented.
+    [Theory]
+    [InlineData("Assembly-CSharp", true)]
+    [InlineData("Assembly-CSharp-firstpass", true)]
+    [InlineData("Cosmere.Core", false)]
+    [InlineData("RimLogging", false)]
+    public void Only_the_base_game_counts_as_the_game_assembly(string name, bool game) {
+        AutoInstrumentScanner.IsGameAssembly(name).Should().Be(game);
+    }
+
+    [Fact]
+    public void Scan_order_puts_mods_before_the_game_and_keeps_relative_order() {
+        string[] loadOrder = ["Assembly-CSharp", "ModA", "Assembly-CSharp-firstpass", "ModB"];
+
+        List<string> ordered = AutoInstrumentScanner.OrderModsFirst(loadOrder, n => n);
+
+        ordered.Should().Equal("ModA", "ModB", "Assembly-CSharp", "Assembly-CSharp-firstpass");
+    }
 }

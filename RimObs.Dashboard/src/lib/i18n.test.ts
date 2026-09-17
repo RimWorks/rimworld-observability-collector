@@ -120,6 +120,25 @@ describe('query parsing', () => {
     });
 });
 
+describe('by-mod tree keys', () => {
+    const modKeys = [
+        'tree.group.sections',
+        'tree.group.mods',
+        'tree.scope.mod',
+        'tree.mod.unknown',
+        'tree.mod.bundleHint',
+    ];
+
+    for (const lang of LANGUAGES) {
+        it(`resolves all by-mod keys for ${lang.code}`, () => {
+            userPrefs.setLang(lang.code);
+            for (const key of modKeys) {
+                expect(t(key)).not.toBe(key);
+            }
+        });
+    }
+});
+
 describe('exporter settings keys', () => {
     const exporterKeys = [
         'settings.exporters',

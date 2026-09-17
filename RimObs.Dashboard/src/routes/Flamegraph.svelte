@@ -127,7 +127,7 @@
         token: string;
         label: string;
         frames: BundleFramesResponse | null;
-        names: Map<number, { name: string; subsystem: string | null }>;
+        names: Map<number, { name: string; subsystem: string | null; assembly: string | null }>;
     }
 
     // one poll per frame while frames are small; flood-sized frames back the poll off, or
@@ -146,7 +146,8 @@
     let active = $derived(imports.find((b) => b.token === source) ?? null);
     let importedFrames = $derived(active?.frames ?? null);
     let importedNames = $derived(
-        active?.names ?? new Map<number, { name: string; subsystem: string | null }>(),
+        active?.names ??
+            new Map<number, { name: string; subsystem: string | null; assembly: string | null }>(),
     );
     let comparisonSources = $derived(
         imports.map((b) => ({ value: `bundle:${b.token}`, label: b.label })),
@@ -236,6 +237,25 @@
 
         paused = true;
         void showOrdinal(ordinal ?? pinnedOrdinal ?? liveOrdinal);
+    }
+
+    // drilling in the bottom pane means reading, and reading live data that shifts every
+    // frame is useless: the panel bumps this to pin whatever is on screen.
+    let lastPauseSignal = uiSignals.pauseLive;
+    $effect(() => {
+        const n = uiSignals.pauseLive;
+        if (n === lastPauseSignal) return;
+        lastPauseSignal = n;
+        untrack(() => {
+            if (live && !paused && frame !== null) pauseAt(frame.capture_ordinal);
+        });
+    });
+
+    // grouping by mods, the spike you clicked is only useful next to the mod rows, so the
+    // strip opens the tree tab for you.
+    function pickStripFrame(ordinal: number): void {
+        pauseAt(ordinal);
+        if (userPrefs.treeGroupMode === 'mods') uiSignals.openTreeTab += 1;
     }
 
     function pauseRange(fromOrdinal: number, toOrdinal: number): void {
@@ -738,7 +758,10 @@
 
             // a bundle without frames is still a comparison source, so it is kept either way.
             let frames: BundleFramesResponse | null = null;
-            let names = new Map<number, { name: string; subsystem: string | null }>();
+            let names = new Map<
+                number,
+                { name: string; subsystem: string | null; assembly: string | null }
+            >();
             if (!res.contents.includes('frames.json')) {
                 importError = t('flamegraph.source.noFrames');
             } else {
@@ -753,7 +776,8 @@
                     names = new Map(
                         hotspots.hotspots.map((h) => [
                             h.id,
-                            { name: sectionLabel(h.name), subsystem: h.subsystem },
+                            // a bundle's hotspots carry no assembly, so by-mod grouping skips them.
+                            { name: sectionLabel(h.name), subsystem: h.subsystem, assembly: null },
                         ]),
                     );
                 }
@@ -1395,7 +1419,7 @@
                 slots={ringCapacity ?? DEFAULT_STRIP_SLOTS}
                 selectedOrdinal={pinnedOrdinal ?? liveOrdinal}
                 selectedRange={pinnedRange}
-                onSelect={(o) => pauseAt(o)}
+                onSelect={pickStripFrame}
                 onSelectRange={pauseRange}
             />
         {/if}
@@ -1663,6 +1687,7 @@
             instrumentation={instrumentationPanel}
             comparison={comparisonPanel}
             threads={threadFilterPanel}
+            groupDisabledHint={live ? undefined : t('tree.mod.bundleHint')}
             onSelect={(i) => {
                 if (treeScope === 'session' || !currentEntry) return;
                 timeline?.focusNode(currentEntry.nodeStart + i);

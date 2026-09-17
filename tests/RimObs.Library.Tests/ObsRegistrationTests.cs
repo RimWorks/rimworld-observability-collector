@@ -176,6 +176,13 @@ public sealed class ObsRegistrationTests : IDisposable {
         SectionRegistry.GetSubsystem(handle.Id).Should().Be("jobs");
     }
 
+    [Fact]
+    public void Obs_RegisterSection_RecordsOwningAssembly() {
+        SectionHandle handle = Obs.Profile.RegisterSection("owned_op");
+
+        SectionRegistry.s_Assemblies[handle.Id].Should().Be(_self.GetName().Name);
+    }
+
     private sealed class RecordingSink : ISampleSink {
         public int Count;
 

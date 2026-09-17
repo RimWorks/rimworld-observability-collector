@@ -14,6 +14,10 @@ namespace RimWorks.RimObs.Patching;
 /// </summary>
 internal static class UnityPhasePack {
     internal const string NamePrefix = "Unity.";
+
+    // these sections are engine time, not any assembly's. the dashboard buckets by assembly, so
+    // without this they land in "unknown" instead of the Unity row.
+    internal const string EngineAssembly = "UnityEngine";
     internal const string EngineSubsystem = "engine";
     internal const string IdleSubsystem = "idle";
 
@@ -118,8 +122,12 @@ internal static class UnityPhasePack {
         }
 
         try {
-            s_CullMarker = new PhaseMarker(SectionRegistry.Register(NamePrefix + "Camera.Cull", EngineSubsystem));
-            s_RenderMarker = new PhaseMarker(SectionRegistry.Register(NamePrefix + "Camera.Render", EngineSubsystem));
+            s_CullMarker = new PhaseMarker(
+                SectionRegistry.Register(NamePrefix + "Camera.Cull", EngineSubsystem, EngineAssembly)
+            );
+            s_RenderMarker = new PhaseMarker(
+                SectionRegistry.Register(NamePrefix + "Camera.Render", EngineSubsystem, EngineAssembly)
+            );
 
             s_PreCull = Subscribe(camera, "onPreCull", nameof(OnPreCull));
             s_PreRender = Subscribe(camera, "onPreRender", nameof(OnPreRender));
@@ -433,7 +441,11 @@ internal sealed class UnityLoopBinding {
     }
 
     private object BuildMarker(PlannedNode planned) {
-        SectionHandle handle = SectionRegistry.Register(planned.SectionName, planned.Subsystem);
+        SectionHandle handle = SectionRegistry.Register(
+            planned.SectionName,
+            planned.Subsystem,
+            UnityPhasePack.EngineAssembly
+        );
         if (!_markers.TryGetValue(handle.Id, out PhaseMarker? marker)) {
             marker = new PhaseMarker(handle);
             _markers[handle.Id] = marker;

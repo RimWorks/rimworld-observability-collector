@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { pieSlices, donutArcs, OTHER_SECTION_ID } from './pieSlices';
+import {
+    pieSlices,
+    pieModSlices,
+    pieSectionDrillSlices,
+    pieModDrillSlices,
+    donutArcs,
+    OTHER_SECTION_ID,
+    OTHER_MOD_KEY,
+} from './pieSlices';
+import { buildModRows, type SectionNames } from './modGroups';
 import type { TreeNode } from './frameTree';
 import { NO_PARENT } from './frameTree';
 
@@ -85,6 +94,57 @@ describe('pieSlices', () => {
     });
 });
 
+describe('pieModSlices', () => {
+    const modNames: SectionNames = new Map([
+        [1, { name: 'author.mod.work', subsystem: null, assembly: 'AuthorMod' }],
+        [2, { name: 'author.mod.more', subsystem: null, assembly: 'AuthorMod' }],
+        [
+            3,
+            {
+                name: 'Verse.TickManager.DoSingleTick',
+                subsystem: 'tick',
+                assembly: 'Assembly-CSharp',
+            },
+        ],
+        [
+            4,
+            {
+                name: 'UnityEngine.Camera.Render',
+                subsystem: 'render',
+                assembly: 'UnityEngine.CoreModule',
+            },
+        ],
+        [5, { name: 'Unity.Camera.Cull', subsystem: 'render', assembly: null }],
+    ]);
+
+    it('sums self time per mod, biggest first', () => {
+        const slices = pieModSlices(
+            [node(1, 0, 30), node(2, 40, 20), node(3, 70, 70), node(4, 150, 10)],
+            modNames,
+        );
+
+        expect(slices.map((s) => s.key)).toEqual(['RimWorld', 'AuthorMod', 'Unity']);
+        expect(slices[1].selfUs).toBe(50);
+    });
+
+    it('folds everything past topN into one other slice', () => {
+        const slices = pieModSlices(
+            [node(3, 0, 60), node(1, 70, 30), node(5, 110, 10)],
+            modNames,
+            1,
+            'rest',
+        );
+
+        expect(slices).toHaveLength(2);
+        expect(slices[1]).toMatchObject({ key: OTHER_MOD_KEY, label: 'rest', selfUs: 40 });
+        expect(slices.reduce((n, s) => n + s.share, 0)).toBeCloseTo(1, 10);
+    });
+
+    it('returns nothing for an empty frame', () => {
+        expect(pieModSlices([], modNames)).toEqual([]);
+    });
+});
+
 describe('donutArcs', () => {
     it('produces one path per slice', () => {
         const arcs = donutArcs(pieSlices([node(1, 0, 40), node(2, 50, 30)], names));
@@ -105,5 +165,133 @@ describe('donutArcs', () => {
         const arcs = donutArcs(pieSlices([node(1, 0, 1), node(2, 5, 999)], names));
 
         for (const a of arcs) expect(a.path).not.toMatch(/NaN/);
+    });
+});
+
+// one frame, read two ways: the pie has to say the same thing the by-mod tree says.
+describe('pieModSlices against the by-mod tree', () => {
+    const frameNames: SectionNames = new Map([
+        [
+            1,
+            {
+                name: 'Verse.TickManager.DoSingleTick',
+                subsystem: 'tick',
+                assembly: 'Assembly-CSharp',
+            },
+        ],
+        [2, { name: 'Verse.TickList.Tick', subsystem: 'tick', assembly: 'Assembly-CSharp' }],
+        [3, { name: 'author.mod.Work', subsystem: null, assembly: 'AuthorMod' }],
+        [4, { name: 'author.mod.Inner', subsystem: null, assembly: 'AuthorMod' }],
+        [5, { name: 'other.mod.Scan', subsystem: 'ai', assembly: 'OtherMod' }],
+        [
+            6,
+            {
+                name: 'UnityEngine.Camera.Render',
+                subsystem: 'render',
+                assembly: 'UnityEngine.CoreModule',
+            },
+        ],
+    ]);
+
+    // each mod's work sits in its own root subtree, the way a frame really splits up.
+    const frame = [
+        node(1, 0, 4000),
+        node(2, 500, 1500, 0),
+        node(3, 4000, 3000),
+        node(4, 4200, 1200, 2),
+        node(5, 7000, 2000),
+        node(6, 9000, 1000),
+    ];
+
+    it('top-N plus other adds up to the same mod totals the tree shows', () => {
+        // pieModSlices buckets on self time, so compare against selfUs, not totalUs.
+        const totals = new Map(buildModRows(frame, frameNames).map((r) => [r.key, r.selfUs]));
+        const slices = pieModSlices(frame, frameNames, 3, 'other');
+
+        expect(slices.map((s) => s.key)).toEqual([
+            'RimWorld',
+            'AuthorMod',
+            'OtherMod',
+            OTHER_MOD_KEY,
+        ]);
+        for (const slice of slices.slice(0, 3)) {
+            expect(slice.selfUs, slice.key).toBe(totals.get(slice.key));
+        }
+        // the tail is every mod past the top three, here Unity on its own.
+        expect(slices[3].selfUs).toBe(totals.get('Unity'));
+        expect(slices.reduce((n, s) => n + s.selfUs, 0)).toBe(10_000);
+        expect(slices.reduce((n, s) => n + s.share, 0)).toBeCloseTo(1, 10);
+    });
+
+    it('drops the tail once topN covers every mod', () => {
+        const slices = pieModSlices(frame, frameNames, 8, 'other');
+
+        expect(slices.map((s) => s.key)).toEqual(['RimWorld', 'AuthorMod', 'OtherMod', 'Unity']);
+        expect(slices.map((s) => s.selfUs)).toEqual([4000, 3000, 2000, 1000]);
+    });
+});
+
+// clicking into a slice re-scopes the donut: a section to its subtree, a mod to its sections.
+describe('pie drill slices', () => {
+    const names = new Map([
+        [1, { name: 'Root', subsystem: null, assembly: 'Assembly-CSharp' }],
+        [2, { name: 'ChildA', subsystem: null, assembly: 'Assembly-CSharp' }],
+        [3, { name: 'ChildB', subsystem: null, assembly: 'ModAsm' }],
+        [4, { name: 'Elsewhere', subsystem: null, assembly: 'ModAsm' }],
+    ]);
+    const nodes: TreeNode[] = [
+        {
+            sectionId: 1,
+            nodeId: 1,
+            parentIndex: NO_PARENT,
+            depth: 0,
+            startUs: 0,
+            durUs: 100,
+            endUs: 100,
+            allocBytes: 0,
+        },
+        {
+            sectionId: 2,
+            nodeId: 2,
+            parentIndex: 0,
+            depth: 1,
+            startUs: 0,
+            durUs: 40,
+            endUs: 40,
+            allocBytes: 0,
+        },
+        {
+            sectionId: 3,
+            nodeId: 3,
+            parentIndex: 0,
+            depth: 1,
+            startUs: 40,
+            durUs: 30,
+            endUs: 70,
+            allocBytes: 0,
+        },
+        {
+            sectionId: 4,
+            nodeId: 4,
+            parentIndex: NO_PARENT,
+            depth: 0,
+            startUs: 100,
+            durUs: 50,
+            endUs: 150,
+            allocBytes: 0,
+        },
+    ];
+
+    it('scopes a section drill to the subtree and sums to its total', () => {
+        const slices = pieSectionDrillSlices(nodes, names, 1, 8, 'other');
+        const total = slices.reduce((a, s) => a + s.selfUs, 0);
+        expect(total).toBe(100);
+        expect(slices.map((s) => s.sectionId).sort()).toEqual([1, 2, 3]);
+    });
+
+    it('scopes a mod drill to that mods sections only', () => {
+        const slices = pieModDrillSlices(nodes, names, 'ModAsm', 8, 'other');
+        expect(slices.map((s) => s.sectionId).sort()).toEqual([3, 4]);
+        expect(slices.reduce((a, s) => a + s.selfUs, 0)).toBe(80);
     });
 });

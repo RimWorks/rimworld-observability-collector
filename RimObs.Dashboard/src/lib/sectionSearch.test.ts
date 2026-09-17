@@ -127,16 +127,18 @@ describe('resolveCursorIndex', () => {
 });
 
 describe('hideMask', () => {
-    it('keeps a matching leaf and every ancestor on its path', () => {
-        // root(0) -> mid(1) -> leaf(2, matches) ; root(0) -> other(3, no match)
+    // ka 2026-09-17: keeping ancestors hid almost nothing on wide queries, so hiding
+    // now keeps only matches and their subtrees.
+    it('keeps a match and its subtree, and hides the ancestors', () => {
+        // root(0) -> mid(1, matches) -> leaf(2) ; root(0) -> other(3, no match)
         const nodes = [
             node({ sectionId: 1, parentIndex: -1 }),
-            node({ sectionId: 2, parentIndex: 0 }),
-            node({ sectionId: 30, parentIndex: 1 }),
+            node({ sectionId: 30, parentIndex: 0 }),
+            node({ sectionId: 2, parentIndex: 1 }),
             node({ sectionId: 3, parentIndex: 0 }),
         ];
         const hidden = hideMask(nodes, new Set([30]));
-        expect(Array.from(hidden)).toEqual([0, 0, 0, 1]);
+        expect(Array.from(hidden)).toEqual([1, 0, 0, 1]);
     });
 
     it('hides everything when nothing matches', () => {

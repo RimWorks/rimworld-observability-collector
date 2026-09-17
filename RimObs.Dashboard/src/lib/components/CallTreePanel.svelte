@@ -9,6 +9,8 @@
         labelFor,
         keysToNode,
         allExpandableKeys,
+        selfTimes,
+        selfAllocBytes,
         type SortColumn,
         type TableRow,
     } from '../frameTable';
@@ -23,7 +25,17 @@
     import Tooltip from './Tooltip.svelte';
     import Icon from './Icon.svelte';
     import PieChart from './PieChart.svelte';
-    import { pieSlices } from '../pieSlices';
+    import {
+        pieSlices,
+        pieModSlices,
+        pieSectionDrillSlices,
+        pieModDrillSlices,
+        type PieSlice,
+        type ModSlice,
+    } from '../pieSlices';
+    import { buildModRows, nestedInSameSection, UNKNOWN_MOD } from '../modGroups';
+    import { userPrefs } from '../userPrefs.svelte';
+    import { uiSignals } from '../uiSignals.svelte';
 
     let {
         nodes,
@@ -39,9 +51,10 @@
         threads,
         patchOwners = new Map<string, string[]>(),
         open = $bindable(false),
+        groupDisabledHint,
     }: {
         nodes: readonly TreeNode[];
-        names: Map<number, { name: string; subsystem: string | null }>;
+        names: Map<number, { name: string; subsystem: string | null; assembly: string | null }>;
         selectedNode?: number;
         frameDurationUs?: number;
         baselineUs?: Map<number, number>;
@@ -55,6 +68,8 @@
         patchOwners?: Map<string, string[]>;
         /** the route shrinks the flame stage to match, so the drawer never covers it */
         open?: boolean;
+        /** set to lock the grouping toggle off, with this as the reason */
+        groupDisabledHint?: string;
     } = $props();
 
     function ownersFor(sectionId: number): string[] {
@@ -66,6 +81,22 @@
         { id: 'frame', label: 'tree.scope.frame' },
         { id: 'session', label: 'tree.scope.session' },
     ] as const;
+
+    const GROUPS = [
+        { id: 'sections', label: 'tree.group.sections' },
+        { id: 'mods', label: 'tree.group.mods' },
+    ] as const;
+
+    /** a mod row stands for many sections, so it has no section of its own */
+    const MOD_SECTION_ID = -2;
+
+    let groupByMod = $derived(
+        userPrefs.treeGroupMode === 'mods' && groupDisabledHint === undefined,
+    );
+
+    function modLabel(key: string): string {
+        return key === UNKNOWN_MOD ? t('tree.mod.unknown') : key;
+    }
 
     let expanded = $state(new SvelteSet<string>());
 
@@ -135,15 +166,127 @@
         open = activeTab !== null;
     });
 
-    let rows = $derived(
-        (inverted ? buildInvertedRows : buildTreeRows)(nodes, {
-            names,
-            expanded,
-            sortColumn,
-            ascending,
-            foldRecursion,
-            search,
-        }),
+    interface DisplayRow extends TableRow {
+        /** set on a mod row, which has no section to take a label from */
+        modLabel?: string;
+    }
+
+    function rowLabel(row: DisplayRow): string {
+        return row.modLabel ?? labelFor(row.sectionId, names);
+    }
+
+    function compareByColumn(a: DisplayRow, b: DisplayRow): number {
+        const la = rowLabel(a);
+        const lb = rowLabel(b);
+        let n: number;
+        if (sortColumn === 'self') n = a.selfUs - b.selfUs;
+        else if (sortColumn === 'alloc') n = a.allocBytes - b.allocBytes;
+        else if (sortColumn === 'calls') n = a.calls - b.calls;
+        else if (sortColumn === 'label') n = la.localeCompare(lb);
+        else n = a.totalUs - b.totalUs;
+        if (!ascending) n = -n;
+        return n !== 0 ? n : la.localeCompare(lb);
+    }
+
+    /** one row per mod, each expanding to the sections that landed in it. */
+    function buildModDisplayRows(): DisplayRow[] {
+        const self = selfTimes(nodes);
+        const selfAlloc = selfAllocBytes(nodes);
+        const perSection = new Map<number, DisplayRow>();
+        for (let i = 0; i < nodes.length; i++) {
+            const id = nodes[i].sectionId;
+            let row = perSection.get(id);
+            if (!row) {
+                row = {
+                    key: '',
+                    sectionId: id,
+                    depth: 1,
+                    totalUs: 0,
+                    selfUs: 0,
+                    allocBytes: 0,
+                    selfAllocBytes: 0,
+                    calls: 0,
+                    hasChildren: false,
+                    expanded: false,
+                    nodes: [],
+                };
+                perSection.set(id, row);
+            }
+            // total and alloc are inclusive, so recursion would count the same time twice
+            if (!nestedInSameSection(nodes, i)) {
+                row.totalUs += nodes[i].durUs;
+                row.allocBytes += nodes[i].allocBytes ?? 0;
+            }
+            row.selfUs += self[i];
+            row.selfAllocBytes += selfAlloc[i];
+            row.calls += nodes[i].calls ?? 1;
+            row.nodes.push(i);
+        }
+
+        const q = search.trim().toLowerCase();
+        const out: DisplayRow[] = [];
+        const mods = buildModRows(nodes, names).map((mod) => {
+            const key = `mod/${mod.key}`;
+            let selfAlloc = 0;
+            for (const id of mod.sectionIds) selfAlloc += perSection.get(id)?.selfAllocBytes ?? 0;
+            return {
+                mod,
+                row: {
+                    key,
+                    sectionId: MOD_SECTION_ID,
+                    modLabel: modLabel(mod.key),
+                    depth: 0,
+                    totalUs: mod.totalUs,
+                    selfUs: mod.selfUs,
+                    allocBytes: mod.allocBytes,
+                    selfAllocBytes: selfAlloc,
+                    calls: mod.calls,
+                    hasChildren: mod.sectionIds.length > 0,
+                    expanded: expanded.has(key),
+                    nodes: [],
+                } satisfies DisplayRow,
+            };
+        });
+        mods.sort((a, b) => compareByColumn(a.row, b.row));
+
+        // matching the subsystem is how you narrow to render or ai work in one keystroke
+        const matches = (r: DisplayRow) =>
+            rowLabel(r).toLowerCase().includes(q) ||
+            (names.get(r.sectionId)?.subsystem ?? '').toLowerCase().includes(q);
+
+        for (const { mod, row } of mods) {
+            let members = mod.sectionIds
+                .map((id) => perSection.get(id))
+                .filter((r): r is DisplayRow => r !== undefined)
+                .map((r) => ({ ...r, key: `${row.key}/${r.sectionId}` }));
+            if (q) {
+                const hits = members.filter(matches);
+                const modHit = row.modLabel!.toLowerCase().includes(q);
+                if (hits.length === 0 && !modHit) continue;
+                // "show me this mod" keeps every section; a section query narrows to hits.
+                if (!modHit) members = hits;
+                // a search has to reach collapsed rows, or a match one level down is invisible
+                row.expanded = true;
+            }
+            out.push(row);
+            if (!row.expanded) continue;
+            members.sort(compareByColumn);
+            out.push(...members);
+        }
+        return out;
+    }
+
+    let rows: DisplayRow[] = $derived(
+        groupByMod && (activeTab === 'tree' || activeTab === 'alloc')
+            ? buildModDisplayRows()
+            : (inverted ? buildInvertedRows : buildTreeRows)(nodes, {
+                  names,
+                  expanded,
+                  sortColumn,
+                  ascending,
+                  foldRecursion,
+                  search,
+              }),
     );
 
     // the ExpandCallTreeToNode half of the flame-to-tree link
@@ -157,6 +300,7 @@
     );
 
     function toggle(row: TableRow): void {
+        requestPause();
         if (expanded.has(row.key)) expanded.delete(row.key);
         else expanded.add(row.key);
     }
@@ -184,12 +328,70 @@
     }
 
     function expandAll(): void {
+        if (groupByMod) {
+            for (const mod of buildModRows(nodes, names)) expanded.add(`mod/${mod.key}`);
+            return;
+        }
         for (const key of allExpandableKeys(nodes)) expanded.add(key);
     }
 
+    // clicking a slice drills into it; live data is pinned first so it holds still.
+    type PieDrill = { kind: 'section'; id: number } | { kind: 'mod'; key: string };
+    let pieDrill = $state<PieDrill | null>(null);
+    $effect(() => {
+        void groupByMod;
+        pieDrill = null;
+    });
+
     let slices = $derived(
-        activeTab === 'pie' ? pieSlices(nodes, names, 8, t('tree.pie.other')) : [],
+        activeTab !== 'pie'
+            ? []
+            : pieDrill !== null
+              ? pieDrill.kind === 'mod'
+                  ? pieModDrillSlices(nodes, names, pieDrill.key, 8, t('tree.pie.other'))
+                  : pieSectionDrillSlices(nodes, names, pieDrill.id, 8, t('tree.pie.other'))
+              : groupByMod
+                ? pieModSlices(nodes, names, 8, t('tree.pie.other')).map((s) => ({
+                      ...s,
+                      label: modLabel(s.label),
+                  }))
+                : pieSlices(nodes, names, 8, t('tree.pie.other')),
     );
+
+    let pieDrillLabel = $derived(
+        pieDrill === null
+            ? ''
+            : pieDrill.kind === 'mod'
+              ? modLabel(pieDrill.key)
+              : labelFor(pieDrill.id, names),
+    );
+
+    function requestPause(): void {
+        uiSignals.pauseLive += 1;
+    }
+
+    function pickSlice(slice: PieSlice | ModSlice): void {
+        requestPause();
+        if ('key' in slice && !('sectionId' in slice)) {
+            pieDrill = { kind: 'mod', key: slice.key };
+            return;
+        }
+        const id = (slice as PieSlice).sectionId;
+        if (pieDrill === null && !groupByMod) {
+            pieDrill = { kind: 'section', id };
+            return;
+        }
+        const at = nodes.findIndex((n) => n.sectionId === id);
+        if (at >= 0) onSelect?.(at);
+    }
+
+    // a chip elsewhere on the page asks for the tree tab; the counter is its only channel.
+    let lastTreeSignal = uiSignals.openTreeTab;
+    $effect(() => {
+        if (uiSignals.openTreeTab === lastTreeSignal) return;
+        lastTreeSignal = uiSignals.openTreeTab;
+        activeTab = 'tree';
+    });
 
     function share(totalUs: number): number {
         if (!(frameDurationUs > 0)) return 0;
@@ -282,6 +484,24 @@
                             >
                         {/each}
                     </span>
+                    {#snippet groupSeg()}
+                        <span class="seg" role="group" aria-label={t('tree.scope.mod')}>
+                            {#each GROUPS as g (g.id)}
+                                <button
+                                    type="button"
+                                    aria-pressed={g.id === (groupByMod ? 'mods' : 'sections')}
+                                    disabled={groupDisabledHint !== undefined}
+                                    onclick={() => userPrefs.setTreeGroupMode(g.id)}
+                                    data-testid="group-{g.id}">{t(g.label)}</button
+                                >
+                            {/each}
+                        </span>
+                    {/snippet}
+                    {#if groupDisabledHint !== undefined}
+                        <Tooltip text={groupDisabledHint}>{@render groupSeg()}</Tooltip>
+                    {:else}
+                        {@render groupSeg()}
+                    {/if}
                     <input
                         type="search"
                         bind:value={search}
@@ -290,11 +510,21 @@
                         data-testid="tree-search"
                     />
                     <label
-                        ><input type="checkbox" bind:checked={inverted} />
+                        ><input
+                            type="checkbox"
+                            bind:checked={inverted}
+                            disabled={groupByMod}
+                            data-testid="tree-invert"
+                        />
                         {t('tree.inverted')}</label
                     >
                     <label
-                        ><input type="checkbox" bind:checked={foldRecursion} />
+                        ><input
+                            type="checkbox"
+                            bind:checked={foldRecursion}
+                            disabled={groupByMod}
+                            data-testid="tree-fold"
+                        />
                         {t('tree.fold')}</label
                     >
                     <button type="button" onclick={expandAll} data-testid="expand-all"
@@ -317,16 +547,22 @@
             {:else if activeTab === 'threads'}
                 {@render threads?.()}
             {:else if activeTab === 'pie'}
+                {#if pieDrill !== null}
+                    <div class="crumb">
+                        <button
+                            type="button"
+                            onclick={() => (pieDrill = null)}
+                            data-testid="pie-back"
+                        >
+                            {groupByMod ? t('tree.pie.backMods') : t('tree.pie.backSections')}
+                        </button>
+                        <span class="mono" data-testid="pie-drill-label">{pieDrillLabel}</span>
+                    </div>
+                {/if}
                 {#if slices.length === 0}
                     <p class="empty" data-testid="pie-empty">{t('tree.empty')}</p>
                 {:else}
-                    <PieChart
-                        {slices}
-                        onSelect={(sectionId) => {
-                            const row = rows.find((r) => r.sectionId === sectionId);
-                            if (row && row.nodes.length > 0) onSelect?.(row.nodes[0]);
-                        }}
-                    />
+                    <PieChart {slices} onPick={pickSlice} />
                 {/if}
             {:else if activeTab === 'vram'}
                 {#if !vram.data?.collected}
@@ -474,7 +710,7 @@
                                             class="twist"
                                             onclick={() => toggle(row)}
                                             aria-expanded={row.expanded}
-                                            aria-label={labelFor(row.sectionId, names)}
+                                            aria-label={rowLabel(row)}
                                         >
                                             <Icon
                                                 name={row.expanded ? 'chevronDown' : 'chevron'}
@@ -488,8 +724,9 @@
                                         type="button"
                                         class="label"
                                         onclick={() =>
-                                            row.nodes.length > 0 && onSelect?.(row.nodes[0])}
-                                        >{labelFor(row.sectionId, names)}</button
+                                            row.nodes.length > 0 &&
+                                            (requestPause(), onSelect?.(row.nodes[0]))}
+                                        >{rowLabel(row)}</button
                                     >
                                     {#if ownersFor(row.sectionId).length > 0}
                                         <Tooltip
@@ -501,7 +738,7 @@
                                             </span>
                                         </Tooltip>
                                     {/if}
-                                    {#if scope === 'session'}
+                                    {#if scope === 'session' && row.modLabel === undefined}
                                         <button
                                             type="button"
                                             class="trend-toggle"
@@ -898,5 +1135,27 @@
     .vram .dim {
         color: var(--text-faint);
         font-size: 0.72rem;
+    }
+    .crumb {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+        padding: var(--s-2) var(--rail) 0;
+        font-size: 0.76rem;
+    }
+    .crumb button {
+        border: none;
+        background: none;
+        padding: 2px var(--s-1);
+        color: var(--text-dim);
+    }
+    .crumb button:hover {
+        color: var(--text);
+    }
+    .crumb .mono {
+        color: var(--text-faint);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 </style>

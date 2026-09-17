@@ -1032,6 +1032,26 @@ describe('Flamegraph page', () => {
         expect(deletedTokens()).toEqual([]);
     });
 
+    // a bundle's hotspots carry no assembly, so by-mod grouping would collapse to one Unknown row.
+    it('disables group-by-mod while an imported bundle is the source', async () => {
+        mockFetch(FRAMES_BODY);
+        const { getByLabelText } = render(Flamegraph);
+        await openTree();
+        expect(screen.getByTestId('group-mods')).not.toBeDisabled();
+
+        await openFile(getByLabelText);
+        await screen.findByTestId('frame-scrub');
+        await waitFor(() => expect(screen.getByTestId('group-mods')).toBeDisabled());
+
+        await fireEvent.mouseEnter(screen.getByTestId('group-mods').closest('.tt-wrap')!);
+        expect(screen.getByRole('tooltip')).toHaveTextContent(/carry no mod identity/i);
+
+        const source = getByLabelText(/^Source$/i) as HTMLSelectElement;
+        await fireEvent.change(source, { target: { value: 'live' } });
+        await openTree();
+        await waitFor(() => expect(screen.getByTestId('group-mods')).not.toBeDisabled());
+    });
+
     // a frameless bundle cannot be scrubbed, but it is still a valid comparison source.
     it('keeps a bundle with no frames.json without offering it as a frame source', async () => {
         mockFetch(FRAMES_BODY, { ...IMPORT_BODY, contents: ['manifest.json'] });
@@ -2123,6 +2143,41 @@ describe('Flamegraph frame history selection', () => {
             const calls = vi.mocked(drawStrip).mock.calls;
             expect(calls.at(-1)?.[2].selectedOrdinal).toBe(4319);
         });
+    });
+
+    async function clickFirstBar(): Promise<void> {
+        const canvas = screen
+            .getByTestId('frame-strip')
+            .querySelector('canvas') as HTMLCanvasElement;
+        canvas.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100 }) as DOMRect;
+        await fireEvent.click(canvas, { clientX: 0, clientY: 10 });
+    }
+
+    it('asks for the tree tab on a strip click while grouping by mods', async () => {
+        userPrefs.setTreeGroupMode('mods');
+        const before = uiSignals.openTreeTab;
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await clickFirstBar();
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        expect(uiSignals.openTreeTab).toBe(before + 1);
+        userPrefs.reset();
+    });
+
+    it('leaves the tree tab alone on a strip click while grouping by sections', async () => {
+        userPrefs.setTreeGroupMode('sections');
+        const before = uiSignals.openTreeTab;
+        render(Flamegraph);
+        await waitFor(() => expect(screen.getByText('4321')).toBeInTheDocument());
+
+        await clickFirstBar();
+
+        await waitFor(() => expect(screen.getByTestId('paused-badge')).toBeInTheDocument());
+        expect(uiSignals.openTreeTab).toBe(before);
+        userPrefs.reset();
     });
 
     // the ring capacity is 5000 slots, so a wide rect gives each slot a real pixel width:

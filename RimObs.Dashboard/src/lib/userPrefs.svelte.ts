@@ -6,6 +6,8 @@ export interface PersistedPrefs {
     mainThreadOnly: boolean;
     /** flame quad fills: 'gl' renders on the gpu, 'cpu' uses the 2d canvas alone. */
     flameRenderer: 'gl' | 'cpu';
+    /** call tree grouping: 'sections' is the flat section tree, 'mods' groups by owning mod. */
+    treeGroupMode: 'sections' | 'mods';
 }
 
 export const DEFAULT_PREFS: PersistedPrefs = {
@@ -13,6 +15,7 @@ export const DEFAULT_PREFS: PersistedPrefs = {
     lang: '',
     mainThreadOnly: true,
     flameRenderer: 'gl',
+    treeGroupMode: 'sections',
 };
 
 function load(): PersistedPrefs {
@@ -41,6 +44,7 @@ export class UserPrefs {
     lang = $state<string>(DEFAULT_PREFS.lang);
     mainThreadOnly = $state<boolean>(DEFAULT_PREFS.mainThreadOnly);
     flameRenderer = $state<'gl' | 'cpu'>(DEFAULT_PREFS.flameRenderer);
+    treeGroupMode = $state<'sections' | 'mods'>(DEFAULT_PREFS.treeGroupMode);
 
     constructor() {
         const loaded = load();
@@ -48,6 +52,7 @@ export class UserPrefs {
         this.lang = loaded.lang;
         this.mainThreadOnly = loaded.mainThreadOnly;
         this.flameRenderer = loaded.flameRenderer;
+        this.treeGroupMode = loaded.treeGroupMode;
     }
 
     private snapshot(): PersistedPrefs {
@@ -56,6 +61,7 @@ export class UserPrefs {
             lang: this.lang,
             mainThreadOnly: this.mainThreadOnly,
             flameRenderer: this.flameRenderer,
+            treeGroupMode: this.treeGroupMode,
         };
     }
 
@@ -79,11 +85,17 @@ export class UserPrefs {
         persist(this.snapshot());
     }
 
+    setTreeGroupMode(value: 'sections' | 'mods'): void {
+        this.treeGroupMode = value;
+        persist(this.snapshot());
+    }
+
     reset(): void {
         this.closeOnDisconnect = DEFAULT_PREFS.closeOnDisconnect;
         this.lang = DEFAULT_PREFS.lang;
         this.mainThreadOnly = DEFAULT_PREFS.mainThreadOnly;
         this.flameRenderer = DEFAULT_PREFS.flameRenderer;
+        this.treeGroupMode = DEFAULT_PREFS.treeGroupMode;
         if (typeof localStorage !== 'undefined') {
             try {
                 localStorage.removeItem(STORAGE_KEY);

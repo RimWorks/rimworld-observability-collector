@@ -49,7 +49,9 @@ internal static class AutoInstrumentScanner {
         if (includes.Length == 0)
             return plan;
 
-        foreach (Assembly assembly in assemblies) {
+        // mods scan first: the base game alone fills the target cap, and a mod profiler
+        // that only instruments Assembly-CSharp answers the wrong question.
+        foreach (Assembly assembly in OrderModsFirst(assemblies, static a => a.GetName().Name ?? string.Empty)) {
             string name = assembly.GetName().Name ?? string.Empty;
             if (IsBlockedAssembly(name))
                 continue;
@@ -59,6 +61,24 @@ internal static class AutoInstrumentScanner {
         }
 
         return plan;
+    }
+
+    /// <summary>True for the base game's own code, which yields cap room to mods.</summary>
+    public static bool IsGameAssembly(string assemblyName) =>
+        assemblyName.StartsWith("Assembly-CSharp", StringComparison.Ordinal);
+
+    /// <summary>Mods first, base game last, relative order otherwise kept.</summary>
+    internal static List<T> OrderModsFirst<T>(IEnumerable<T> items, Func<T, string> name) {
+        List<T> ordered = new List<T>();
+        List<T> game = new List<T>();
+        foreach (T item in items) {
+            if (IsGameAssembly(name(item)))
+                game.Add(item);
+            else
+                ordered.Add(item);
+        }
+        ordered.AddRange(game);
+        return ordered;
     }
 
     private static void ScanAssembly(

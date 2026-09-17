@@ -104,16 +104,14 @@ export function resolveCursorIndex(nodes: TreeNode[], cursor: MatchCursor | null
     return -1;
 }
 
-// a node is kept if it matches or something beneath it does. nodes emit parent before
-// child, so one reverse pass carries a child's keep flag up to its parent.
 export function hideMask(nodes: TreeNode[], matchIds: ReadonlySet<number>): Uint8Array {
+    // matches and their subtrees survive; ancestors do not. hiding is "show me this
+    // code's work", and keeping the whole parent spine hid almost nothing on wide queries.
     const keep = new Uint8Array(nodes.length);
-    for (let i = nodes.length - 1; i >= 0; i--) {
+    for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-        if (matchIds.has(n.sectionId) || keep[i] === 1) {
+        if (matchIds.has(n.sectionId) || (n.parentIndex >= 0 && keep[n.parentIndex] === 1))
             keep[i] = 1;
-            if (n.parentIndex >= 0) keep[n.parentIndex] = 1;
-        }
     }
     const hidden = new Uint8Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) hidden[i] = keep[i] === 1 ? 0 : 1;
