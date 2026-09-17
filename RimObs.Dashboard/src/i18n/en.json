@@ -45,16 +45,6 @@
     "settings.schema": "Schema version",
     "settings.language": "Language",
     "settings.update": "Update available",
-    "settings.exporters": "Exporters",
-    "settings.prometheus": "Prometheus",
-    "settings.exporter.enabled": "Enabled",
-    "settings.exporter.disabled": "Disabled",
-    "settings.exporter.endpoint": "Endpoint",
-    "settings.exporter.last_scrape": "Last scrape",
-    "settings.exporter.sample_count": "Samples in last scrape",
-    "settings.exporter.errors": "Errors",
-    "settings.exporter.unavailable": "Exporter status is unavailable.",
-    "tip.settings.prometheus": "When this is on, the collector serves a Prometheus-format /metrics endpoint built from session aggregates.",
     "settings.behavior": "Behavior",
     "settings.close_on_disconnect": "Close on disconnect",
     "settings.close_on_disconnect.hint": "Close this tab automatically when the collector stops responding, for example when RimWorld exits. Your browser may block this if a script did not open the tab.",
@@ -346,5 +336,7 @@
     "vram.unnamed": "(unnamed)",
     "vram.tracked": "Tracked assets",
     "tree.pie.backSections": "< All sections",
-    "tree.pie.backMods": "< All mods"
+    "tree.pie.backMods": "< All mods",
+    "disconnect.title": "Collector gone",
+    "disconnect.body": "RimWorld closed or the collector stopped answering. This tab tried to close itself, but the browser only allows that for tabs a script opened. It is safe to close."
 }

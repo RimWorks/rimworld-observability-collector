@@ -23,5 +23,4 @@ public sealed class RimObsConfig {
     [JsonPropertyName("i18n")]
     public I18nOptions I18n { get; set; } = new();
 
-    public ExporterOptions Exporters { get; set; } = new();
 }

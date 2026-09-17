@@ -28,18 +28,6 @@ export interface StatusResponse {
         latest_version: string | null;
         url: string | null;
     };
-    exporters: {
-        prometheus_enabled: boolean;
-        prometheus_port: number;
-        otlp_enabled: boolean;
-        prometheus_health: {
-            total_scrapes: number;
-            last_scrape_utc: string | null;
-            last_sample_count: number;
-            total_errors: number;
-            last_error: string | null;
-        };
-    };
 }
 
 /** One lane in the thread table. `role` is the ThreadRole enum: 0 main, 1 unity job, 2 mod, 3 rimobs. */

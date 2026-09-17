@@ -138,27 +138,3 @@ describe('by-mod tree keys', () => {
         });
     }
 });
-
-describe('exporter settings keys', () => {
-    const exporterKeys = [
-        'settings.exporters',
-        'settings.prometheus',
-        'settings.exporter.enabled',
-        'settings.exporter.disabled',
-        'settings.exporter.endpoint',
-        'settings.exporter.last_scrape',
-        'settings.exporter.sample_count',
-        'settings.exporter.errors',
-        'settings.exporter.unavailable',
-        'tip.settings.prometheus',
-    ];
-
-    for (const lang of LANGUAGES) {
-        it(`resolves all exporter keys for ${lang.code}`, () => {
-            userPrefs.setLang(lang.code);
-            for (const key of exporterKeys) {
-                expect(t(key)).not.toBe(key);
-            }
-        });
-    }
-});

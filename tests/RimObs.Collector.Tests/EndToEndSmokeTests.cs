@@ -766,7 +766,6 @@ public sealed class EndToEndSmokeTests {
             root.GetProperty("storage").GetProperty("sqlite_journal_mode").GetString().Should().Be("WAL");
             root.GetProperty("privacy").GetProperty("include_assembly_versions_and_patches").GetBoolean().Should().BeTrue();
             root.GetProperty("i18n").GetProperty("default_language").GetString().Should().Be("en");
-            root.GetProperty("exporters").GetProperty("prometheus_port").GetInt32().Should().Be(7879);
             root.GetProperty("sampling").GetProperty("max_capture_depth").GetInt32().Should().Be(8);
             JsonElement auto = root.GetProperty("auto_instrument");
             auto.GetProperty("enabled").GetBoolean().Should().BeFalse();

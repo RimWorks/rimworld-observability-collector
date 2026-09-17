@@ -141,8 +141,6 @@ public static class Program {
         builder.Services.AddSingleton(new Bundle.BundleImportRegistry(importsDir, TimeSpan.FromMinutes(30)));
         builder.Services.AddSingleton<Bundle.BundleImportService>();
         builder.Services.AddHostedService<Bundle.BundleImportSweeper>();
-        builder.Services.AddSingleton<Exporters.ExporterHealth>();
-        builder.Services.AddSingleton<Exporters.PrometheusMetricsBuilder>();
         builder.Services.AddSingleton<Instrumentation.SessionMetaRegistry>();
         builder.Services.AddSingleton(_ => hasPersister
             ? Storage.DynamicPatchStore.Open(ResolveDynamicPatchStorePath(sessionsDir)!)
@@ -202,7 +200,6 @@ public static class Program {
         app.MapLogsEndpoints();
         app.MapInstrumentationEndpoints();
         app.MapBundleEndpoints();
-        app.MapMetricsExporterEndpoints();
         app.MapSpaEndpoints();
     }
 

@@ -4,6 +4,7 @@
     import { StreamResource } from './lib/stream.svelte';
     import { Resource } from './lib/poll.svelte';
     import { userPrefs } from './lib/userPrefs.svelte';
+    import { t } from './lib/i18n';
     import TopBar from './lib/components/TopBar.svelte';
     import Flamegraph from './routes/Flamegraph.svelte';
     import NameSessionPrompt from './lib/components/NameSessionPrompt.svelte';
@@ -83,6 +84,7 @@
         }
     }
 
+    let disconnected = $state(false);
     $effect(() => {
         if (
             hasBeenConnected &&
@@ -92,16 +94,25 @@
         ) {
             closeRequested = true;
             window.close();
+            // browsers only honor close() for script-opened tabs; ours comes from $BROWSER.
+            setTimeout(() => (disconnected = true), 250);
         }
     });
 </script>
 
-<div class="shell">
-    <TopBar status={status.data} auto={autoRes.data?.auto ?? null} />
-    <main class="main" id="main">
-        <Flamegraph />
-    </main>
-</div>
+{#if disconnected}
+    <div class="gone" data-testid="disconnected-screen">
+        <h1>{t('disconnect.title')}</h1>
+        <p>{t('disconnect.body')}</p>
+    </div>
+{:else}
+    <div class="shell">
+        <TopBar status={status.data} auto={autoRes.data?.auto ?? null} />
+        <main class="main" id="main">
+            <Flamegraph />
+        </main>
+    </div>
+{/if}
 
 {#if needsName && session}
     <NameSessionPrompt
@@ -125,5 +136,22 @@
     .main {
         grid-area: main;
         overflow-y: auto;
+    }
+    .gone {
+        display: grid;
+        place-content: center;
+        gap: var(--s-2);
+        height: 100vh;
+        text-align: center;
+        color: var(--text-dim);
+    }
+    .gone h1 {
+        font-size: 1rem;
+        color: var(--text);
+    }
+    .gone p {
+        max-width: 46ch;
+        margin: 0;
+        font-size: 0.85rem;
     }
 </style>

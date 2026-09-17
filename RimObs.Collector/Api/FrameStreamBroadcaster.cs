@@ -24,8 +24,6 @@ public sealed class FrameStreamBroadcaster : IDisposable {
     private Task? _loop;
 
     private readonly Update.UpdateState _updateState;
-    private readonly Config.ConfigStore _configStore;
-    private readonly Exporters.ExporterHealth _exporterHealth;
     private long _lastSlowLaneMs;
 
     /// <summary>Milliseconds between slow-lane pushes.</summary>
@@ -48,14 +46,10 @@ public sealed class FrameStreamBroadcaster : IDisposable {
     public FrameStreamBroadcaster(
         SessionAggregator aggregator,
         Update.UpdateState updateState,
-        Config.ConfigStore configStore,
-        Exporters.ExporterHealth exporterHealth,
         Instrumentation.SessionMetaRegistry? metaRegistry = null) {
         _metaRegistry = metaRegistry;
         _aggregator = aggregator;
         _updateState = updateState;
-        _configStore = configStore;
-        _exporterHealth = exporterHealth;
         aggregator.Frames.FrameSealed = Signal;
     }
 
@@ -72,7 +66,7 @@ public sealed class FrameStreamBroadcaster : IDisposable {
 
     public string BuildStatusJson() =>
         JsonSerializer.Serialize(
-            StatusEndpoints.BuildStatusPayload(_aggregator, _updateState, _configStore, _exporterHealth), s_Json);
+            StatusEndpoints.BuildStatusPayload(_aggregator, _updateState), s_Json);
 
     public string BuildCallTreeJson() =>
         JsonSerializer.Serialize(SessionsEndpoints.BuildCallTreePayload(_aggregator, 12, 24), s_Json);

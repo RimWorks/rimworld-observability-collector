@@ -10,10 +10,8 @@ public static class StatusEndpoints {
     public static IEndpointRouteBuilder MapStatusEndpoints(this IEndpointRouteBuilder endpoints) {
         endpoints.MapGet("/api/v1/status", (
             SessionAggregator aggregator,
-            Update.UpdateState updateState,
-            Config.ConfigStore configStore,
-            Exporters.ExporterHealth exporterHealth) =>
-                Results.Ok(BuildStatusPayload(aggregator, updateState, configStore, exporterHealth)));
+            Update.UpdateState updateState) =>
+                Results.Ok(BuildStatusPayload(aggregator, updateState)));
 
         return endpoints;
     }
@@ -21,12 +19,9 @@ public static class StatusEndpoints {
     /// <summary>Shared by the endpoint and the SSE slow lane, so the shapes cannot drift.</summary>
     public static object BuildStatusPayload(
         SessionAggregator aggregator,
-        Update.UpdateState updateState,
-        Config.ConfigStore configStore,
-        Exporters.ExporterHealth exporterHealth) {
+        Update.UpdateState updateState) {
         SessionMeta? meta = aggregator.Meta;
         Update.ReleaseInfo? latest = updateState.Latest;
-        Config.ExporterOptions exporters = configStore.Current.Exporters;
         return new {
             schema_version = SchemaVersion.Current,
             status = "running",
@@ -39,18 +34,6 @@ public static class StatusEndpoints {
                 available = latest is not null,
                 latest_version = latest?.TagName,
                 url = latest?.HtmlUrl,
-            },
-            exporters = new {
-                prometheus_enabled = exporters.PrometheusEnabled,
-                prometheus_port = exporters.PrometheusPort,
-                otlp_enabled = exporters.OtlpEnabled,
-                prometheus_health = new {
-                    total_scrapes = exporterHealth.TotalScrapes,
-                    last_scrape_utc = exporterHealth.LastScrapeUtc,
-                    last_sample_count = exporterHealth.LastSampleCount,
-                    total_errors = exporterHealth.TotalErrors,
-                    last_error = exporterHealth.LastError,
-                },
             },
         };
     }

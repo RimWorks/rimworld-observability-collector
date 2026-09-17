@@ -106,19 +106,17 @@
         { id: 'dashboard', label: 'settings.group.dashboard' },
     ] as const;
     type SectionId = (typeof SECTIONS)[number]['id'];
-    // review-only fork: 'anchors' scrolls one column, 'tabs' shows one section at a time.
-    let navMode = $state<'anchors' | 'tabs'>('anchors');
+    // tabs, permanently: ka killed the anchors variant of the review fork (2026-09-17).
     let activeSection = $state<SectionId>('session');
     let bodyEl = $state<HTMLElement | null>(null);
 
     function jumpTo(id: SectionId): void {
         activeSection = id;
-        if (navMode === 'anchors')
-            bodyEl?.querySelector(`#settings-${id}`)?.scrollIntoView({ block: 'start' });
+        bodyEl?.scrollTo?.({ top: 0 });
     }
 
     function sectionShown(id: SectionId): boolean {
-        return navMode === 'anchors' || activeSection === id;
+        return activeSection === id;
     }
 
     $effect(() => {
@@ -144,9 +142,6 @@
             globalThis.removeEventListener('pointerdown', onPointer);
         };
     });
-
-    let prom = $derived(status?.exporters);
-    let health = $derived(prom?.prometheus_health);
 
     let sessions = $derived(sessionsStore.items);
     let pastSessions = $derived(sessions.filter((s) => !s.is_current));
@@ -290,12 +285,6 @@
     >
         <header class="head">
             <h2>{t('settings.title')}</h2>
-            <button
-                type="button"
-                class="navmode mono"
-                onclick={() => (navMode = navMode === 'anchors' ? 'tabs' : 'anchors')}
-                data-testid="drawer-variant">{navMode === 'anchors' ? 'A' : 'B'}</button
-            >
             <button
                 type="button"
                 class="close"
@@ -710,35 +699,6 @@
                                     {bytes(status.receive.total_bytes)}
                                 </dd>
                             {/if}
-                            {#if prom}
-                                <dt>
-                                    <Tooltip text={t('tip.settings.prometheus')}>
-                                        <span>{t('settings.prometheus')}</span>
-                                    </Tooltip>
-                                </dt>
-                                <dd class:on={prom.prometheus_enabled}>
-                                    {prom.prometheus_enabled
-                                        ? t('settings.exporter.enabled')
-                                        : t('settings.exporter.disabled')}
-                                </dd>
-                                {#if prom.prometheus_enabled && health}
-                                    <dt>{t('settings.exporter.endpoint')}</dt>
-                                    <dd class="mono">/metrics</dd>
-                                    <dt>{t('settings.exporter.last_scrape')}</dt>
-                                    <dd class="mono">{health.last_scrape_utc ?? '-'}</dd>
-                                    <dt>{t('settings.exporter.sample_count')}</dt>
-                                    <dd class="mono">{health.last_sample_count}</dd>
-                                    {#if health.total_errors > 0}
-                                        <dt>{t('settings.exporter.errors')}</dt>
-                                        <dd class="mono bad">
-                                            {health.total_errors} | {health.last_error ?? ''}
-                                        </dd>
-                                    {/if}
-                                {/if}
-                            {:else}
-                                <dt>{t('settings.exporters')}</dt>
-                                <dd>{t('settings.exporter.unavailable')}</dd>
-                            {/if}
                         </dl>
                     </details>
                 </section>
@@ -884,13 +844,6 @@
         letter-spacing: 0.1em;
         color: var(--text-dim);
     }
-    .navmode {
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        font-size: 0.7rem;
-        color: var(--text-faint);
-    }
     .close {
         display: inline-flex;
         align-items: center;
@@ -953,6 +906,8 @@
         margin: 0 0 var(--s-2);
         padding-left: 26px;
         font-size: 0.72rem;
+        text-transform: none;
+        letter-spacing: normal;
         color: var(--text-faint);
     }
     .cost.live {
@@ -987,7 +942,9 @@
         gap: var(--s-1);
         margin-bottom: var(--s-3);
     }
-    .field.row {
+    .field.row,
+    .field > .row {
+        display: flex;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -997,10 +954,6 @@
         font-size: 0.8rem;
         color: var(--text-dim);
         cursor: help;
-        text-decoration: underline;
-        text-decoration-style: dotted;
-        text-decoration-color: var(--border-strong);
-        text-underline-offset: 3px;
     }
     .text {
         width: 100%;
@@ -1156,9 +1109,6 @@
         text-align: right;
         word-break: break-all;
         font-variant-numeric: tabular-nums;
-    }
-    .readout dd.on {
-        color: var(--cyan);
     }
     .readout dd.bad {
         color: var(--bad);

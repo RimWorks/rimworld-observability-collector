@@ -124,15 +124,6 @@ const status = {
     version: '1.2.3',
     session: null,
     receive: null,
-    exporters: {
-        prometheus_enabled: true,
-        prometheus_health: {
-            last_scrape_utc: '2026-09-08T13:00:00Z',
-            last_sample_count: 42,
-            total_errors: 0,
-            last_error: null,
-        },
-    },
 } as unknown as StatusResponse;
 
 describe('SettingsPopover', () => {
@@ -144,6 +135,7 @@ describe('SettingsPopover', () => {
         await fireEvent.click(screen.getByTestId('settings-gear'));
 
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+        await fireEvent.click(screen.getByTestId('settings-nav-collector'));
         expect(screen.getByText('1.2.3')).toBeTruthy();
     });
 
@@ -158,16 +150,14 @@ describe('SettingsPopover', () => {
         expect(document.activeElement).toBe(screen.getByTestId('settings-gear'));
     });
 
-    // the review fork: anchors shows every group at once, tabs shows one at a time.
-    it('shows one section at a time in tabs mode and all of them in anchors mode', async () => {
+    // ka killed the anchors variant (2026-09-17): tabs only, one section at a time,
+    // and the A/B switcher must never come back.
+    it('shows one section at a time and has no variant switcher', async () => {
         render(SettingsPopover, { status });
         await fireEvent.click(screen.getByTestId('settings-gear'));
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
 
-        expect(document.getElementById('settings-session')).toBeTruthy();
-        expect(document.getElementById('settings-dashboard')).toBeTruthy();
-
-        await fireEvent.click(screen.getByTestId('drawer-variant'));
+        expect(screen.queryByTestId('drawer-variant')).toBeNull();
         expect(document.getElementById('settings-session')).toBeTruthy();
         expect(document.getElementById('settings-dashboard')).toBeNull();
 
@@ -234,27 +224,11 @@ describe('SettingsPopover', () => {
 
         uiSignals.settingsOpen = true;
         await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await waitFor(() =>
             expect(screen.getByTestId<HTMLInputElement>('auto-instrument').disabled).toBe(false),
         );
-    });
-
-    it('shows the prometheus health block only while the exporter is on', async () => {
-        const { unmount } = render(SettingsPopover, { status });
-        await fireEvent.click(screen.getByTestId('settings-gear'));
-        await waitFor(() => expect(screen.getByText('/metrics')).toBeTruthy());
-        unmount();
-
-        const off = {
-            ...status,
-            exporters: { ...status.exporters, prometheus_enabled: false },
-        } as unknown as StatusResponse;
-        render(SettingsPopover, { status: off });
-        await fireEvent.click(screen.getByTestId('settings-gear'));
-        await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
-
-        expect(screen.queryByText('/metrics')).toBeNull();
     });
 });
 
@@ -294,6 +268,8 @@ describe('SettingsPopover counters', () => {
     it('carries the counters the header dropped', async () => {
         render(SettingsPopover, { status: withCounters });
         await fireEvent.click(screen.getByLabelText(/settings/i));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-collector'));
 
         await waitFor(() => expect(screen.getByTestId('kv-batches')).toBeTruthy());
         expect(screen.getByTestId('kv-batches').textContent).toContain('101');
@@ -310,6 +286,7 @@ describe('SettingsPopover counters', () => {
         await fireEvent.click(screen.getByLabelText(/settings/i));
 
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+        await fireEvent.click(screen.getByTestId('settings-nav-collector'));
         expect(screen.queryByTestId('kv-batches')).toBeNull();
     });
 });
@@ -420,6 +397,8 @@ describe('SettingsPopover auto-instrument status', () => {
         });
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await waitFor(() => expect(screen.getByTestId('auto-matched')).toBeTruthy());
         expect(screen.getByTestId('auto-matched').textContent).toContain('10');
@@ -442,6 +421,8 @@ describe('SettingsPopover auto-instrument status', () => {
         });
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await waitFor(() => expect(screen.getByTestId('auto-truncated')).toBeTruthy());
         expect(screen.getByTestId('auto-skipped-over-cap').textContent).toContain('51,808');
@@ -463,6 +444,8 @@ describe('SettingsPopover auto-instrument status', () => {
         });
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await waitFor(() => expect(screen.getByTestId('auto-matched')).toBeTruthy());
         expect(screen.queryByTestId('auto-truncated')).toBeNull();
@@ -477,6 +460,7 @@ describe('SettingsPopover auto-instrument status', () => {
         await fireEvent.click(screen.getByTestId('settings-gear'));
 
         await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
         expect(screen.queryByTestId('auto-matched')).toBeNull();
     });
 });
@@ -487,6 +471,7 @@ describe('SettingsPopover profiling controls', () => {
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
         await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
         await waitFor(() =>
             expect((screen.getByTestId('max-depth') as HTMLInputElement).value).not.toBe(''),
         );
@@ -694,6 +679,7 @@ describe('SettingsPopover profiling controls', () => {
 
     it('posts the session naming prompt toggle', async () => {
         await open();
+        await fireEvent.click(screen.getByTestId('settings-nav-dashboard'));
 
         await fireEvent.click(screen.getByTestId('prompt-for-name'));
 
@@ -714,6 +700,7 @@ describe('SettingsPopover profiling controls', () => {
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
         await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await waitFor(() =>
             expect((screen.getByTestId('max-depth') as HTMLInputElement).disabled).toBe(true),
@@ -741,6 +728,7 @@ describe('SettingsPopover ring capacity publishing', () => {
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
         await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
         await waitFor(() =>
             expect((screen.getByTestId('ring-capacity') as HTMLInputElement).value).not.toBe(''),
         );
@@ -774,6 +762,8 @@ describe('SettingsPopover autocomplete', () => {
         );
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         const box = await screen.findByTestId('auto-filters');
         await fireEvent.input(box, { target: { value: 'cos' } });
@@ -812,6 +802,8 @@ describe('SettingsPopover apply progress', () => {
         });
         render(SettingsPopover, { status: withSession });
         await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-profiling'));
 
         await fireEvent.input(await screen.findByTestId('auto-filters'), {
             target: { value: 'Assembly-CSharp!Verse.Map::*' },
