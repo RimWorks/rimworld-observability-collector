@@ -163,6 +163,8 @@ public static class Program {
         }
 
         builder.Services.AddSingleton<Api.FrameStreamBroadcaster>();
+        // registered even when metrics_push is off; the service itself no-ops until the config says go.
+        builder.Services.AddHostedService<Push.MetricsPushService>();
 
         WebApplication app = builder.Build();
         app.UseOriginCheck(port);

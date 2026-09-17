@@ -48,6 +48,16 @@ function configDoc(over: Record<string, unknown> = {}) {
             max_targets: 8192,
         },
         session: { pending_name: '', prompt_for_name: true },
+        metrics_push: {
+            enabled: false,
+            endpoint: '',
+            bearer_token: '',
+            tenant_id: '',
+            basic_auth: '',
+            interval_seconds: 10,
+            grafana_url: '',
+            grafana_token: '',
+        },
         ...over,
     };
 }
@@ -715,6 +725,130 @@ describe('SettingsPopover profiling controls', () => {
         ) as unknown as typeof fetch;
 
         await fireEvent.change(screen.getByTestId('max-depth'), { target: { value: '4' } });
+
+        await waitFor(() => expect(screen.getByTestId('config-error')).toBeTruthy());
+    });
+});
+
+// remote-write is off by default, so the endpoint and the token only mean anything once the
+// toggle is on. a field that posts while push is off writes a setting nothing reads.
+describe('SettingsPopover metrics push', () => {
+    async function open(doc = configDoc()) {
+        mockConfig(doc);
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-collector'));
+        await waitFor(() =>
+            expect(screen.getByTestId<HTMLInputElement>('push-enabled').disabled).toBe(false),
+        );
+    }
+
+    const pushOn = (over: Record<string, unknown> = {}) =>
+        configDoc({
+            metrics_push: {
+                enabled: true,
+                endpoint: '',
+                bearer_token: '',
+                tenant_id: '',
+                basic_auth: '',
+                interval_seconds: 10,
+                grafana_url: '',
+                grafana_token: '',
+                ...over,
+            },
+        });
+
+    it('posts the push toggle', async () => {
+        await open();
+
+        await fireEvent.click(screen.getByTestId('push-enabled'));
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({ metrics_push: { enabled: true } });
+    });
+
+    it('posts the remote-write endpoint', async () => {
+        await open(pushOn());
+
+        await fireEvent.change(screen.getByTestId('push-endpoint'), {
+            target: { value: 'http://mimir:9009/api/v1/push' },
+        });
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({
+            metrics_push: { endpoint: 'http://mimir:9009/api/v1/push' },
+        });
+    });
+
+    it('posts the tenant id and basic auth mimir and grafana cloud need', async () => {
+        await open(pushOn());
+
+        await fireEvent.change(screen.getByTestId('push-tenant'), { target: { value: 'colony' } });
+        await fireEvent.change(screen.getByTestId('push-basic-auth'), {
+            target: { value: '12345:glc_token' },
+        });
+
+        await waitFor(() => expect(configPosts()).toHaveLength(2));
+        expect(configPosts()[0]).toMatchObject({ metrics_push: { tenant_id: 'colony' } });
+        expect(configPosts()[1]).toMatchObject({ metrics_push: { basic_auth: '12345:glc_token' } });
+    });
+
+    it('clamps the push interval to the collector range', async () => {
+        await open(pushOn());
+
+        await fireEvent.change(screen.getByTestId('push-interval'), { target: { value: '9000' } });
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({ metrics_push: { interval_seconds: 300 } });
+    });
+
+    it('keeps every push field disabled while the toggle is off', async () => {
+        await open();
+
+        for (const id of [
+            'push-endpoint',
+            'push-token',
+            'push-tenant',
+            'push-basic-auth',
+            'push-grafana-url',
+            'push-grafana-token',
+            'push-interval',
+        ]) {
+            expect(screen.getByTestId<HTMLInputElement>(id).disabled).toBe(true);
+        }
+    });
+
+    // an older collector answers with no metrics_push block, and the controls used to write
+    // onto undefined.
+    it('fills in defaults when the collector answered without the block', async () => {
+        const doc = configDoc();
+        delete (doc as Record<string, unknown>).metrics_push;
+        mockConfig(doc);
+        render(SettingsPopover, { status: withSession });
+        await fireEvent.click(screen.getByTestId('settings-gear'));
+        await screen.findByRole('dialog');
+        await fireEvent.click(screen.getByTestId('settings-nav-collector'));
+
+        await fireEvent.click(await screen.findByTestId('push-enabled'));
+
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({
+            metrics_push: { enabled: true, interval_seconds: 10, endpoint: '' },
+        });
+    });
+
+    // the error line only lived in the profiling section, so a rejected push save looked like
+    // it landed.
+    it('reports a failed push save in the collector section', async () => {
+        await open(pushOn());
+        globalThis.fetch = vi.fn(
+            async () => new Response('nope', { status: 500, statusText: 'Server Error' }),
+        ) as unknown as typeof fetch;
+
+        await fireEvent.change(screen.getByTestId('push-endpoint'), {
+            target: { value: 'http://mimir:9009/api/v1/push' },
+        });
 
         await waitFor(() => expect(screen.getByTestId('config-error')).toBeTruthy());
     });

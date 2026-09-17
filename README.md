@@ -15,7 +15,8 @@ the data, serves a dashboard, and exports diagnostic bundles.
 Unlike Dubs Performance Analyzer, which shows a live readout for the session you are in,
 RimObs stores every session in a local database. Play once with a mod and once without,
 then diff the two hotspot tables and load orders to see what actually moved. Any session
-exports as a speedscope profile, and the collector exposes a Prometheus endpoint.
+exports as a speedscope profile, and the collector can push metrics into Prometheus or
+Grafana.
 
 Mod authors register their own named sections and metrics, which land in the same
 dashboard as the game's.

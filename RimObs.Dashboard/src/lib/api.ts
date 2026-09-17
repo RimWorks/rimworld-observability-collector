@@ -492,6 +492,17 @@ export interface RimObsConfig {
         [key: string]: unknown;
     };
     session: { pending_name: string; prompt_for_name: boolean; [key: string]: unknown };
+    metrics_push: {
+        enabled: boolean;
+        endpoint: string;
+        bearer_token: string;
+        tenant_id: string;
+        basic_auth: string;
+        interval_seconds: number;
+        grafana_url: string;
+        grafana_token: string;
+        [key: string]: unknown;
+    };
     [key: string]: unknown;
 }
 

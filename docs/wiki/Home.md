@@ -36,7 +36,7 @@ You want to read collector data from your own tool.
 
 - [CLI reference](Collector-CLI)
 - [Configuration](Configuration)
-- [Prometheus export](Prometheus-Export)
+- [Metrics push](Metrics-Push): remote-write into Prometheus or Mimir, plus Grafana annotations
 
 ### Dashboard
 

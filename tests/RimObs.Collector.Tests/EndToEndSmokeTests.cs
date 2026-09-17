@@ -772,6 +772,10 @@ public sealed class EndToEndSmokeTests {
             auto.GetProperty("filters").GetString().Should().BeEmpty();
             auto.GetProperty("ignore").GetString().Should().Be(AutoInstrumentOptions.DefaultIgnore);
             auto.GetProperty("mute_trivial").GetBoolean().Should().BeTrue();
+            JsonElement push = root.GetProperty("metrics_push");
+            push.GetProperty("enabled").GetBoolean().Should().BeFalse();
+            push.GetProperty("interval_seconds").GetInt32().Should().Be(10);
+            push.GetProperty("bearer_token").GetString().Should().BeEmpty();
         }
         finally {
             await app.StopAsync();
@@ -819,6 +823,52 @@ public sealed class EndToEndSmokeTests {
             await app.StopAsync();
             await app.DisposeAsync();
         }
+    }
+
+    [Fact]
+    public async Task Config_masks_the_push_token_and_keeps_it_when_the_mask_comes_back() {
+        int port = PickFreePort();
+        Security.CollectorToken token = Security.CollectorToken.FromExplicitValue("config-mask-token");
+        WebApplication app = Program.BuildApp([], port, token);
+        await app.StartAsync();
+        try {
+            using HttpClient http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            await WaitFor(async () => {
+                HttpResponseMessage r = await http.GetAsync("/api/v1/status");
+                return r.IsSuccessStatusCode;
+            }, TimeSpan.FromSeconds(3));
+
+            await PostConfig(http, port, token,
+                "{\"schema_version\":1,\"metrics_push\":{\"bearer_token\":\"mimir-secret\"}}");
+
+            string masked = await http.GetStringAsync("/api/v1/config");
+            masked.Should().NotContain("mimir-secret");
+            using (JsonDocument doc = JsonDocument.Parse(masked)) {
+                doc.RootElement.GetProperty("metrics_push").GetProperty("bearer_token").GetString()
+                    .Should().Be(MetricsPushOptions.RedactedToken);
+            }
+
+            // the dashboard posts the whole document back, mask and all; that must not wipe the token.
+            await PostConfig(http, port, token, masked);
+
+            using JsonDocument after = JsonDocument.Parse(await http.GetStringAsync("/api/v1/config"));
+            after.RootElement.GetProperty("metrics_push").GetProperty("bearer_token").GetString()
+                .Should().Be(MetricsPushOptions.RedactedToken);
+        }
+        finally {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    private static async Task PostConfig(HttpClient http, int port, Security.CollectorToken token, string json) {
+        using HttpRequestMessage post = new(HttpMethod.Post, "/api/v1/config") {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        };
+        post.Headers.Add("Origin", $"http://127.0.0.1:{port}");
+        post.Headers.Add("Authorization", $"Bearer {token.Value}");
+        HttpResponseMessage response = await http.SendAsync(post);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     // the library polls GET /api/v1/config, so "serves them back" is the whole forwarding path.

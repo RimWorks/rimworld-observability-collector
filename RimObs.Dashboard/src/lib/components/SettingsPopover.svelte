@@ -152,6 +152,27 @@
     let saveError = $state('');
 
     let auto = $derived(config?.auto_instrument);
+    let push = $derived(config?.metrics_push);
+
+    const PUSH_DEFAULTS = {
+        enabled: false,
+        endpoint: '',
+        bearer_token: '',
+        tenant_id: '',
+        basic_auth: '',
+        interval_seconds: 10,
+        grafana_url: '',
+        grafana_token: '',
+    };
+    const MIN_PUSH_INTERVAL = 1;
+    const MAX_PUSH_INTERVAL = 300;
+
+    // a collector older than the push feature answers without the block at all.
+    function pushBlock(c: RimObsConfig): RimObsConfig['metrics_push'] {
+        const had = c.metrics_push as Partial<RimObsConfig['metrics_push']> | undefined;
+        c.metrics_push = { ...PUSH_DEFAULTS, ...had };
+        return c.metrics_push;
+    }
     // the example patterns are real starting values, not just placeholder text, and what you
     // type is remembered locally so an empty collector never wipes it. a legacy ignore list
     // folds in as ! lines, so the one box carries both.
@@ -308,6 +329,14 @@
             {/each}
         </nav>
         <div class="body" bind:this={bodyEl}>
+            {#snippet saveErrorNote()}
+                {#if saveError}
+                    <p class="error" role="alert" data-testid="config-error">
+                        {t('settings.saveFailed')}: {saveError}
+                    </p>
+                {/if}
+            {/snippet}
+
             {#if sectionShown('session')}
                 <section class="group" id="settings-session">
                     <h3>{t('overview.session')}</h3>
@@ -646,11 +675,7 @@
                         (c, v) => (c.auto_instrument.max_targets = v),
                     )}
 
-                    {#if saveError}
-                        <p class="error" role="alert" data-testid="config-error">
-                            {t('settings.saveFailed')}: {saveError}
-                        </p>
-                    {/if}
+                    {@render saveErrorNote()}
                 </section>
             {/if}
 
@@ -664,6 +689,129 @@
                             <span class="mono">{status.update.latest_version}</span>
                         </a>
                     {/if}
+
+                    <h4>{t('settings.push.title')}</h4>
+                    <p class="subhint">{t('settings.push.hint')}</p>
+
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            checked={push?.enabled ?? false}
+                            disabled={config === null || saving}
+                            onchange={(e) => {
+                                const on = (e.currentTarget as HTMLInputElement).checked;
+                                void save((c) => (pushBlock(c).enabled = on));
+                            }}
+                            data-testid="push-enabled"
+                        />
+                        <span class="label">{t('settings.push.enabled')}</span>
+                    </label>
+
+                    {#snippet pushText(
+                        label: string,
+                        type: 'text' | 'password',
+                        value: string,
+                        placeholder: string,
+                        testid: string,
+                        apply: (c: RimObsConfig, v: string) => void,
+                    )}
+                        <div class="field">
+                            <span class="label">{label}</span>
+                            <input
+                                class="text"
+                                {type}
+                                {placeholder}
+                                {value}
+                                disabled={config === null || saving || !push?.enabled}
+                                onchange={(e) => {
+                                    const v = e.currentTarget.value;
+                                    void save((c) => apply(c, v));
+                                }}
+                                aria-label={label}
+                                data-testid={testid}
+                            />
+                        </div>
+                    {/snippet}
+
+                    {@render pushText(
+                        t('settings.push.endpoint'),
+                        'text',
+                        push?.endpoint ?? '',
+                        'http://mimir:9009/api/v1/push',
+                        'push-endpoint',
+                        (c, v) => (pushBlock(c).endpoint = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.token'),
+                        'password',
+                        push?.bearer_token ?? '',
+                        '',
+                        'push-token',
+                        (c, v) => (pushBlock(c).bearer_token = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.tenant'),
+                        'text',
+                        push?.tenant_id ?? '',
+                        'anonymous',
+                        'push-tenant',
+                        (c, v) => (pushBlock(c).tenant_id = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.basicAuth'),
+                        'password',
+                        push?.basic_auth ?? '',
+                        '',
+                        'push-basic-auth',
+                        (c, v) => (pushBlock(c).basic_auth = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.grafanaUrl'),
+                        'text',
+                        push?.grafana_url ?? '',
+                        '',
+                        'push-grafana-url',
+                        (c, v) => (pushBlock(c).grafana_url = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.grafanaToken'),
+                        'password',
+                        push?.grafana_token ?? '',
+                        '',
+                        'push-grafana-token',
+                        (c, v) => (pushBlock(c).grafana_token = v),
+                    )}
+
+                    <div class="field">
+                        <div class="row">
+                            <span class="label">{t('settings.push.interval')}</span>
+                            <input
+                                class="text num mono"
+                                type="number"
+                                min={MIN_PUSH_INTERVAL}
+                                max={MAX_PUSH_INTERVAL}
+                                step="1"
+                                value={push?.interval_seconds ?? ''}
+                                disabled={config === null || saving || !push?.enabled}
+                                onchange={(e) => {
+                                    const v = Number(e.currentTarget.value);
+                                    void save(
+                                        (c) =>
+                                            (pushBlock(c).interval_seconds = Math.min(
+                                                MAX_PUSH_INTERVAL,
+                                                Math.max(MIN_PUSH_INTERVAL, Math.round(v)),
+                                            )),
+                                    );
+                                }}
+                                aria-label={t('settings.push.interval')}
+                                data-testid="push-interval"
+                            />
+                        </div>
+                        <p class="hint mono">{t('settings.push.interval.hint')}</p>
+                    </div>
+
+                    {@render saveErrorNote()}
+
                     <details class="fold">
                         <summary>
                             <Icon name="chevron" size={13} />
@@ -785,6 +933,8 @@
                             <span class="label">{t('threads.mainOnly')}</span>
                         </Tooltip>
                     </label>
+
+                    {@render saveErrorNote()}
                 </section>
             {/if}
         </div>
@@ -901,6 +1051,11 @@
         font-size: 0.68rem;
         color: var(--text-faint);
         text-align: right;
+    }
+    .subhint {
+        margin: 0 0 var(--s-3);
+        font-size: 0.72rem;
+        color: var(--text-faint);
     }
     .cost {
         margin: 0 0 var(--s-2);

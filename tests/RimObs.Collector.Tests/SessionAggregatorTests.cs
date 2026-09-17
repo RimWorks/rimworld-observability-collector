@@ -316,6 +316,92 @@ public sealed class SessionAggregatorTests {
         aggregator.LostDatagrams.Should().Be(2);
     }
 
+    // tertius: the library replays registrations once per process, so a SessionMeta that
+    // arrives late (or a dropped one) used to wipe the id-to-name table for good: the tick
+    // section went missing and every hotspot row became a bare id.
+    [Fact]
+    public void A_session_change_keeps_section_names_and_drops_only_the_counts() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
+        aggregator.OnSectionRegistrations(new SectionRegistrationsBatch {
+            SectionIds = [5],
+            Names = ["Verse.TickManager.DoSingleTick"],
+            Subsystems = ["tick"],
+            Assemblies = ["Assembly-CSharp"],
+        });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [5],
+            ParentIds = [-1],
+            StartTimestamps = [100L],
+            ElapsedTicks = [500L],
+            FrameOrdinals = [1],
+        });
+        aggregator.TickSectionStats.Should().NotBeNull();
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
+
+        SectionStats? tick = aggregator.TickSectionStats;
+        tick.Should().NotBeNull();
+        tick!.Name.Should().Be("Verse.TickManager.DoSingleTick");
+        tick.Subsystem.Should().Be("tick");
+        tick.Assembly.Should().Be("Assembly-CSharp");
+        tick.SampleCount.Should().Be(0);
+        tick.TotalElapsedTicks.Should().Be(0);
+    }
+
+    // tertius: a session change left section stats, distributions and the running totals
+    // in place, so session 2's push carried session 1's numbers under session 2's label.
+    [Fact]
+    public void A_session_change_resets_sections_totals_and_gc() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
+        aggregator.OnSectionBatch(new SectionBatch {
+            SectionIds = [10],
+            ParentIds = [-1],
+            StartTimestamps = [100L],
+            ElapsedTicks = [500L],
+            FrameOrdinals = [1],
+        });
+        aggregator.OnGcEvents(new GcEventsBatch {
+            Generations = [2],
+            PauseTypes = [0],
+            HeapBefore = [1000L],
+            HeapAfter = [500L],
+            DurationMicros = [2500L],
+            Ticks = [11L],
+            AllocationRateBytesPerMinute = [0L],
+            FrameOrdinals = [1],
+        });
+        aggregator.TotalSamples.Should().Be(1);
+        aggregator.TotalGcPauseMicros.Should().Be(2500);
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
+
+        aggregator.TotalSamples.Should().Be(0);
+        aggregator.TotalGcEvents.Should().Be(0);
+        aggregator.TotalGcPauseMicros.Should().Be(0);
+        // the row survives because its name does; the counts behind it do not.
+        aggregator.FindSection(10)!.SampleCount.Should().Be(0);
+        aggregator.SnapshotGcEvents(10).Should().BeEmpty();
+    }
+
+    // the library announces each lane once per process, so clearing threads on a session
+    // change emptied the lanes for the rest of the run.
+    [Fact]
+    public void A_session_change_keeps_the_thread_lanes() {
+        SessionAggregator aggregator = new();
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "first" });
+        aggregator.OnThreadRegistrations(new ThreadRegistrationsBatch {
+            ThreadIds = [3],
+            Names = ["unity-job-2"],
+            Roles = [(int)ThreadRole.UnityJob],
+        });
+
+        aggregator.OnSessionMeta(new SessionMeta { SessionId = "second" });
+
+        aggregator.Threads.Snapshot().Should().ContainSingle(t => t.Name == "unity-job-2");
+    }
+
     // transport loss belongs to its session: the counters and sequence baselines reset on a
     // session change, or the new session reports drops that never happened in it.
     [Fact]

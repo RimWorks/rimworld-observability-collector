@@ -40,6 +40,7 @@ public sealed class SessionAggregator {
     private long _totalBatches;
     private long _totalBytes;
     private long _totalGcEvents;
+    private long _totalGcPauseMicros;
     private long _totalAllocations;
     private long _totalMetricObservations;
     private long _latestTpsBits;
@@ -58,6 +59,7 @@ public sealed class SessionAggregator {
     public DateTime LastBatchUtc => _lastBatchUtc;
     public int SectionCount => _sections.Count;
     public long TotalGcEvents => Interlocked.Read(ref _totalGcEvents);
+    public long TotalGcPauseMicros => Interlocked.Read(ref _totalGcPauseMicros);
     public long TotalAllocations => Interlocked.Read(ref _totalAllocations);
     public long TotalMetricObservations => Interlocked.Read(ref _totalMetricObservations);
     public int MetricCount => _metrics.Count;
@@ -112,6 +114,9 @@ public sealed class SessionAggregator {
 
     public SectionStats? FindSection(int id) => _sections.TryGetValue(id, out SectionStats? stats) ? stats : null;
 
+    /// <summary>The DoSingleTick section, or null until the game registers it.</summary>
+    public SectionStats? TickSectionStats => _tickSectionId == NoSection ? null : FindSection(_tickSectionId);
+
     public GcEventRecord[] SnapshotGcEvents(int limit) => _gcEvents.SnapshotNewestFirst(limit);
 
     public IReadOnlyList<PatchConflictRecord> PatchConflicts => Volatile.Read(ref _patchConflicts);
@@ -130,23 +135,65 @@ public sealed class SessionAggregator {
 
     public void OnSessionMeta(SessionMeta meta) {
         string? previous = _meta?.SessionId;
-        _meta = meta;
         bool changed = previous != null && previous != meta.SessionId;
+        // _meta is published last: the push thread reads Meta.SessionId, so assigning it
+        // first lets a tick label the old session's totals with the new session's id.
         if (changed) {
             _frames.Clear();
-            _frameRootSectionId = NoSection;
             // a name belongs to the session it was given to, never to the next one.
             SessionName = string.Empty;
             // transport loss belongs to its session too, or the new one starts haunted.
             Interlocked.Exchange(ref _lostDatagrams, 0);
             Interlocked.Exchange(ref _backlogDrops, 0);
             _lastSequence.Clear();
+            // the last tps, vram and gc reading are sess-1 numbers; pushing them under sess-2's
+            // label is a lie until sess-2 sends its own.
+            Interlocked.Exchange(ref _hasTpsFps, 0);
+            _gcEvents.Clear();
+            lock (_vramHistory) {
+                _latestVram = null;
+                _latestVramUtc = default;
+                _vramHistory.Clear();
+            }
+            // the numbers are the session's, but the id-to-name table is the process's: the
+            // library replays registrations once, so a dropped meta datagram would lose the
+            // names for good. reset the stats in place and keep every name.
+            ResetSectionAndMetricStats();
+            _callEdges.Clear();
+            Interlocked.Exchange(ref _tickEmaTicksBits, 0);
+            Interlocked.Exchange(ref _totalSamples, 0);
+            Interlocked.Exchange(ref _totalBatches, 0);
+            Interlocked.Exchange(ref _totalBytes, 0);
+            Interlocked.Exchange(ref _totalGcEvents, 0);
+            Interlocked.Exchange(ref _totalGcPauseMicros, 0);
+            Interlocked.Exchange(ref _totalAllocations, 0);
+            Interlocked.Exchange(ref _totalMetricObservations, 0);
         }
 
+        _meta = meta;
         if (previous != meta.SessionId)
             SessionStarted?.Invoke(meta.SessionId);
 
         _persister?.WriteSessionMeta(meta);
+    }
+
+    // keeps SectionId/Name/Subsystem/Assembly and MetricId/Name/Kind/Unit, drops the counts.
+    private void ResetSectionAndMetricStats() {
+        foreach (SectionStats old in _sections.Values) {
+            _sections[old.SectionId] = new SectionStats {
+                SectionId = old.SectionId,
+                Name = old.Name,
+                Subsystem = old.Subsystem,
+                Assembly = old.Assembly,
+            };
+        }
+        foreach (MetricStats old in _metrics.Values) {
+            _metrics[old.MetricId] = new MetricStats(old.MetricId) {
+                Name = old.Name,
+                Kind = old.Kind,
+                Unit = old.Unit,
+            };
+        }
     }
 
     public void OnSectionRegistrations(SectionRegistrationsBatch batch) {
@@ -294,6 +341,7 @@ public sealed class SessionAggregator {
                 frameOrdinal: i < frameOrdinalLen ? batch.FrameOrdinals[i] : 0
             );
             _gcEvents.Add(in record);
+            Interlocked.Add(ref _totalGcPauseMicros, record.DurationMicros);
         }
         Interlocked.Add(ref _totalGcEvents, n);
     }

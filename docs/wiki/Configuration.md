@@ -41,9 +41,10 @@ The collector config file is **JSON** with `snake_case` keys. All sections are o
     "session_retention_days": 30,
     "max_total_storage_mb": 1024
   },
-  "exporters": {
-    "prometheus_enabled": false,
-    "prometheus_port": 7879
+  "metrics_push": {
+    "enabled": false,
+    "endpoint": "",
+    "interval_seconds": 10
   }
 }
 ```
@@ -150,13 +151,25 @@ Full defaults are in the catalog below.
 |---|---|---|---|
 | `i18n.default_language` | string | `"en"` | Default UI language |
 
-### `exporters`
+### `metrics_push`
+
+Off by default. Pushes session metrics to a Prometheus remote-write endpoint and marks sessions
+in Grafana. Full walkthrough: [Metrics push](Metrics-Push).
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `exporters.prometheus_enabled` | bool | `false` | Enable the Prometheus metrics exporter |
-| `exporters.prometheus_port` | int | `7879` | Port the Prometheus exporter listens on |
-| `exporters.otlp_enabled` | bool | `false` | Enable the OpenTelemetry OTLP exporter (experimental) |
+| `metrics_push.enabled` | bool | `false` | Master switch for the metric push and the Grafana annotations |
+| `metrics_push.endpoint` | string | `""` | Prometheus remote-write URL |
+| `metrics_push.bearer_token` | string | `""` | Bearer token for the remote-write endpoint. Stored in plain text |
+| `metrics_push.basic_auth` | string | `""` | `user:password` for the endpoint. Wins over the bearer token. Stored in plain text |
+| `metrics_push.tenant_id` | string | `""` | Sent as `X-Scope-OrgID`. Needed by multi-tenant Mimir and Grafana Cloud |
+| `metrics_push.interval_seconds` | int | `10` | Seconds between pushes, clamped to 1-300 |
+| `metrics_push.grafana_url` | string | `""` | Grafana base URL for session annotations |
+| `metrics_push.grafana_token` | string | `""` | Grafana service-account token. Stored in plain text |
+| `metrics_push.extra_labels` | map | `{}` | Extra labels merged into every pushed series |
+
+There is no scrape exporter. The `/metrics` endpoint and the `exporters` block were removed;
+the push above replaces them.
 
 ## Override precedence
 
@@ -183,6 +196,7 @@ The collector does **not** watch `config.json` for changes. File edits take effe
 
 ## Related
 
+- [Metrics push](Metrics-Push)
 - [Collector CLI](Collector-CLI)
 - [Using the collector](Using-The-Collector)
 - [Local HTTP API](Local-HTTP-API)

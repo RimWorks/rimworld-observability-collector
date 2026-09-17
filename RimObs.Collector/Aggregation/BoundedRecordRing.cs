@@ -32,6 +32,13 @@ internal sealed class BoundedRecordRing<T>
         }
     }
 
+    public void Clear() {
+        lock (_lock) {
+            _head = 0;
+            _count = 0;
+        }
+    }
+
     public T[] SnapshotNewestFirst(int limit) {
         if (limit <= 0)
             return [];

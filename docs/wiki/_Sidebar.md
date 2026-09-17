@@ -23,7 +23,7 @@
 
 - [CLI](Collector-CLI)
 - [Configuration](Configuration)
-- [Prometheus export](Prometheus-Export)
+- [Metrics push](Metrics-Push)
 
 **Dashboard**
 

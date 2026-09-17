@@ -11,7 +11,7 @@ public static class ConfigEndpoints {
         // returned raw, not enveloped: RimObsConfig already carries its own schema_version. the
         // envelope exists for list payloads that have nowhere of their own to put one.
         endpoints.MapGet("/api/v1/config", (ConfigStore store) =>
-            Results.Json(store.Current, ConfigJson.Options));
+            Results.Json(store.Current, ConfigJson.PublicOptions));
 
         endpoints.MapPost("/api/v1/config", async (
             HttpContext context,
@@ -31,11 +31,18 @@ public static class ConfigEndpoints {
                     SamplingOptions.ClampRingCapacity(incoming.Sampling.RingCapacity);
                 incoming.AutoInstrument.MaxTargets =
                     AutoInstrumentOptions.ClampMaxTargets(incoming.AutoInstrument.MaxTargets);
+                // the GET masked the push token, so posting the document back must not save the mask.
+                if (incoming.MetricsPush.BearerToken == MetricsPushOptions.RedactedToken)
+                    incoming.MetricsPush.BearerToken = store.Current.MetricsPush.BearerToken;
+                if (incoming.MetricsPush.BasicAuth == MetricsPushOptions.RedactedToken)
+                    incoming.MetricsPush.BasicAuth = store.Current.MetricsPush.BasicAuth;
+                if (incoming.MetricsPush.GrafanaToken == MetricsPushOptions.RedactedToken)
+                    incoming.MetricsPush.GrafanaToken = store.Current.MetricsPush.GrafanaToken;
                 store.Replace(incoming);
                 // the ring resizes in place so the strip keeps the history that still fits.
                 aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);
                 aggregator.Frames.OpenFrameWindow = store.Current.Sampling.OpenFrameWindow;
-                return Results.Json(store.Current, ConfigJson.Options);
+                return Results.Json(store.Current, ConfigJson.PublicOptions);
             });
 
         return endpoints;

@@ -19,6 +19,7 @@ public sealed class RimObsConfig {
     public PrivacyOptions Privacy { get; set; } = new();
     public SecurityOptions Security { get; set; } = new();
     public PanelOptions Panels { get; set; } = new();
+    public MetricsPushOptions MetricsPush { get; set; } = new();
 
     [JsonPropertyName("i18n")]
     public I18nOptions I18n { get; set; } = new();

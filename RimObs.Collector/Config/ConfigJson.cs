@@ -8,4 +8,9 @@ public static class ConfigJson {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true,
     };
+
+    /// <summary>What the HTTP api serializes with: same shape, secrets masked.</summary>
+    public static readonly JsonSerializerOptions PublicOptions = new(Options) {
+        Converters = { new RedactedMetricsPushConverter() },
+    };
 }
