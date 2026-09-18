@@ -163,6 +163,8 @@
         interval_seconds: 10,
         grafana_url: '',
         grafana_token: '',
+        profile_endpoint: '',
+        profile_basic_auth: '',
     };
     const MIN_PUSH_INTERVAL = 1;
     const MAX_PUSH_INTERVAL = 300;
@@ -780,6 +782,22 @@
                         '',
                         'push-grafana-token',
                         (c, v) => (pushBlock(c).grafana_token = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.profileEndpoint'),
+                        'text',
+                        push?.profile_endpoint ?? '',
+                        '',
+                        'push-profile-endpoint',
+                        (c, v) => (pushBlock(c).profile_endpoint = v),
+                    )}
+                    {@render pushText(
+                        t('settings.push.profileBasicAuth'),
+                        'password',
+                        push?.profile_basic_auth ?? '',
+                        '',
+                        'push-profile-basic-auth',
+                        (c, v) => (pushBlock(c).profile_basic_auth = v),
                     )}
 
                     <div class="field">

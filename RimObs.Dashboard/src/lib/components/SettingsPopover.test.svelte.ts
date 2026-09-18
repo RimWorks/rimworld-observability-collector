@@ -803,6 +803,37 @@ describe('SettingsPopover metrics push', () => {
         expect(configPosts()[0]).toMatchObject({ metrics_push: { interval_seconds: 300 } });
     });
 
+    it('saves the pyroscope endpoint and credential', async () => {
+        await open(pushOn());
+
+        await fireEvent.change(screen.getByTestId('push-profile-endpoint'), {
+            target: { value: 'https://pyroscope.example.com' },
+        });
+        await waitFor(() => expect(configPosts()).toHaveLength(1));
+        expect(configPosts()[0]).toMatchObject({
+            metrics_push: { profile_endpoint: 'https://pyroscope.example.com' },
+        });
+
+        await fireEvent.change(screen.getByTestId('push-profile-basic-auth'), {
+            target: { value: 'rimobs:hunter2' },
+        });
+        await waitFor(() => expect(configPosts()).toHaveLength(2));
+        expect(configPosts()[1]).toMatchObject({
+            metrics_push: { profile_basic_auth: 'rimobs:hunter2' },
+        });
+    });
+
+    // the credential is a password field for the same reason the others are: the drawer is
+    // reachable from any browser on the tailnet.
+    it('masks the pyroscope credential but not its url', async () => {
+        await open(pushOn());
+
+        expect(screen.getByTestId<HTMLInputElement>('push-profile-basic-auth').type).toBe(
+            'password',
+        );
+        expect(screen.getByTestId<HTMLInputElement>('push-profile-endpoint').type).toBe('text');
+    });
+
     it('keeps every push field disabled while the toggle is off', async () => {
         await open();
 
@@ -813,6 +844,8 @@ describe('SettingsPopover metrics push', () => {
             'push-basic-auth',
             'push-grafana-url',
             'push-grafana-token',
+            'push-profile-endpoint',
+            'push-profile-basic-auth',
             'push-interval',
         ]) {
             expect(screen.getByTestId<HTMLInputElement>(id).disabled).toBe(true);

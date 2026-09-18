@@ -501,6 +501,8 @@ export interface RimObsConfig {
         interval_seconds: number;
         grafana_url: string;
         grafana_token: string;
+        profile_endpoint: string;
+        profile_basic_auth: string;
         [key: string]: unknown;
     };
     [key: string]: unknown;

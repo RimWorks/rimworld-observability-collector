@@ -54,6 +54,8 @@
     "settings.push.basicAuth": "Basic auth (user:password)",
     "settings.push.grafanaUrl": "Grafana URL (annotations)",
     "settings.push.grafanaToken": "Grafana API token",
+    "settings.push.profileEndpoint": "Pyroscope URL",
+    "settings.push.profileBasicAuth": "Pyroscope user:password",
     "settings.push.interval": "Push interval",
     "settings.push.interval.hint": "1 to 300 seconds",
     "settings.behavior": "Behavior",
