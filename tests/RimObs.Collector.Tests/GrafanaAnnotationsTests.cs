@@ -76,7 +76,7 @@ public sealed class GrafanaAnnotationsTests {
     }
 
     [Fact]
-    public async Task A_repeat_tick_on_the_same_session_annotates_nothing_new() {
+    public async Task A_repeat_tick_on_the_same_session_opens_no_second_region() {
         FakeGrafana handler = new();
         MetricsPushOptions options = Options();
         using MetricsPushService service = new(Aggregator("sess-1", "rim colony"), Store(options), log: null, http: new HttpClient(handler));
@@ -84,7 +84,8 @@ public sealed class GrafanaAnnotationsTests {
         await service.PushOnceAsync(options, CancellationToken.None);
         await service.PushOnceAsync(options, CancellationToken.None);
 
-        handler.Sent.Should().ContainSingle();
+        // the second tick heartbeats timeEnd, but the region itself is opened once.
+        handler.Sent.Where(s => s.Method == HttpMethod.Post).Should().ContainSingle();
     }
 
     [Fact]
@@ -99,12 +100,11 @@ public sealed class GrafanaAnnotationsTests {
         agg.SessionName = "second run";
         await service.PushOnceAsync(options, CancellationToken.None);
 
-        handler.Sent.Select(s => (s.Method.Method, s.Url)).Should().Equal(
-            ("POST", $"{GrafanaUrl}/api/annotations"),
-            ("PATCH", $"{GrafanaUrl}/api/annotations/{FakeGrafana.FirstId}"),
-            ("POST", $"{GrafanaUrl}/api/annotations"));
-        JsonDocument.Parse(handler.Sent[1].Body).RootElement.GetProperty("timeEnd").GetInt64().Should().BeGreaterThan(0);
-        JsonDocument.Parse(handler.Sent[2].Body).RootElement.GetProperty("text").GetString().Should().Be("second run");
+        IReadOnlyList<Sent> posts = handler.Sent.Where(s => s.Method == HttpMethod.Post).ToList();
+        posts.Should().HaveCount(2, "each session opens its own region");
+        handler.Sent.Should().Contain(s =>
+            s.Method == HttpMethod.Patch && s.Url == $"{GrafanaUrl}/api/annotations/{FakeGrafana.FirstId}");
+        JsonDocument.Parse(posts[1].Body).RootElement.GetProperty("text").GetString().Should().Be("second run");
     }
 
     [Fact]
@@ -120,12 +120,12 @@ public sealed class GrafanaAnnotationsTests {
         // the rename already landed, so a third tick must not repeat it.
         await service.PushOnceAsync(options, CancellationToken.None);
 
-        handler.Sent.Select(s => (s.Method.Method, s.Url)).Should().Equal(
-            ("POST", $"{GrafanaUrl}/api/annotations"),
-            ("PATCH", $"{GrafanaUrl}/api/annotations/{FakeGrafana.FirstId}"));
-        JsonElement patched = JsonDocument.Parse(handler.Sent[1].Body).RootElement;
+        handler.Sent.Where(s => s.Method == HttpMethod.Post).Should().ContainSingle();
+        IEnumerable<Sent> named = handler.Sent
+            .Where(s => s.Body.Contains("\"text\"", StringComparison.Ordinal) && s.Method == HttpMethod.Patch);
+        // the rename lands once; later ticks only move timeEnd.
+        JsonElement patched = JsonDocument.Parse(named.Should().ContainSingle().Subject.Body).RootElement;
         patched.GetProperty("text").GetString().Should().Be("rim colony");
-        patched.TryGetProperty("timeEnd", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -141,8 +141,9 @@ public sealed class GrafanaAnnotationsTests {
         handler.Sent[1].Url.Should().Be($"{GrafanaUrl}/api/annotations/{FakeGrafana.FirstId}");
 
         // nothing is open now, so a second stop must not fire another close.
+        int after = handler.Sent.Count;
         await service.StopAsync(CancellationToken.None);
-        handler.Sent.Should().HaveCount(2);
+        handler.Sent.Should().HaveCount(after);
     }
 
     [Fact]
@@ -266,6 +267,27 @@ public sealed class GrafanaAnnotationsTests {
         closes.Should().HaveCount(2, "the failed close is re-sent until grafana takes it");
         closes.Should().OnlyContain(x => x.Url == $"{GrafanaUrl}/api/annotations/{FakeGrafana.FirstId}");
     }
+
+    // ka 2026-09-18: a hard-killed collector never reaches StopAsync, so the region kept its
+    // start as its end. the heartbeat walks the end forward every tick instead.
+    [Fact]
+    public async Task Each_tick_walks_the_open_regions_end_forward() {
+        FakeGrafana handler = new();
+        MetricsPushOptions options = Options();
+        using MetricsPushService service = new(Aggregator("sess-1", "rim colony"), Store(options), log: null, http: new HttpClient(handler));
+
+        await service.PushOnceAsync(options, CancellationToken.None);
+        await service.PushOnceAsync(options, CancellationToken.None);
+        await service.PushOnceAsync(options, CancellationToken.None);
+
+        IEnumerable<Sent> beats = handler.Sent.Where(x => x.Method == HttpMethod.Patch);
+        beats.Should().HaveCountGreaterThanOrEqualTo(2, "every tick past the first moves timeEnd");
+        beats.Should().OnlyContain(x => x.Body.Contains("timeEnd", StringComparison.Ordinal));
+    }
+
+    // regions an earlier run left unended are closed once, at their own start, since their
+
+    // two collectors can push to one grafana. the other one's region is open because it is
 
     private sealed record Sent(HttpMethod Method, string Url, string? Authorization, string Body);
 

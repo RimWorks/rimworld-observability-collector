@@ -128,6 +128,9 @@ public sealed class MetricsPushService : BackgroundService {
         }
         else if (sessionId == _annotatedSessionId) {
             await RenameAnnotationAsync(sessionId!, cancellationToken).ConfigureAwait(false);
+            // heartbeat the end: a killed collector never reaches StopAsync, so without this
+            // the region keeps the start as its end and the session reads as a point.
+            await HeartbeatAnnotationAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -183,6 +186,28 @@ public sealed class MetricsPushService : BackgroundService {
                 _annotationFailing = true;
                 _log?.LogWarning(ex, "Grafana annotation at {Url} failed; further failures stay quiet", logUrl);
             }
+        }
+    }
+
+    /// <summary>Walks the region's end forward to now, so a hard kill leaves it ending within
+    /// one interval of the truth instead of never ending at all.</summary>
+    private async Task HeartbeatAnnotationAsync(CancellationToken cancellationToken) {
+        if (_annotationId <= 0 || _annotationUrl is null)
+            return;
+
+        try {
+            await _annotations.CloseAsync(
+                _annotationUrl,
+                _annotationToken ?? string.Empty,
+                _annotationId,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            throw;
+        }
+        catch (Exception) {
+            // the real close still retries through _pendingClose; a missed beat costs one interval.
         }
     }
 

@@ -119,6 +119,8 @@ spike lines up with the session that produced it.
   to the open region in place.
 - The region closes when the session ends, when the collector shuts down, or when the game
   goes quiet. A quiet game closes the region at the last batch it sent, not at the timeout.
+- Every push also walks the open region's end forward. If the collector is killed outright and
+  never gets to shut down, the region still ends within one interval of the truth.
 
 `grafana_token` needs a Grafana service-account token with annotation write permission. A
 token with only read scope fails with `403`, and the collector logs the first failure and then
