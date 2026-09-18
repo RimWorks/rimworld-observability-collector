@@ -24,6 +24,7 @@ public sealed class MetricsPushService : BackgroundService {
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly GrafanaAnnotations _annotations;
+    private readonly ProfilePush _profiles;
     private int _consecutiveFailures;
     private int _loggedBadLabels;
     private string? _annotatedSessionId;
@@ -54,6 +55,7 @@ public sealed class MetricsPushService : BackgroundService {
         _ownsHttp = http is null;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         _annotations = new GrafanaAnnotations(_http);
+        _profiles = new ProfilePush(_http);
     }
 
     public override void Dispose() {
@@ -109,7 +111,26 @@ public sealed class MetricsPushService : BackgroundService {
         }
 
         await SyncAnnotationAsync(options, _aggregator.Meta?.SessionId, cancellationToken).ConfigureAwait(false);
+        await PushProfileAsync(options, cancellationToken).ConfigureAwait(false);
         return sent;
+    }
+
+    /// <summary>Sends the call tree to pyroscope. Its failures are swallowed the same way the
+    /// annotations' are, so a profile store being down never costs a metrics push.</summary>
+    private async Task PushProfileAsync(MetricsPushOptions options, CancellationToken cancellationToken) {
+        if (!options.Enabled)
+            return;
+
+        try {
+            await _profiles.PushAsync(_aggregator, options, _aggregator.Meta?.SessionId ?? string.Empty, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            throw;
+        }
+        catch (Exception ex) {
+            OnFailure(options.ProfileEndpoint, ex);
+        }
     }
 
     /// <summary>Opens an annotation for a new session and closes the one it replaces. A null

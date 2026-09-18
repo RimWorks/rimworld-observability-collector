@@ -600,6 +600,54 @@
       ],
       "title": "Tracked VRAM",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 900,
+      "panels": [],
+      "title": "Call tree",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "${DS_PYROSCOPE}"
+      },
+      "description": "Where the ticks went, summed over the dashboard's time range. Needs metrics_push.profile_endpoint set on the collector. The times are wall clock, not sampled estimates.",
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 901,
+      "options": {
+        "collapsedFlamegraphs": false,
+        "flameGraph": {
+          "collapsing": true
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "${DS_PYROSCOPE}"
+          },
+          "groupBy": [],
+          "labelSelector": "{service_name=\"rimobs\", session_id=\"$session\"}",
+          "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
+          "queryType": "profile",
+          "refId": "A"
+        }
+      ],
+      "title": "Call tree",
+      "type": "flamegraph"
     }
   ],
   "preload": false,
@@ -648,6 +696,20 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Profiles",
+        "multi": false,
+        "name": "DS_PYROSCOPE",
+        "options": [],
+        "query": "grafana-pyroscope-datasource",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
       }
     ]
   },

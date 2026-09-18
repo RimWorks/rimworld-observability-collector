@@ -38,6 +38,12 @@ public sealed class MetricsPushOptions {
     // a grafana service-account token. masked by the api the same way BearerToken is.
     public string GrafanaToken { get; set; } = string.Empty;
 
+    // pyroscope's base url, like https://pyroscope.example.com. set it to push call-tree profiles.
+    public string ProfileEndpoint { get; set; } = string.Empty;
+
+    // "user:password" for pyroscope. masked by the api the same way the tokens are.
+    public string ProfileBasicAuth { get; set; } = string.Empty;
+
     // merged into every pushed series, so a colony can be tagged per host or per run.
     public Dictionary<string, string> ExtraLabels { get; set; } = [];
 
@@ -50,6 +56,8 @@ public sealed class MetricsPushOptions {
         IntervalSeconds = IntervalSeconds,
         GrafanaUrl = GrafanaUrl,
         GrafanaToken = string.IsNullOrEmpty(GrafanaToken) ? string.Empty : RedactedToken,
+        ProfileEndpoint = ProfileEndpoint,
+        ProfileBasicAuth = string.IsNullOrEmpty(ProfileBasicAuth) ? string.Empty : RedactedToken,
         ExtraLabels = ExtraLabels,
     };
 

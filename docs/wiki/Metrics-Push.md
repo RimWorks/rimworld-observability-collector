@@ -54,9 +54,11 @@ drawer does exactly that.
 | `metrics_push.interval_seconds` | int | `10` | Seconds between pushes, clamped to 1-300 |
 | `metrics_push.grafana_url` | string | `""` | Grafana base URL. Empty means no annotations |
 | `metrics_push.grafana_token` | string | `""` | Grafana service-account token, sent as a bearer token |
+| `metrics_push.profile_endpoint` | string | `""` | Pyroscope base URL. Empty means no call-tree profiles go out |
+| `metrics_push.profile_basic_auth` | string | `""` | `user:password` for Pyroscope, sent as `Authorization: Basic` |
 | `metrics_push.extra_labels` | map | `{}` | Extra label name/value pairs merged into every series |
 
-`GET /api/v1/config` masks both tokens and `basic_auth` as `__redacted__`. Send that same value back to keep the
+`GET /api/v1/config` masks both tokens, `basic_auth` and `profile_basic_auth` as `__redacted__`. Send that same value back to keep the
 stored token, or send a new string to replace it.
 
 ## Series
@@ -107,6 +109,23 @@ rimobs_fps * on(session_id) group_left(session_name) rimobs_session_info
 Label names must match `[a-zA-Z_][a-zA-Z0-9_]*`. An extra label with a bad name, or one that
 repeats `session_id` or `session_name`, is dropped and logged once. The rest of the push still
 goes out.
+
+## Call-tree profiles
+
+Set `profile_endpoint` and the collector pushes the call tree to Pyroscope once per interval, so
+the dashboard gets a flame graph of where the ticks actually went.
+
+- The payload is Pyroscope's folded text: one line per stack, then the microseconds spent in
+  that frame itself. No protobuf, no agent.
+- Each window sends only what moved since the last one, so the numbers are wall time for that
+  window rather than a running total.
+- It lands as service `rimobs`, profile type `process_cpu:cpu:nanoseconds:cpu:nanoseconds`, with
+  a `session_id` label and whatever `extra_labels` carries.
+- A section reached from two callers splits its children's time between them by each caller's
+  share, so the totals still add up.
+
+The times are measured, not sampled. A frame that reads 4 ms really took 4 ms, which is the part
+a sampling profiler can only estimate.
 
 ## Grafana session annotations
 

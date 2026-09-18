@@ -38,6 +38,8 @@ public static class ConfigEndpoints {
                     incoming.MetricsPush.BasicAuth = store.Current.MetricsPush.BasicAuth;
                 if (incoming.MetricsPush.GrafanaToken == MetricsPushOptions.RedactedToken)
                     incoming.MetricsPush.GrafanaToken = store.Current.MetricsPush.GrafanaToken;
+                if (incoming.MetricsPush.ProfileBasicAuth == MetricsPushOptions.RedactedToken)
+                    incoming.MetricsPush.ProfileBasicAuth = store.Current.MetricsPush.ProfileBasicAuth;
                 store.Replace(incoming);
                 // the ring resizes in place so the strip keeps the history that still fits.
                 aggregator.Frames.Resize(store.Current.Sampling.FrameRingCapacity);

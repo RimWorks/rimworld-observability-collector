@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
+using RimWorks.RimObs.Collector.Push;
 using Xunit;
 
 namespace RimWorks.RimObs.Collector.Tests;
@@ -55,7 +56,8 @@ public sealed class ShippedDashboardTests {
             }
 
             foreach (JsonElement target in targets.EnumerateArray()) {
-                exprs.Add(target.GetProperty("expr").GetString()!);
+                if (target.TryGetProperty("expr", out JsonElement expr))
+                    exprs.Add(expr.GetString()!);
             }
         }
 
@@ -71,7 +73,10 @@ public sealed class ShippedDashboardTests {
             if (!panel.TryGetProperty("targets", out JsonElement targets))
                 continue;
             foreach (JsonElement target in targets.EnumerateArray()) {
-                string expr = target.GetProperty("expr").GetString() ?? string.Empty;
+                // the flame graph reads pyroscope, not mimir, so it has no promql to join.
+                if (!target.TryGetProperty("expr", out JsonElement exprElement))
+                    continue;
+                string expr = exprElement.GetString() ?? string.Empty;
                 expr.Should().Contain(
                     "on(session_id) group_left(session_name) rimobs_session_info",
                     "a panel without the join can only legend a raw session id");
@@ -119,10 +124,31 @@ public sealed class ShippedDashboardTests {
             }
 
             foreach (JsonElement target in targets.EnumerateArray()) {
-                target.GetProperty("expr").GetString().Should()
+                if (!target.TryGetProperty("expr", out JsonElement expr))
+                    continue;
+                expr.GetString().Should()
                     .Contain("session_id=~\"$session\"", "a panel that ignores $session shows every session at once");
             }
         }
+    }
+
+    private static bool IsFlameGraph(JsonElement panel) =>
+        panel.TryGetProperty("type", out JsonElement type) && type.GetString() == "flamegraph";
+
+    // the flame graph is the one panel that reads pyroscope, so the promql checks above skip
+    // it entirely. it still has to honour the session picker and name a type we really push.
+    [Fact]
+    public void The_flame_graph_reads_pyroscope_for_the_selected_session() {
+        List<JsonElement> flames = [.. Panels(Dashboard()).Where(IsFlameGraph)];
+        JsonElement panel = flames.Should().ContainSingle().Subject;
+
+        JsonElement target = panel.GetProperty("targets").EnumerateArray().Should().ContainSingle().Subject;
+        target.GetProperty("labelSelector").GetString().Should()
+            .Contain("session_id=\"$session\"", "the flame graph has to follow the session picker too")
+            .And.Contain($"service_name=\"{ProfilePush.AppName}\"");
+        target.GetProperty("profileTypeId").GetString().Should()
+            .Be("process_cpu:cpu:nanoseconds:cpu:nanoseconds", "that is what a folded ingest lands as");
+        panel.GetProperty("datasource").GetProperty("type").GetString().Should().Be("grafana-pyroscope-datasource");
     }
 
     [Fact]
