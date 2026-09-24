@@ -1,5 +1,10 @@
 # RimObs: RimWorld performance profiler and lag diagnostics
 
+> [!WARNING]
+> **Deprecated and unmaintained.** This mod gets no further updates, and this repository is
+> archived. Issues and pull requests are closed. The code stays here for anyone who wants to
+> read it or fork it.
+
 [![Steam Workshop](https://img.shields.io/badge/Steam_Workshop-RimObs-1b2838?logo=steam&logoColor=white)](https://steamcommunity.com/sharedfiles/filedetails/?id=3733585062)
 [![Discord](https://img.shields.io/badge/Discord-Cryptiks_Mods-5865F2?logo=discord&logoColor=white)](https://discord.gg/tbcKN8e4mZ)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=RimWorks_rimworld-observability-collector&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=RimWorks_rimworld-observability-collector)

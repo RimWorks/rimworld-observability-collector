@@ -1,5 +1,8 @@
 # RimObs: RimWorld performance profiler and lag diagnostics
 
+**DEPRECATED AND UNMAINTAINED.** This mod gets no further updates and the source repository is
+archived. It is left up for anyone still using it, but nothing more is coming.
+
 Find out which mod is eating your TPS. RimObs profiles a running RimWorld colony, records where every tick goes, and keeps the history so you can compare one session against another. Timed sections, counters, gauges, histograms, GC events, allocation samples, and Harmony patch conflicts.
 
 ## Which mod is causing your lag?

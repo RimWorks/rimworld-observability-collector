@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-    <name>RimObs</name>
+    <name>RimObs (deprecated)</name>
     <packageId>RimWorks.RimObs</packageId>
     <author>RimWorks</author>
     <url>https://github.com/RimWorks/rimworld-observability-collector</url>
@@ -25,7 +25,9 @@
         <li>brrainz.harmony</li>
         <li>concordlib.concord</li>
     </loadAfter>
-    <description>Performance profiler and lag diagnostics for RimWorld. Find out which mod is eating your TPS.
+    <description>DEPRECATED AND UNMAINTAINED. This mod gets no further updates and its source repository is archived. It still works, but nothing more is coming.
+
+Performance profiler and lag diagnostics for RimWorld. Find out which mod is eating your TPS.
 
 RimObs records where every tick goes: timed sections, counters, gauges, histograms, GC events, allocation samples, and Harmony patch conflicts. A local collector daemon aggregates the data and serves a dashboard in your browser.
 
