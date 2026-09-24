@@ -145,9 +145,10 @@ public static class Profiler {
         ThreadState state = t_State ?? InitThreadState();
         int depth = state.Depth;
         if (depth >= MaxStackDepth) {
-            if (state.Overflow == 0)
-                ReportPinnedStack(state);
+            // count first: the report logs, the log call is instrumented, and it lands back here
             state.Overflow++;
+            if (state.Overflow == 1)
+                ReportPinnedStack(state);
             return;
         }
 

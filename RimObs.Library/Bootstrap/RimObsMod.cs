@@ -102,10 +102,11 @@ public sealed class RimObsMod : Mod {
 
             ControlServices.StartServer(ownerId);
             WireTelemetrySink(ownerId, port);
-            // always on (ka, 2026-09-16): the alloc column and strip are blind without it,
-            // and the deferred arming already waits out the worldgen JIT storm.
-            FrameTickPatches.AllocArmGate = static () => Current.ProgramState == ProgramState.Playing;
-            AllocationHook.DeferEnable();
+            // off until the callback is native. a managed delegate as boehm's allocation
+            // callback re-enters the allocator on every unattached engine thread; see AllocationHook.
+            Log.WarnTo(
+                LogChannels.Bootstrap,
+                "per-section allocation tracking off: a managed boehm callback segfaults on unattached engine threads, so the alloc columns stay empty");
             PopulateOwnerRegistry();
             ProfilingXmlLoader.LoadResult declared = LoadDeclaredProfiling();
 

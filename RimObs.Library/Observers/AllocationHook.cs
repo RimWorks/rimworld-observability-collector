@@ -49,8 +49,8 @@ internal static class AllocationHook {
         t_Count++;
     }
 
-    // enabling before the first Playing frame puts the callback live while worldgen JIT-compiles
-    // patch wrappers, and boehm's allocation lock nested under mono's JIT locks segfaults.
+    // never armed in-game: mono's managed-wrapper attach allocates, so on an unattached engine
+    // thread the callback recurses into itself and faults in GC_clear_stack (gdb, 2026-09-19).
     private static bool s_DeferredPending;
 
     public static bool DeferredPending => s_DeferredPending;
